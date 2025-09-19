@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date, timedelta
-from lib.task import Task
+from models.task import Task
 
 @st.dialog("Add new task to project")
 def render_task_add(session):

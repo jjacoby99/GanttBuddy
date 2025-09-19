@@ -1,5 +1,5 @@
 import streamlit as st
-from lib.project import Project
+from models.project import Project
 
 @st.dialog("Create a project")
 def create_project(session):
@@ -11,7 +11,7 @@ def create_project(session):
     if not project_name:
         st.info("Enter a valid name for your project.")
         st.stop()
-
+    
     project_description = None
     if st.checkbox(f"Add project description?"):
         project_description = st.text_input(
