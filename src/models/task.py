@@ -1,3 +1,4 @@
+from __future__ import annotations
 import datetime
 from typing import Optional
 from dataclasses import dataclass
@@ -8,6 +9,7 @@ class Task:
     start_date: datetime
     end_date: datetime
     note: str
+    preceding_task: Optional[Task] = None
 
     def to_dict(self) -> dict:
         return {"Task": self.name, "Start": self.start_date, "Finish": self.end_date, "Note": self.note}
