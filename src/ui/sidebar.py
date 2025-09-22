@@ -22,7 +22,7 @@ def create_project(session):
     new_project = Project(
         name=project_name,
         description=project_description,
-        tasks=[]
+        phases=[]
     )
 
     if st.button("Create Project"):
