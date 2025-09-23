@@ -12,7 +12,6 @@ from ui.sidebar import render_sidebar
 from ui.add_phase import render_add_phase
 st.set_page_config(layout="wide")
 
-# Initialize once
 if "session" not in st.session_state:
     st.session_state.session = SessionModel()
 
@@ -22,7 +21,6 @@ if "show_task_dialog" not in st.session_state:
 if "show_phase_dialog" not in st.session_state:
     st.session_state.show_phase_dialog = False
 
-
 with st.sidebar:
     st.subheader(f"Project Explorer")
     render_sidebar(st.session_state.session)
@@ -30,7 +28,6 @@ with st.sidebar:
 if not st.session_state.session.project:
     st.info(f"Create or load a project to view.")
     st.stop()
-    st.title("GanttBuddy")
 
 st.title(st.session_state.session.project.name)
 
@@ -44,7 +41,6 @@ if st.session_state.session.project.phases:
     # Open dialog
     if st.button("Add New Task", key="add_task_button"):
         st.session_state.show_add_dialog = True
-    
 else:
     st.info(f"Add a phase to your project to begin.")
     st.stop()
