@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from models.task import Task
 from models.project import Project
 from models.phase import Phase
@@ -35,7 +35,7 @@ def render_task_add(session):
     task_list = session.project.phases[phase_idx].tasks
 
     preceding_task = None
-    if task_list:
+    if task_list and st.checkbox("Set preceding task"):
         preceding_task = st.selectbox(
             label="Preceding task",
             options=task_list,
@@ -43,11 +43,47 @@ def render_task_add(session):
             help="Select the task that directly precedes *{task_name}*"
         )
 
-    start_date, end_date = st.date_input(
-        label=f"Select the start and end dates for *{task_name}*",
-        value=[date.today(), date.today() + timedelta(days=1)],
-        key="task_start_date"
-    )
+    if preceding_task:
+        new_start_date = preceding_task.end_date
+    
+    start_col, end_col = st.columns(2)
+    with start_col:
+        start_day = st.date_input(
+            label=f"Select the start date for *{task_name}*",
+            value=new_start_date if preceding_task else None,
+            key="task_start_date_single"
+        )
+        if not session.project.settings.work_all_day:
+            start_time = st.time_input(
+                label=f"Select the start time for *{task_name}*",
+                value=session.project.settings.work_start_time,
+                key="task_start_time"
+            )
+            if start_day:
+                start_date = datetime.combine(start_day, start_time)
+            else:
+                start_date = None
+
+    with end_col:
+        end_day = st.date_input(
+            label=f"Select the end date for *{task_name}*",
+            value=new_start_date + timedelta(days=1) if preceding_task else None,
+            key="task_start_date"
+        )
+        if not session.project.settings.work_all_day:
+            end_time = st.time_input(
+                label=f"Select the end time for *{task_name}*",
+                value=session.project.settings.work_end_time,
+                key="task_end_time"
+            )
+            if end_day:
+                end_date = datetime.combine(end_day, end_time)
+            else:
+                end_date = None
+
+    if not start_date or not end_date:
+        st.info("Select a start and end date to continue.")
+        st.stop()
 
     task_note = st.text_input(
         label=f"Add a note for {task_name}",
