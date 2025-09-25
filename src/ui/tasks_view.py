@@ -20,7 +20,7 @@ def render_tasks_table(session):
             cols[2].markdown("**Finish**")
 
             for t in phase.tasks:
-                c = st.columns([3, 2, 2, 2])
+                c = st.columns([3, 2, 2])
                 c[0].write(t.name)
                 c[1].write(t.start_date)
                 c[2].write(t.end_date)
