@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 from models.task import Task
 from models.phase import Phase
+from models.project_settings import ProjectSettings
 from datetime import datetime
 
 @dataclass
@@ -10,7 +11,7 @@ class Project:
     name: str
     description: Optional[str] = None
     phases: list[Phase] = field(default_factory=list)
-
+    settings: ProjectSettings = field(default_factory=ProjectSettings)
 
     @property
     def start_date(self) -> Optional[datetime]:
