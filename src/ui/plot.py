@@ -19,6 +19,9 @@ def render_gantt(session):
                 "Finish": t.end_date,
             })
 
+    if not rows:
+        st.info(f"Add a task to your project to view the visualizer.")
+        return
     df = pd.DataFrame(rows)
 
     df["Task"] = pd.Categorical(df["Task"], categories=[r["Task"] for r in rows], ordered=True)
@@ -36,6 +39,7 @@ def render_gantt(session):
         df, x_start="Start", x_end="Finish", y="Task", color="Phase",
         color_discrete_map=color_map
     )
+    
     fig.update_yaxes(autorange="reversed")
 
     # Row height control
