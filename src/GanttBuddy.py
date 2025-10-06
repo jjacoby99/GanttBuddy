@@ -5,67 +5,60 @@ from datetime import date
 
 from models.task import Task
 from models.session import SessionModel
+from models.ui_state import UIState
 from ui.add_task import render_task_add
 from ui.plot import render_gantt
 from ui.tasks_view import render_tasks_table
 from ui.settings_view import render_settings_view
-from ui.sidebar import render_sidebar
+from ui.sidebar import render_project_sidebar, render_project_buttons
 from ui.add_phase import render_add_phase
+from ui.edit_phase import render_phase_edit
+
 st.set_page_config(layout="wide")
 
 if "session" not in st.session_state:
     st.session_state.session = SessionModel()
 
-if "show_settings_dialog" not in st.session_state:
-    st.session_state.show_settings_dialog = False
+if "ui" not in st.session_state:
+    st.session_state.ui = UIState()
 
-if "show_task_dialog" not in st.session_state:
-    st.session_state.show_add_dialog = False
-
-if "show_phase_dialog" not in st.session_state:
-    st.session_state.show_phase_dialog = False
+ui = st.session_state.ui
 
 with st.sidebar:
     st.subheader(f"Project Explorer")
-    render_sidebar(st.session_state.session)
+    render_project_sidebar(st.session_state.session)
 
 if not st.session_state.session.project:
     st.info(f"Create or load a project to view.")
     st.stop()
 
+
+with st.sidebar:
+    render_project_buttons(st.session_state.session)
+
 st.title(st.session_state.session.project.name)
 
-proj_col, _, settings_col = st.columns([1, 10, 1])
+_, _, _, settings_col = st.columns([2, 2, 10, 2])
 
 with settings_col:
+    st.caption("Settings")
     if st.button("🔧", help="View / Edit settings: work days, hours, holidays, etc."):
-            st.session_state.show_settings_dialog = True
+            st.session_state.ui.show_settings = True
+            # st.session_state.show_settings_dialog = True
 
-if st.session_state.show_settings_dialog:
+if st.session_state.ui.show_settings:
     render_settings_view(st.session_state.session)
-    st.session_state.show_settings_dialog = False
+    # st.session_state.show_settings_dialog = False
+    st.session_state.session.ui.show_settings = False
 
-with proj_col:
-    if st.button("Add Phase"):
-        st.session_state.show_phase_dialog = True
 
-if st.session_state.show_phase_dialog:
-    render_add_phase(st.session_state.session)
-    st.session_state.show_phase_dialog = False
-
-if st.session_state.session.project.phases:
-    # Open dialog
-    if st.button("Add New Task", key="add_task_button"):
-        st.session_state.show_add_dialog = True
-else:
+if not st.session_state.session.project.phases:
     st.info(f"Add a phase to your project to begin.")
     st.stop()
 
-
-
-if st.session_state.show_add_dialog:
-    render_task_add(st.session_state.session)
-    st.session_state.show_add_dialog = False
+if not st.session_state.session.project.has_task:
+    st.info(f"Add a task to your project to begin.")
+    st.stop()
 
 task_col, plot_col = st.columns(2)
 
