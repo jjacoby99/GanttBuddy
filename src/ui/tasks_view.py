@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+from ui.edit_task import render_task_edit
 
 def render_tasks_table(session):
     phases = session.project.phases
@@ -14,16 +15,19 @@ def render_tasks_table(session):
                          f"— {phase.start_date or '—'} → {phase.end_date or '—'}",
                          expanded=True):
             # Header row
-            cols = st.columns([3, 2, 2])
+            cols = st.columns([3, 2, 2, 2])
             cols[0].markdown("**Task**")
             cols[1].markdown("**Start**")
             cols[2].markdown("**Finish**")
+            cols[3].markdown("**Edit**")
 
             for t in phase.tasks:
-                c = st.columns([3, 2, 2])
+                c = st.columns([3, 2, 2, 2])
                 c[0].write(t.name)
                 c[1].write(t.start_date)
                 c[2].write(t.end_date)
+                if c[3].button("✏️", key="edit_{t.name}"):
+                    render_task_edit(session)
                 
                 # optional per-task actions
                 #ac = st.columns([1,1,6])
