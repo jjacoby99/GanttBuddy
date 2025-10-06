@@ -1,5 +1,9 @@
 import streamlit as st
 from models.project import Project
+from ui.add_phase import render_add_phase
+from ui.edit_phase import render_phase_edit
+from ui.add_task import render_task_add
+from ui.edit_task import render_task_edit
 
 @st.dialog("Create a project")
 def create_project(session):
@@ -34,7 +38,7 @@ def create_project(session):
 def load_project(session) -> Project:
     pass
 
-def render_sidebar(session) -> Project:
+def render_project_sidebar(session) -> Project:
     if st.button(f"Create Project", help="Create a new project from scratch"):
         create_project(session)
         return
@@ -42,3 +46,30 @@ def render_sidebar(session) -> Project:
     if st.button(f"Load Project", help="Load an existing project"):
         load_project(session)
         return
+    
+
+def render_project_buttons(session):
+    if not session.project:
+        return
+    
+    st.divider()
+    st.caption(f"Plan your project")
+    add_phase, add_task = st.columns(2)
+    with add_phase:
+        if st.button("➕ Phase", 
+                     key="add_phase", 
+                     help=f"Add a phase to {session.project.name}"):
+            render_add_phase(session)
+            st.session_state.ui.show_add_phase = False
+
+    with add_task:
+        if st.button("➕ Task", 
+                     key="add_task", 
+                     help=f"Add a task to {session.project.name}",
+                     disabled= False if session.project.phases else True):
+            render_task_add(session)
+            st.session_state.ui.show_add_task = False
+    
+    
+
+        
