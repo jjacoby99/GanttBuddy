@@ -49,13 +49,13 @@ def render_task_add(session):
     start_col, end_col = st.columns(2)
     with start_col:
         start_day = st.date_input(
-            label=f"Select the start date for *{task_name}*",
+            label=f"Start date",
             value=new_start_date if preceding_task else None,
             key="task_start_date_single"
         )
         if not session.project.settings.work_all_day:
             start_time = st.time_input(
-                label=f"Select the start time for *{task_name}*",
+                label=f"Start time",
                 value=session.project.settings.work_start_time,
                 key="task_start_time"
             )
@@ -66,13 +66,13 @@ def render_task_add(session):
 
     with end_col:
         end_day = st.date_input(
-            label=f"Select the end date for *{task_name}*",
+            label=f"End date",
             value=new_start_date + timedelta(days=1) if preceding_task else None,
             key="task_start_date"
         )
         if not session.project.settings.work_all_day:
             end_time = st.time_input(
-                label=f"Select the end time for *{task_name}*",
+                label=f"End time",
                 value=session.project.settings.work_end_time,
                 key="task_end_time"
             )
