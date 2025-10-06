@@ -27,6 +27,28 @@ class Project:
         
         return self.phases[-1]
     
+    @property
+    def has_task(self) -> bool:
+        """
+            Returns true if the project has at least one task,
+            false otherwise.
+        """
+        if not self.phases:
+            return False
+        
+        for phase in self.phases:
+            if phase.tasks:
+                return True
+        return False
+    
+    def find_phase(self, task: Task) -> Phase:
+        """
+            Searches the project phases to see if the provided Task exists.
+            If the task exists within a phase, the phase is returned.
+            If the task does not exist, a ValueError is thrown.
+        """
+
+        
 
     def add_phase(self, phase: Phase):
         if not phase.preceding_phase:
