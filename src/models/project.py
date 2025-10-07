@@ -47,7 +47,21 @@ class Project:
             If the task exists within a phase, the phase is returned.
             If the task does not exist, a ValueError is thrown.
         """
+        for phase in self.phases:
+            if task in phase.tasks:
+                return phase
+        
+        raise ValueError(f"Task {task.name} not found in any project phase.")
 
+    def update_task(self, phase: Phase, old_task: Task, new_task: Task):
+        """
+            Updates a task within the project.
+            Searches for the old_task, and if found, replaces it with new_task.
+            If old_task is not found, a ValueError is thrown.
+        """
+        phase_idx = self.get_phase_index(phase)
+        
+        self.phases[phase_idx].edit_task(old_task, new_task)
         
 
     def add_phase(self, phase: Phase):
@@ -80,7 +94,7 @@ class Project:
             raise RuntimeError(f"Project {self.name} does not contain any phases")
         
         if not phase in self.phases:
-            raise ValueError(f"Provided phase does not exist in phase list.")
+            raise ValueError(f"Provided phase {phase.name} does not exist in phase list.")
         
         return self.phases.index(phase)
 
