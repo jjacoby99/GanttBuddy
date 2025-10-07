@@ -27,7 +27,7 @@ def render_tasks_table(session):
                 c[1].write(t.start_date)
                 c[2].write(t.end_date)
                 if c[3].button("✏️", key="edit_{t.name}"):
-                    render_task_edit(session)
+                    render_task_edit(session, task=t)
                 
                 # optional per-task actions
                 #ac = st.columns([1,1,6])
