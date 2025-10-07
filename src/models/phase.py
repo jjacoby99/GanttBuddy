@@ -36,6 +36,14 @@ class Phase:
         idx = self.tasks.index(task.preceding_task)
         self.tasks.insert(idx + 1, task)
 
+
+    def edit_task(self, old_task: Task, new_task: Task):
+        if not old_task in self.tasks:
+            raise RuntimeError(f"Provided task {old_task} not found.")
+        
+        idx = self.tasks.index(old_task)
+        self.tasks[idx] = new_task
+        
     def delete_task(self, task: Task):
         if not task in self.tasks:
             raise RuntimeError(f"Provided task {task} not found.")
