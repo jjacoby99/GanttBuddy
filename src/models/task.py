@@ -21,6 +21,24 @@ class Task:
     def __str__(self) -> str:
         return f"Task(name = {self.name}, start_date={self.start_date}, end_date={self.end_date}, note={self.note})"
     
+    @staticmethod
+    def from_dict(data: dict) -> Task:
+        if not "Task" in data:
+            raise ValueError("Task must have a name.")
+        if not "Start" in data:
+            raise ValueError("Task must have a start date.")
+        if not "Finish" in data:   
+            raise ValueError("Task must have an end date.")
+        
+        task = Task.__new__(Task)  # Create an uninitialized instance
+        task.name = data["Task"]
+        task.start_date = data["Start"]
+        task.end_date = data["Finish"]
+        task.note = data.get("note", "")
+        task.preceding_task = data.get("preceding_task", None)
+
+        return task
+
     def calculate_end_date(self, duration: int, settings: ProjectSettings) -> datetime:
         """
             Calculate the end date of a task given a start date, duration (in days), and project settings.
