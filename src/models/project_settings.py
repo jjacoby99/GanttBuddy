@@ -60,3 +60,27 @@ class ProjectSettings:
             if holiday.date == date.date():
                 return True
         return False
+    
+    def to_dict(self) -> dict:
+        return {
+            "work_all_day": self.work_all_day,
+            "work_start_time": self.work_start_time,
+            "work_end_time": self.work_end_time,
+            "working_days": self.working_days,
+            "observe_state_holidays": self.observe_state_holidays,
+            "province": self.province,
+            "holidays": [ {"name": h.name, "date": h.date} for h in self.holidays ] if self.holidays else []
+        }
+    
+    @staticmethod
+    def from_dict(data: dict) -> ProjectSettings:
+        settings = ProjectSettings.__new__(ProjectSettings)
+        settings.work_all_day = data.get("work_all_day", False)
+        settings.work_start_time = data.get("work_start_time", time(hour=7, minute=0))
+        settings.work_end_time = data.get("work_end_time", time(hour=18, minute=0))
+        settings.working_days = tuple(data.get("working_days", (True, True, True, True, False, False, False)))
+        settings.observe_state_holidays = data.get("observe_state_holidays", True)
+        settings.province = data.get("province", None)
+        holidays_data = data.get("holidays", [])
+        settings.holidays = [Holiday(name=h["name"], date=h["date"]) for h in holidays_data]
+        return settings
