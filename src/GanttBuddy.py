@@ -34,7 +34,20 @@ with st.sidebar:
 
 st.title(st.session_state.session.project.name)
 
-_, _, _, settings_col = st.columns([2, 2, 10, 2])
+save_col, _, _, settings_col = st.columns([2, 2, 10, 2])
+
+with save_col:
+    st.caption("Save")
+    if st.button("💾", help="Save project to file"):
+        proj_dict = st.session_state.session.project.to_dict()
+        import json
+        import os
+        project_path = os.path.join(os.getcwd(),
+                                    "projects",)
+        os.makedirs(project_path, exist_ok=True)
+        with open(os.path.join(project_path, st.session_state.session.project.name + ".json"), "w") as f:
+            json.dump(proj_dict, f, default=str, indent=4)
+            st.success("Project saved.")
 
 with settings_col:
     st.caption("Settings")
