@@ -68,7 +68,10 @@ class Project:
         if not phase.preceding_phase:
             self.phases.append(phase) # add to end
             return
+        print(f"TYPE OF PHASE: {type(phase)}")
         
+        print(f"ADDING PHASE {phase} after {phase.preceding_phase}")
+        print(f"Current phases: {[p.name for p in self.phases]}")
         # check for duplicate phase name
         for existing_phase in self.phases:
             if existing_phase.name == phase:
@@ -106,3 +109,11 @@ class Project:
             raise RuntimeError(f"Provided phase {phase} not found.")
         
         self.phases.delete(phase)
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "phases": [p.to_dict() for p in self.phases],
+            "settings": self.settings.to_dict()
+        }
