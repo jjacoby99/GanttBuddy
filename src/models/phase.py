@@ -43,7 +43,7 @@ class Phase:
         
         idx = self.tasks.index(old_task)
         self.tasks[idx] = new_task
-        
+
     def delete_task(self, task: Task):
         if not task in self.tasks:
             raise RuntimeError(f"Provided task {task} not found.")
@@ -52,3 +52,23 @@ class Phase:
     def __str__(self):
         return f"Project Phase '{self.name}'. Start date: {self.start_date if self.tasks else None}. End date: {self.end_date if self.tasks else None}"
     
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "tasks": [t.to_dict() for t in self.tasks],
+            "preceding_phase": self.preceding_phase.name if self.preceding_phase else None
+        }
+    
+    @staticmethod
+    def from_dict(data: dict) -> Phase:
+        if not "name" in data:
+            raise ValueError("Phase must have a name.")
+        if not "tasks" in data:
+            raise ValueError("Phase must have tasks.")
+        
+        phase = Phase.__new__(Phase)  
+        phase.name = data["name"]
+        phase.tasks = [Task.from_dict(t) for t in data["tasks"]]
+        phase.preceding_phase = data.get("preceding_phase", None)
+
+        return phase
