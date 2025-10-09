@@ -1,9 +1,11 @@
 import streamlit as st
+import os
 from models.project import Project
 from ui.add_phase import render_add_phase
 from ui.edit_phase import render_phase_edit
 from ui.add_task import render_task_add
 from ui.edit_task import render_task_edit
+from logic.load_project import ProjectLoader
 
 @st.dialog("Create a project")
 def create_project(session):
@@ -35,8 +37,30 @@ def create_project(session):
         st.rerun()
         return
 
+@st.dialog("Load a project")
 def load_project(session) -> Project:
-    pass
+    projects = os.listdir(os.path.join(os.getcwd(), "projects"))
+    if not projects:
+        st.info("No saved projects found. Create a new project to get started.")
+        st.stop()
+
+    file = st.selectbox(
+        label="Select a saved project",
+        options=projects,
+        help="Select a previously saved project to load",
+        format_func=lambda x: x.replace(".json", "")
+    )
+
+    if st.button("Load Project"):
+        file_path = os.path.join(os.getcwd(), "projects", file)
+        try:
+            proj_dict = ProjectLoader.load_json_file(file_path)
+            project = ProjectLoader.load_project(proj_dict)
+            session.project = project
+            st.success(f"Project '{project.name}' loaded.")
+        except (FileNotFoundError, ValueError) as e:
+            st.error(str(e))
+            return
 
 def render_project_sidebar(session) -> Project:
     if st.button(f"Create Project", help="Create a new project from scratch"):
