@@ -16,7 +16,11 @@ class Task:
     preceding_task: Optional[Task] = None
 
     def to_dict(self) -> dict:
-        return {"Task": self.name, "Start": self.start_date, "Finish": self.end_date, "Note": self.note}
+        return {"Task": self.name, 
+                "Start": self.start_date, 
+                "Finish": self.end_date, 
+                "Note": self.note,
+                "preceding_task": self.preceding_task.name if self.preceding_task else None}
     
     def __str__(self) -> str:
         return f"Task(name = {self.name}, start_date={self.start_date}, end_date={self.end_date}, note={self.note})"
