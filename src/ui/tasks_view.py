@@ -21,13 +21,13 @@ def render_tasks_table(session):
             cols[2].markdown("**Finish**")
             cols[3].markdown("**Edit**")
 
-            for t in phase.tasks:
+            for i, t in enumerate(phase.tasks):
                 c = st.columns([3, 2, 2, 2])
                 c[0].write(t.name)
                 c[1].write(t.start_date)
                 c[2].write(t.end_date)
-                if c[3].button("✏️", key=f"edit_{t.name}"):
-                    render_task_edit(session, task=t)
+                if c[3].button("✏️", key=f"edit_{phase.name}_{t.name}_{i}"):
+                    render_task_edit(session, phase=phase, task=t)
                 
                 # optional per-task actions
                 #ac = st.columns([1,1,6])

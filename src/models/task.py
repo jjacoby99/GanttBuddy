@@ -42,7 +42,7 @@ class Task:
         task.preceding_task = data.get("preceding_task", None)
 
         return task
-
+    
     def calculate_end_date(self, duration: int, settings: ProjectSettings) -> datetime:
         """
             Calculate the end date of a task given a start date, duration (in days), and project settings.
