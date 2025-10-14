@@ -5,7 +5,7 @@ from ui.add_phase import render_add_phase
 from ui.edit_phase import render_phase_edit
 from ui.add_task import render_task_add
 from ui.edit_task import render_task_edit
-from logic.load_project import ProjectLoader
+from logic.load_project import ProjectLoader, ExcelProjectLoader, ExcelParameters
 
 @st.dialog("Create a project")
 def create_project(session):
@@ -62,6 +62,27 @@ def load_project(session) -> Project:
             st.error(str(e))
             return
 
+@st.dialog("Import from Excel")
+def load_from_excel(session) -> Project:
+    file = st.file_uploader(
+        label="Select an Excel file",
+        type=["xls", "xlsx"],
+        help="Select a BTA Excel template file to import project data from"
+    )
+
+    if not file:
+        return # user has not uploaded a file yet
+
+    try:
+        session.project = ExcelProjectLoader.load_excel_project(file, ExcelParameters())
+    except (FileNotFoundError, ValueError) as e:
+        st.error(str(e))
+        return
+    st.success(f"Project '{session.project.name}' imported from Excel.")
+    st.rerun()
+    
+
+
 def render_project_sidebar(session) -> Project:
     if st.button(f"Create Project", help="Create a new project from scratch"):
         create_project(session)
@@ -69,6 +90,10 @@ def render_project_sidebar(session) -> Project:
     
     if st.button(f"Load Project", help="Load an existing project"):
         load_project(session)
+        return
+    
+    if st.button(f"Import from Excel", help="Import project data from a BTA Excel template"):
+        load_from_excel(session)
         return
     
 
