@@ -69,10 +69,13 @@ if not st.session_state.session.project.has_task:
 
 task_col, plot_col = st.columns(2)
 
-task_tab, plot_tab = st.tabs(["Task List", "Visualizer"])
+task_tab, plot_tab, forecast_tab = st.tabs(["Plan", "Visualize", "Forecast"])
 with task_tab:
     render_tasks_table(st.session_state.session)
 
 with plot_tab:
     render_gantt(st.session_state.session)
+
+with forecast_tab:
+    st.info("Forecasting coming soon!")
 
