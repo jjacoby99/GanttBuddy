@@ -64,7 +64,7 @@ def render_gantt(session):
         return
 
     rows = []
-    for ph in phases:
+    for ph in phases.values():
         rows.append({
             "Phase": ph.name,
             "Task": f"◼ {ph.name}",
@@ -72,7 +72,7 @@ def render_gantt(session):
             "Finish": ph.end_date,
             "Kind": "Phase",
         })
-        for t in ph.tasks:
+        for t in ph.tasks.values():
             rows.append({
                 "Phase": ph.name,
                 "Task": t.name,
