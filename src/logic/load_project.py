@@ -7,25 +7,51 @@ from models.project_settings import ProjectSettings
 from models.task import Task
 from pprint import pprint
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 import re
 from openpyxl import load_workbook
 from io import BytesIO
+from typing import Union
+
+@dataclass
+class DataColumn:
+    name: str
+    column: int
+
 
 @dataclass
 class ExcelParameters:
     sheet_name: str = "Daily Schedule"
+
+    columns: list[DataColumn] = field(default_factory=list[DataColumn])
+
     project_name_cell: str = "A5"
     start_row: int = 8
-    activity_col: int = 2 #B
-    planned_duration_col: int = 3 #C
-    planned_start_col: int = 4 #D
-    planned_end_col: int = 5 #E
-    actual_dur_col: int = 7 #G
-    actual_start_col: int = 8 #H
-    actual_end_col: int = 9 #I
-    notes_col: int = 10 #J
+
+    def get_pd_usecols(self):
+        return [col.column - 1 for col in self.columns]
+    
+    def get_col_names(self):
+        return [col.name for col in self.columns]
+    
+    def get_df_index(self, col_name: str) -> int:
+        for i, col in enumerate(self.columns):
+            if col.name == col_name:
+                return i
+        raise KeyError(f"Column name '{col_name}' not found in columns.")
+    
+    def __getitem__(self, key: Union[int, str]) -> DataColumn:
+        if isinstance(key, int):
+            if key < len(self.columns):
+                return self.columns[key]
+            raise IndexError(f"Index {key} out of range for columns of length {len(self.columns)}.")
+        elif isinstance(key, str):
+            for col in self.columns:
+                if col.name == key:
+                    return col.column
+        raise KeyError(f"Column name '{key}' not found in columns.")
+    
 
 class ProjectLoader():
     @staticmethod
@@ -55,9 +81,6 @@ class ProjectLoader():
                 if phase.preceding_phase:
                     pass
 
-
-
-
         project.settings = ProjectSettings.from_dict(proj_dict["settings"])
 
         return project
@@ -68,6 +91,7 @@ warnings.filterwarnings(
     message=".*extension is not supported and will be removed",
     module="openpyxl\\worksheet\\_reader"
 )   
+
 class ExcelProjectLoader():
 
     _phase_pat = re.compile(r"\b(\d+(?:\.\d+)?)\s*day(s)?\b", re.IGNORECASE)
@@ -142,31 +166,14 @@ class ExcelProjectLoader():
             bio_pd,
             sheet_name=params.sheet_name,
             header=params.start_row - 2,
-            usecols=[
-                params.activity_col - 1,
-                params.planned_duration_col - 1,
-                params.planned_start_col - 1,
-                params.planned_end_col - 1,
-                params.actual_dur_col - 1,
-                params.actual_start_col - 1,
-                params.actual_end_col - 1,
-                params.notes_col - 1
-                ],
+            usecols=params.get_pd_usecols(),
         )
-        
-        df.columns = [
-            "ACTIVITY",
-            "PLANNED DURATION (HOURS)",
-            "PLANNED START",
-            "PLANNED END",
-            "ACTUAL DURATION",
-            "ACTUAL START",
-            "ACTUAL END",
-            "NOTES",
-        ]
+        print(df.columns.to_list())
+        df.columns = params.get_col_names()
 
         df = df.drop(0) # remove header row
-        df[df.columns[-1]] = df[df.columns[-1]].fillna("") # fill notes NaN with empty string
+        
+        df['NOTES'] = df['NOTES'].fillna("") # fill notes NaN with empty string
 
         # Drop fully empty rows based on ACTIVITY being blank
         df["ACTIVITY"] = df["ACTIVITY"].astype(str).str.strip()
