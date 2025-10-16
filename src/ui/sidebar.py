@@ -5,7 +5,7 @@ from ui.add_phase import render_add_phase
 from ui.edit_phase import render_phase_edit
 from ui.add_task import render_task_add
 from ui.edit_task import render_task_edit
-from logic.load_project import ProjectLoader, ExcelProjectLoader, ExcelParameters
+from logic.load_project import ProjectLoader, ExcelProjectLoader, ExcelParameters, DataColumn
 
 @st.dialog("Create a project")
 def create_project(session):
@@ -73,8 +73,23 @@ def load_from_excel(session) -> Project:
     if not file:
         return # user has not uploaded a file yet
 
+    params = ExcelParameters(
+        columns=[
+            DataColumn(name="ACTIVITY", column=2),
+            DataColumn(name="PLANNED DURATION (HOURS)", column=3),
+            DataColumn(name="PLANNED START", column=4),
+            DataColumn(name="PLANNED END", column=5),
+            DataColumn(name="ACTUAL DURATION", column=7),
+            DataColumn(name="ACTUAL START", column=8),
+            DataColumn(name="ACTUAL END", column=9),
+            DataColumn(name="NOTES", column=10),
+            DataColumn(name="PREDECESSOR", column=11),
+            DataColumn(name="UUID", column=12),
+        ]
+    )
+
     try:
-        session.project = ExcelProjectLoader.load_excel_project(file, ExcelParameters())
+        session.project = ExcelProjectLoader.load_excel_project(file, params)
     except (FileNotFoundError, ValueError) as e:
         st.error(str(e))
         return
