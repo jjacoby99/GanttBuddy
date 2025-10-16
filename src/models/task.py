@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, date, timedelta
 from typing import Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from models.project_settings import ProjectSettings
 from exceptions.date_error import InvalidDateError
 from exceptions.time_error import InvalidTimeError
@@ -9,12 +9,14 @@ from logic.generate_id import new_id
 
 @dataclass
 class Task:
-    uuid: str = new_id()
     name: str
     start_date: datetime
     end_date: datetime
     note: str
     preceding_task: Optional[Task] = None
+    uuid: str = field(default_factory=new_id)
+    predecessor_ids: list[str] = field(default_factory=list)
+    phase_id: str = ""
 
     def to_dict(self) -> dict:
         return {"Task": self.name, 
@@ -22,7 +24,9 @@ class Task:
                 "Finish": self.end_date, 
                 "Note": self.note,
                 "preceding_task": self.preceding_task.name if self.preceding_task else None,
-                "uuid": self.uuid}
+                "predecessr_ids": self.predecessor_ids,
+                "uuid": self.uuid,
+                "phase_id": self.phase_id}
     
     def __str__(self) -> str:
         return f"Task(name = {self.name}, start_date={self.start_date}, end_date={self.end_date}, note={self.note})"
@@ -42,7 +46,9 @@ class Task:
         task.end_date = data["Finish"]
         task.note = data.get("note", "")
         task.preceding_task = data.get("preceding_task", None)
+        task.predecessor_ids = data.get("predecessor_ids", [])
         task.uuid = data.get("uuid", new_id())
+        task.phase_id = data.get("phase_id", "")
         return task
 
     def calculate_end_date(self, duration: int, settings: ProjectSettings) -> datetime:
