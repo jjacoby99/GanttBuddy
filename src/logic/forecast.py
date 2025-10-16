@@ -27,8 +27,8 @@ def build_forecast_df(project: Project) -> pd.DataFrame:
         "Notes": []
     }
 
-    for phase in project.phases:
-        for task in phase.tasks:
+    for phase in project.phases.values():
+        for task in phase.tasks.values():
             data["Phase"].append(phase.name)
             data["Task"].append(task.name)
             data["Est. Duration (h)"].append(0.0)
