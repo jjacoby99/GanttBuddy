@@ -3,9 +3,11 @@ from dataclasses import dataclass, field
 from models.task import Task
 from typing import Optional
 from datetime import datetime
+from logic.generate_id import new_id
 
 @dataclass
 class Phase:
+    uuid: str = new_id()
     name: str
     tasks: list[Task] = field(default_factory=list) # sorted in project order
     preceding_phase: Optional[Phase] = None
@@ -42,6 +44,7 @@ class Phase:
             raise RuntimeError(f"Provided task {old_task} not found.")
         
         idx = self.tasks.index(old_task)
+        new_task.uuid = old_task.uuid # preserve uuid
         self.tasks[idx] = new_task
 
     def delete_task(self, task: Task):
@@ -56,7 +59,8 @@ class Phase:
         return {
             "name": self.name,
             "tasks": [t.to_dict() for t in self.tasks],
-            "preceding_phase": self.preceding_phase.name if self.preceding_phase else None
+            "preceding_phase": self.preceding_phase.name if self.preceding_phase else None,
+            "uuid": self.uuid
         }
     
     @staticmethod
@@ -70,5 +74,5 @@ class Phase:
         phase.name = data["name"]
         phase.tasks = [Task.from_dict(t) for t in data["tasks"]]
         phase.preceding_phase = data.get("preceding_phase", None)
-
+        phase.uuid = data.get("uuid", new_id())
         return phase

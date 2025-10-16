@@ -5,10 +5,11 @@ from dataclasses import dataclass
 from models.project_settings import ProjectSettings
 from exceptions.date_error import InvalidDateError
 from exceptions.time_error import InvalidTimeError
-
+from logic.generate_id import new_id
 
 @dataclass
 class Task:
+    uuid: str = new_id()
     name: str
     start_date: datetime
     end_date: datetime
@@ -20,7 +21,8 @@ class Task:
                 "Start": self.start_date, 
                 "Finish": self.end_date, 
                 "Note": self.note,
-                "preceding_task": self.preceding_task.name if self.preceding_task else None}
+                "preceding_task": self.preceding_task.name if self.preceding_task else None,
+                "uuid": self.uuid}
     
     def __str__(self) -> str:
         return f"Task(name = {self.name}, start_date={self.start_date}, end_date={self.end_date}, note={self.note})"
@@ -33,16 +35,16 @@ class Task:
             raise ValueError("Task must have a start date.")
         if not "Finish" in data:   
             raise ValueError("Task must have an end date.")
-        
+            
         task = Task.__new__(Task)  # Create an uninitialized instance
         task.name = data["Task"]
         task.start_date = data["Start"]
         task.end_date = data["Finish"]
         task.note = data.get("note", "")
         task.preceding_task = data.get("preceding_task", None)
-
+        task.uuid = data.get("uuid", new_id())
         return task
-    
+
     def calculate_end_date(self, duration: int, settings: ProjectSettings) -> datetime:
         """
             Calculate the end date of a task given a start date, duration (in days), and project settings.

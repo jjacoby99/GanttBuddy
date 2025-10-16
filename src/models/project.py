@@ -5,9 +5,11 @@ from models.task import Task
 from models.phase import Phase
 from models.project_settings import ProjectSettings
 from datetime import datetime
+from logic.generate_id import new_id
 
 @dataclass
 class Project:
+    uuid: str = new_id()
     name: str
     description: Optional[str] = None
     phases: list[Phase] = field(default_factory=list)
