@@ -194,6 +194,8 @@ class ExcelProjectLoader():
                 end_date=pd.to_datetime(row["PLANNED END"], errors="coerce") if not ExcelProjectLoader._is_nan(row["PLANNED END"]) else None,
                 note=ExcelProjectLoader._coerce_str(row["NOTES"]),
                 preceding_task=None,
+                uuid=ExcelProjectLoader._coerce_str(row["UUID"]),
+                predecessor_ids=ExcelProjectLoader._coerce_str(row["PREDECESSOR"]).split(",") if not ExcelProjectLoader._is_nan(row["PREDECESSOR"]) else [],
             )
 
         phase_ctr = 1
@@ -204,10 +206,9 @@ class ExcelProjectLoader():
                 # Commit previous phase implicitly by starting a new one
                 new_phase = Phase(
                     name=str(phase_ctr) + ". " + ExcelProjectLoader._coerce_str(row["ACTIVITY"]),
-                    preceding_phase=None,
-                    tasks=[]
+                    preceding_phase=None
                 )
-                project.phases.append(new_phase)
+                project.add_phase(new_phase)
                 phase_ctr += 1
                 task_ctr = 1
                 current_phase = new_phase
@@ -221,13 +222,12 @@ class ExcelProjectLoader():
                         unassigned_phase = Phase(
                             name="Unassigned",
                             preceding_phase=None,
-                            tasks=[]
                         )
-                        project.phases.append(unassigned_phase)
+                        project.add_phase(unassigned_phase)
                         phase_ctr += 1
                     unassigned_phase.tasks.append(task)
                 else:
-                    current_phase.tasks.append(task)
+                    current_phase.add_task(task)
 
         return project
     
