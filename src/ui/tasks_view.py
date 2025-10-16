@@ -9,7 +9,7 @@ def render_tasks_table(session):
         st.info(f"Add a phase to {session.project.name} to view project planner")
         return
 
-    for phase in phases:
+    for phase in phases.values():
         with st.expander(f"**{phase.name}**  "
                          f"({len(phase.tasks)} tasks)  "
                          f"— {phase.start_date or '—'} → {phase.end_date or '—'}",
@@ -21,7 +21,7 @@ def render_tasks_table(session):
             cols[2].markdown("**Finish**")
             cols[3].markdown("**Edit**")
 
-            for i, t in enumerate(phase.tasks):
+            for i, t in enumerate(phase.tasks.values()):
                 c = st.columns([3, 2, 2, 2])
                 c[0].write(t.name)
                 c[1].write(t.start_date)
