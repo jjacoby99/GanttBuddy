@@ -168,9 +168,8 @@ class ExcelProjectLoader():
             header=params.start_row - 2,
             usecols=params.get_pd_usecols(),
         )
-        print(df.columns.to_list())
-        df.columns = params.get_col_names()
 
+        df.columns = params.get_col_names()
         df = df.drop(0) # remove header row
         
         df['NOTES'] = df['NOTES'].fillna("") # fill notes NaN with empty string
@@ -188,13 +187,19 @@ class ExcelProjectLoader():
         unassigned_phase = None
 
         def mk_task(row)-> Task:
+            uuid = ExcelProjectLoader._coerce_str(row["UUID"])
+            if uuid == "":
+                from models.task import new_id
+                uuid = new_id()
+
             return Task(
                 name=ExcelProjectLoader._coerce_str(row["ACTIVITY"]),
                 start_date=pd.to_datetime(row["PLANNED START"], errors="coerce") if not ExcelProjectLoader._is_nan(row["PLANNED START"]) else None,
                 end_date=pd.to_datetime(row["PLANNED END"], errors="coerce") if not ExcelProjectLoader._is_nan(row["PLANNED END"]) else None,
+                actual_end=pd.to_datetime(row["ACTUAL END"], errors="coerce") if not ExcelProjectLoader._is_nan(row["ACTUAL END"]) else None,
+                actual_start=pd.to_datetime(row["ACTUAL START"], errors="coerce") if not ExcelProjectLoader._is_nan(row["ACTUAL START"]) else None,
                 note=ExcelProjectLoader._coerce_str(row["NOTES"]),
-                preceding_task=None,
-                uuid=ExcelProjectLoader._coerce_str(row["UUID"]),
+                uuid=uuid,
                 predecessor_ids=ExcelProjectLoader._coerce_str(row["PREDECESSOR"]).split(",") if not ExcelProjectLoader._is_nan(row["PREDECESSOR"]) else [],
             )
 
@@ -206,7 +211,6 @@ class ExcelProjectLoader():
                 # Commit previous phase implicitly by starting a new one
                 new_phase = Phase(
                     name=str(phase_ctr) + ". " + ExcelProjectLoader._coerce_str(row["ACTIVITY"]),
-                    preceding_phase=None
                 )
                 project.add_phase(new_phase)
                 phase_ctr += 1
@@ -225,7 +229,7 @@ class ExcelProjectLoader():
                         )
                         project.add_phase(unassigned_phase)
                         phase_ctr += 1
-                    unassigned_phase.tasks.append(task)
+                    unassigned_phase.add_task(task)
                 else:
                     current_phase.add_task(task)
 
