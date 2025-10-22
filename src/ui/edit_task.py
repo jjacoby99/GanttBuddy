@@ -17,7 +17,7 @@ def render_task_edit(session, phase: Phase, task: Task):
     df = pd.DataFrame([task_dict])
     df = df.drop(["Note", "preceding_task"], axis=1)
 
-    precdeding_task_options = ["None"] + [t for t in phase.tasks if t.name != task.name]
+    precdeding_task_options = ["None"] + [t for t in phase.tasks.values() if t.name != task.name]
     
     default_preceding_task = precdeding_task_options.index(task.preceding_task) if task.preceding_task else None
     preceding_task = st.selectbox(
