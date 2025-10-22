@@ -17,6 +17,7 @@ def render_forecast(session: SessionModel):
         search = st.text_input("Search")
 
     grid = df.copy()
+    grid.drop(columns=["UUID"], inplace=True)
     if phase_filter != "All":
         grid = grid[grid["Phase"] == phase_filter]
     if search:
@@ -44,7 +45,7 @@ def render_forecast(session: SessionModel):
             "Est. Duration (h)": st.column_config.NumberColumn(
                 label="Est. Duration (h)",
                 disabled=True,
-                step=1
+                step=0.1
             ),
             "Actual Start": st.column_config.DatetimeColumn(
                 label="Actual Start",

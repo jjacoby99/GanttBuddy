@@ -15,7 +15,10 @@ def build_forecast_df(project: Project) -> pd.DataFrame:
     if not project.has_task:
         raise ValueError(f"Provided project {project.name} has no tasks")
     
+    pd.set_option("display.float_format", "{:.2f}".format)
+
     data = {
+        "UUID": [],
         "Phase": [],
         "Task": [],
         "Est. Duration (h)": [],
@@ -26,16 +29,18 @@ def build_forecast_df(project: Project) -> pd.DataFrame:
         "% Complete": [],
         "Notes": []
     }
+    
 
     for phase in project.phases.values():
         for task in phase.tasks.values():
+            data["UUID"].append(task.uuid)
             data["Phase"].append(phase.name)
             data["Task"].append(task.name)
-            data["Est. Duration (h)"].append(0.0)
+            data["Est. Duration (h)"].append(float((task.end_date - task.start_date).total_seconds() / 3600.0))
             data["Planned Start"].append(task.start_date)
             data["Planned End"].append(task.end_date)
-            data["Actual End"].append(pd.NaT)
-            data["Actual Start"].append(pd.NaT)
+            data["Actual Start"].append(task.actual_start if task.actual_start else pd.NaT)
+            data["Actual End"].append(task.actual_end if task.actual_end else pd.NaT)
             data["% Complete"].append(0.0)
             data["Notes"].append(task.note)
 
