@@ -97,7 +97,6 @@ class Project:
             else:
                 idx = len(self.phase_order)
             self.phase_order.insert(idx, phase.uuid)
-            
 
 
     def get_phase_index(self, phase: Phase) -> int:
@@ -119,6 +118,8 @@ class Project:
     def add_task_to_phase(self, phase: Phase, task: Task): 
         if not phase.uuid in self.phases.keys():
             raise ValueError(f"Provided phase {phase.name} does not exist.")
+        if not isinstance(task, Task):
+            raise ValueError(f"Provided task {task} is not a valid Task instance.")
         self.phases[phase.uuid].add_task(task)          
 
     def delete_phase(self, phase: Phase):
