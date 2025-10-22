@@ -56,7 +56,6 @@ def adjust_color_any(color: str, *, lighten: float = 0.0, darken: float = 0.0) -
     return _to_hex(r2, g2, b2)
 
 
-
 def render_gantt(session):
     phases = session.project.phases
     if not phases:
@@ -67,7 +66,7 @@ def render_gantt(session):
     for ph in phases.values():
         rows.append({
             "Phase": ph.name,
-            "Task": f"◼ {ph.name}",
+            "Task": f"{ph.name}",
             "Start": ph.start_date,
             "Finish": ph.end_date,
             "Kind": "Phase",
@@ -86,22 +85,34 @@ def render_gantt(session):
         return
 
     df = pd.DataFrame(rows)
+    
+    df["Start"]  = pd.to_datetime(df["Start"],  errors="coerce").dt.tz_localize(None)
+    df["Finish"] = pd.to_datetime(df["Finish"], errors="coerce").dt.tz_localize(None)
+
+    df["_FinishStr"] = df["Finish"].dt.strftime("%Y-%m-%d %H:%M").fillna("")
+
+    # Keep y ordered like input
     df["Task"] = pd.Categorical(df["Task"], categories=[r["Task"] for r in rows], ordered=True)
 
+    # --- Color building (phase base color -> dark for Phase bar, light for Task bar) ---
     palette = q.Plotly + q.Set3 + q.Pastel + q.Safe + q.Dark24
     def base_color(key: str) -> str:
         return palette[hash(key) % len(palette)]
 
     df["ColorKey"] = df.apply(lambda r: f"{r['Phase']}|{r['Kind']}", axis=1)
-
     color_map = {}
     for ph_name in df["Phase"].unique().tolist():
-        base = base_color(ph_name)  # may be '#...' or 'rgb(...)'
+        base = base_color(ph_name)
         color_map[f"{ph_name}|Phase"] = adjust_color_any(base, darken=0.35)
         color_map[f"{ph_name}|Task"]  = adjust_color_any(base, lighten=0.35)
 
     pattern_map = {"Phase": "\\", "Task": ""}
 
+    df["_Title"] = df.apply(
+        lambda r: r["Phase"] if r["Kind"] == "Phase" else f'{r["Phase"]}: {r["Task"]}',
+        axis=1
+    )
+    
     fig = px.timeline(
         df,
         x_start="Start",
@@ -111,19 +122,26 @@ def render_gantt(session):
         color_discrete_map=color_map,
         pattern_shape="Kind",
         pattern_shape_map=pattern_map,
-        # make these available to hovertemplate:
-        custom_data=df[["Phase", "Kind", "Start", "Finish"]],
-        hover_data={"ColorKey": False},  # keep extra clean
+        custom_data=["_Title", "Start", "_FinishStr"],
+        hover_data={"ColorKey": False}
     )
 
     fig.update_yaxes(autorange="reversed")
 
+    # --- Make legend show one entry per Phase, using the Phase-colored trace ---
     for tr in fig.data:
+        # Derive the phase name from the color key
         if isinstance(tr.name, str) and "|" in tr.name:
             ph_name, kind = tr.name.split("|", 1)
             tr.legendgroup = ph_name
             tr.name = ph_name
-            tr.showlegend = (kind == "Phase")
+
+            # Show legend for the Phase trace only (the one with the "\" pattern)
+            shape = getattr(getattr(tr, "marker", None), "pattern", None)
+            shape = getattr(shape, "shape", None)
+            tr.showlegend = (shape == "\\")
+
+        # Cosmetics
         tr.marker.line.width = 1
         tr.marker.line.color = "rgba(0,0,0,0.25)"
 
@@ -132,14 +150,16 @@ def render_gantt(session):
         height=max(240, row_height * df["Task"].nunique()),
         margin=dict(l=10, r=10, t=40, b=10),
         legend_title_text="Phase",
+        legend_tracegroupgap=6,
+        showlegend=True,                # force legend on
         hoverlabel=dict(namelength=-1),
     )
 
+    # Use the preformatted Finish string to avoid NaN display and tz issues
     fig.update_traces(
-        hovertemplate="<b>%{customdata[0]}</b> — %{y}<br>"
-                      "Type: %{customdata[1]}<br>"
-                      "Start: %{customdata[2]|%Y-%m-%d %H:%M}<br>"
-                      "Finish: %{customdata[3]|%Y-%m-%d %H:%M}<extra></extra>"
+        hovertemplate="<b>%{customdata[0]}</b><br>"
+                      "Start: %{customdata[1]|%Y-%m-%d %H:%M}<br>"
+                      "Finish: %{customdata[2]}<extra></extra>"
     )
 
     st.plotly_chart(fig, use_container_width=True)
