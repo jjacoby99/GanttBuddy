@@ -214,6 +214,6 @@ __marimo__/
 projects/
 
 #excel files
-.xlsx
-.xlsm
-.xls
+*.xlsx
+*.xlsm
+*.xls
