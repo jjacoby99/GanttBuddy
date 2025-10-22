@@ -12,8 +12,9 @@ class Task:
     name: str
     start_date: datetime
     end_date: datetime
-    note: str
-    preceding_task: Optional[Task] = None
+    actual_start: Optional[datetime] = None
+    actual_end: Optional[datetime] = None
+    note: str = ""
     uuid: str = field(default_factory=new_id)
     predecessor_ids: list[str] = field(default_factory=list)
     phase_id: str = ""
@@ -44,6 +45,8 @@ class Task:
         task.name = data["Task"]
         task.start_date = data["Start"]
         task.end_date = data["Finish"]
+        task.actual_start = data.get("Actual Start", None)
+        task.actual_end = data.get("Actual End", None)
         task.note = data.get("note", "")
         task.preceding_task = data.get("preceding_task", None)
         task.predecessor_ids = data.get("predecessor_ids", [])
