@@ -10,6 +10,7 @@ from ui.tasks_view import render_tasks_table
 from ui.settings_view import render_settings_view
 from ui.sidebar import render_project_sidebar, render_project_buttons
 from ui.forecast_view import render_forecast, render_actual_duration
+from ui.compact_buttons import use_compact_buttons
 
 st.set_page_config(layout="wide")
 
@@ -19,6 +20,7 @@ if "session" not in st.session_state:
 if "ui" not in st.session_state:
     st.session_state.ui = UIState()
 
+use_compact_buttons()
 ui = st.session_state.ui
 
 with st.sidebar:
