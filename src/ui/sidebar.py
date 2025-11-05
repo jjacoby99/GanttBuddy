@@ -28,7 +28,6 @@ def create_project(session):
     new_project = Project(
         name=project_name,
         description=project_description,
-        phases=[]
     )
 
     if st.button("Create Project"):
@@ -120,14 +119,14 @@ def render_project_buttons(session):
     st.caption(f"Plan your project")
     add_phase, add_task = st.columns(2)
     with add_phase:
-        if st.button("➕ Phase", 
+        if st.button(":material/add_circle: Phase", 
                      key="add_phase", 
                      help=f"Add a phase to {session.project.name}"):
             render_add_phase(session)
             st.session_state.ui.show_add_phase = False
 
     with add_task:
-        if st.button("➕ Task", 
+        if st.button(":material/add_circle: Task", 
                      key="add_task", 
                      help=f"Add a task to {session.project.name}",
                      disabled= False if session.project.phases else True):
