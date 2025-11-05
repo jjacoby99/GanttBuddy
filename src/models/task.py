@@ -23,14 +23,15 @@ class Task:
         return {"Task": self.name, 
                 "Start": self.start_date, 
                 "Finish": self.end_date, 
+                "Actual_Start": self.actual_start,
+                "Actual_Finish": self.actual_end,
                 "Note": self.note,
-                "preceding_task": self.preceding_task.name if self.preceding_task else None,
-                "predecessr_ids": self.predecessor_ids,
+                "predecessor_ids": self.predecessor_ids,
                 "uuid": self.uuid,
                 "phase_id": self.phase_id}
     
     def __str__(self) -> str:
-        return f"Task(name = {self.name}, start_date={self.start_date}, end_date={self.end_date}, note={self.note})"
+        return f"Task(name = {self.name}, start_date={self.start_date}, end_date={self.end_date}, actual_start={self.actual_start}, actual_end={self.actual_end}, note={self.note})"
     
     @staticmethod
     def from_dict(data: dict) -> Task:
@@ -45,8 +46,8 @@ class Task:
         task.name = data["Task"]
         task.start_date = data["Start"]
         task.end_date = data["Finish"]
-        task.actual_start = data.get("Actual Start", None)
-        task.actual_end = data.get("Actual End", None)
+        task.actual_start = data.get("Actual_Start", None)
+        task.actual_end = data.get("Actual_Finish", None)
         task.note = data.get("note", "")
         task.preceding_task = data.get("preceding_task", None)
         task.predecessor_ids = data.get("predecessor_ids", [])
