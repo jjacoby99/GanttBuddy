@@ -12,43 +12,55 @@ def render_task_edit(session, phase: Phase, task: Task):
     if not phases:
         return
     
-    task_dict = task.to_dict()
-    
-    df = pd.DataFrame([task_dict])
-    df = df.drop(["Note", "preceding_task"], axis=1)
+    edited_task_name = st.text_input(
+        label="Edit name",
+        value=task.name if task.name else ""
+    )
 
+    task_dict = task.to_dict()
+    planned_df = pd.DataFrame([task_dict])
+    actual_df = pd.DataFrame([task_dict])
+
+    planned_df = planned_df.drop(["Task", "Note", "uuid", "phase_id", "predecessor_ids", "Actual_Start", "Actual_Finish"], axis=1)
+    actual_df = actual_df.drop(["Task", "Note", "uuid", "phase_id", "predecessor_ids", "Start", "Finish"], axis=1)
+    
     precdeding_task_options = ["None"] + [t for t in phase.tasks.values() if t.name != task.name]
     
-    default_preceding_task = precdeding_task_options.index(task.preceding_task) if task.preceding_task else None
-    preceding_task = st.selectbox(
-        label=f"Preceding Task",
-        options=precdeding_task_options,
-        format_func=lambda t: t.name if not isinstance(t, str) else t,
-        index=default_preceding_task,
-        help=f"Select the task that comes directly before **{task.name}** chronologically."
+    default_predecessors = [phase.tasks[id] for id in task.predecessor_ids]
+
+    predecessors = st.multiselect(
+        label=f"Preceding Tasks",
+        options=[val for _, val in phase.tasks.items()if val.name != task.name],
+        default=default_predecessors,
+        format_func=lambda t: t.name,
+        help=f"Select tasks that must finish before {task.name} begins."
+    )
+
+    st.caption("Edit Task Plan")
+    edited_planned_df = st.data_editor(
+        planned_df,
+        use_container_width=True,
+        hide_index=True
     )
     
-    if st.toggle(label="Move task"):
-        following_task = st.selectbox(
-            label="Move task before",
-            options = [t for t in phase.tasks if not t in [task, preceding_task]] + ["Move to Phase end"],
-            format_func = lambda t: t.name if not isinstance(t, str) else t,
-            help=f"Select the task that follows **{task.name}**"
-        )
-
-
-    st.caption("Task Parameters")
-    edited_df = st.data_editor(
-        df,
-        use_container_width=True
+    st.caption("Edit actual start / end")
+    edited_actual_df = st.data_editor(
+        actual_df,
+        hide_index=True
     )
     if st.button("Save"):
-        edited_dict = edited_df.iloc[0].to_dict()
+        edited_dict = edited_planned_df.iloc[0].to_dict()
 
+        actual_edited_dict = edited_actual_df.iloc[0].to_dict()
+
+        edited_dict = edited_dict | actual_edited_dict # merge 
         edited_dict['Start'] = pd.to_datetime(edited_dict['Start'])
         edited_dict['Finish'] = pd.to_datetime(edited_dict['Finish'])
-        edited_dict['preceding_task'] = preceding_task if preceding_task != "None" else None
-        
+        edited_dict['Actual_Start'] = pd.to_datetime(edited_dict['Actual_Start'])
+        edited_dict['Actual_Finish'] = pd.to_datetime(edited_dict['Actual_Finish'])
+        edited_dict['Task'] = edited_task_name
+        edited_dict['predecessor_ids'] = [p.uuid for p in predecessors]
+
         new_task = Task.from_dict(edited_dict)
 
         session.project.update_task(
@@ -58,7 +70,7 @@ def render_task_edit(session, phase: Phase, task: Task):
         )
 
         st.success("Task updated.")
-        time.sleep(3)
+        time.sleep(1)
         st.rerun()
 
 
