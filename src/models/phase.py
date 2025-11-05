@@ -31,6 +31,19 @@ class Phase:
             return None
         return max(task.end_date for task in self.tasks.values())
     
+
+    @property
+    def actual_start(self) -> Optional[datetime]:
+        if not self.tasks:
+            return None
+        return min(task.actual_start for task in self.tasks.values())
+
+    @property
+    def actual_end(self) -> Optional[datetime]:
+        if not self.tasks:
+            return None
+        return max(task.actual_end for task in self.tasks.values())
+
     def _sort_tasks(self):
         if self._sort_mode == SortMode.by_planned_start:
             self.task_order = [
