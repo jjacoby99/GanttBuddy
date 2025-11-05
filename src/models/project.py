@@ -64,9 +64,7 @@ class Project:
             Updates a task within the project.
             Searches for the old_task, and if found, replaces it with new_task.
             If old_task is not found, a ValueError is thrown.
-        """
-        phase_idx = self.get_phase_index(phase)
-        
+        """        
         self.phases[phase.uuid].edit_task(old_task, new_task)        
 
     def add_phase(self, phase: Phase, position: int | None = None):
