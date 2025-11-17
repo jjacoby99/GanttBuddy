@@ -218,7 +218,6 @@ class ExcelProjectLoader():
                 current_phase = new_phase
             else:
                 task = mk_task(row)
-                task.name = f"{phase_ctr - 1}.{task_ctr} " + task.name
                 task_ctr += 1
                 if current_phase is None:
                     # Task appears before any phase. Put it under an 'Unassigned' bucket
