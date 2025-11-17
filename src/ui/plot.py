@@ -88,11 +88,11 @@ def render_gantt(session):
         # Tasks
         for t_id in ph.task_order:
             t = ph.tasks[t_id]
-            label = f"{ph.name}: {t.name}"
+
             # Planned task
             rows.append({
                 "RowID": f"TK:{t_id}",
-                "Label": label,
+                "Label": t.name,
                 "Phase": ph.name,
                 "Start": t.start_date,
                 "Finish": t.end_date,
@@ -103,7 +103,7 @@ def render_gantt(session):
             if show_actual and getattr(t, "actual_start", None) is not None and getattr(t, "actual_end", None) is not None:
                 rows.append({
                     "RowID": f"TK:{t_id}",
-                    "Label": label,
+                    "Label": t.name,
                     "Phase": ph.name,
                     "Start": t.actual_start,
                     "Finish": t.actual_end,
