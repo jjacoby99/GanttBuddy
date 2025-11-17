@@ -9,7 +9,7 @@ from ui.plot import render_gantt
 from ui.tasks_view import render_tasks_table
 from ui.settings_view import render_settings_view
 from ui.sidebar import render_project_sidebar, render_project_buttons
-from ui.forecast_view import render_forecast, render_actual_duration
+from ui.forecast_view import render_forecast
 from ui.compact_buttons import use_compact_buttons
 
 st.set_page_config(layout="wide")
