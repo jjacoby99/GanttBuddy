@@ -4,111 +4,49 @@ from models.session import SessionModel
 from models.phase import Phase
 from models.task import Task
 from models.project import Project
-from logic.forecast import build_forecast_df
+from logic.forecast import build_forecast_df_v2, forecast, make_forecast_figure
+
+DTFMT = "%Y-%m-%d %H:%M"
+
 
 def render_forecast(session: SessionModel):
-    
-    df = build_forecast_df(session.project)
-    # --- Filters / quick actions ---
-    cols = st.columns([1,1,2,2,2])
-    with cols[0]:
-        phase_filter = st.selectbox("Phase filter", ["All"] + sorted(df["Phase"].unique().tolist()))
-    with cols[1]:
-        search = st.text_input("Search")
+    raw = build_forecast_df_v2(session.project)
 
-    grid = df.copy()
-    grid.drop(columns=["UUID"], inplace=True)
-    if phase_filter != "All":
-        grid = grid[grid["Phase"] == phase_filter]
-    if search:
-        s = search.lower()
-        grid = grid[grid["Task"].str.lower().str.contains(s) | grid["Notes"].str.lower().str.contains(s)]
+    # No manual As Of. Forecast will infer it from the last actual.
+    st.caption("The red line marks where actuals end and the forecast begins (last actual timestamp).")
 
-    # --- Editable grid ---
-    edited = st.data_editor(
-        grid,
-        key="forecast_grid",                  # so we can read selection reliably
-        use_container_width=True,
-        hide_index=True,
-        num_rows="dynamic",
-        column_config={
-            "Planned Start": st.column_config.DatetimeColumn(
-                label="Planned Start",
-                disabled=True,                 
-                format="YYYY-MM-DD HH:mm"      # optional
-            ),
-            "Planned End": st.column_config.DatetimeColumn(
-                label="Planned End",
-                disabled=True,
-                format="YYYY-MM-DD HH:mm"
-            ),
-            "Est. Duration (h)": st.column_config.NumberColumn(
-                label="Est. Duration (h)",
-                disabled=True,
-                step=0.1
-            ),
-            "Actual Start": st.column_config.DatetimeColumn(
-                label="Actual Start",
-                format="YYYY-MM-DD HH:mm"
-            ),
-            "Actual End": st.column_config.DatetimeColumn(
-                label="Actual End",
-                format="YYYY-MM-DD HH:mm"
-            ),
-            "% Complete": st.column_config.NumberColumn(
-                min_value=0, max_value=100, step=5
-            )
-            
-        }
-    )
+    productivity = st.slider("Productivity factor (relative to plan)", 0.25, 2.0, 1.0, 0.05)
+    freq = st.selectbox("Time step", options=["H", "30min", "15min", "D"], index=0,
+                        help="Resolution for building cumulative curves.")
 
+    # Let the engine infer as_of=None
+    res = forecast(raw, as_of=None, productivity=float(productivity), freq=freq)
 
-    # Example: bulk actions on selected rows
-    selection = st.session_state.get("data_editor", {}).get("selection", {})
-    selected_rows = selection.get("rows", []) if selection else []
+    # KPIs
+    DTFMT = "%Y-%m-%d %H:%M"
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Planned End", res.planned_end.strftime(DTFMT) if not pd.isna(res.planned_end) else "—")
+    k2.metric("Forecast End", res.forecast_end.strftime(DTFMT) if not pd.isna(res.forecast_end) else "—",
+              delta=("+" if (not pd.isna(res.planned_end) and not pd.isna(res.forecast_end) and res.forecast_end > res.planned_end) else "")
+                    + (str((res.forecast_end - res.planned_end)) if (not pd.isna(res.planned_end) and not pd.isna(res.forecast_end)) else ""))
+    k3.metric("Completed (to date)", f"{res.completed_hours_to_date:,.1f} h")
+    k4.metric("Total Planned", f"{res.total_planned_hours:,.1f} h")
 
-    with st.expander("Bulk actions"):
-        c1,c2,c3,c4 = st.columns(4)
-        if c1.button("Actual Start = Now", disabled=not selected_rows):
-            now = pd.Timestamp.now()
-            edited.loc[edited.index[selected_rows],"Actual Start"] = now
-        if c2.button("Actual End = Now", disabled=not selected_rows):
-            now = pd.Timestamp.now()
-            edited.loc[edited.index[selected_rows],"Actual End"] = now
-        if c3.button("Backfill End = Start + Est", disabled=not selected_rows):
-            idx = edited.index[selected_rows]
-            edited.loc[idx,"Actual End"] = edited.loc[idx,"Actual Start"] + pd.to_timedelta(edited.loc[idx,"Est. Duration (h)"], unit="h")
-        if c4.button("Mark Done", disabled=not selected_rows):
-            idx = edited.index[selected_rows]
-            now = pd.Timestamp.now()
-            edited.loc[idx,"% Complete"] = 100
-            edited.loc[idx,"Actual End"] = edited.loc[idx,"Actual End"].fillna(now)
+    # Chart (logo will be pulled from assets/bta_logo.png or /mnt/data/bta_logo.png)
+    fig = make_forecast_figure(res, as_of=res.as_of, logo_path="assets/bta_logo.png")
+    st.plotly_chart(fig, use_container_width=True)
 
-    # --- Forecast compute stub ---
-    #if recalc:
-        # 1) Merge edited back into full df (by a stable key in your real app)
-        # 2) Build schedule respecting settings
-        # 3) Produce: forecasted end date, cumulative hours series, gantt for remaining
-        #st.success("Forecast recomputed. (Plug in your scheduling function here.)")
-        # st.altair_chart(...); st.plotly_chart(...)
-                
-@st.dialog(f"Actual Duration")
-def render_actual_duration(session: SessionModel):
-    phases = session.project.phases
-    if not phases:
-        st.info(f"Add phases to your project to start forecasting")
-        return
-    
-    if not session.project.has_task:
-        st.info(f"Add tasks to your project to start forecasting")
-
-    phase = st.selectbox(
-        label="Select a phase to start forecasting",
-        options = phases,
-        format_func= lambda p: p.name if p else ""
-    )
-
-    st.write(type(phase))
-
-
-                
+    # Details
+    show_table = st.checkbox("Show forecasted task details", value=True)
+    if show_table:
+        view = res.forecasted_tasks[[
+            "name",
+            "phase" if "phase" in res.forecasted_tasks.columns else None,
+            "planned_start", "planned_finish", "planned_hours",
+            "actual_start", "actual_finish",
+            "completed_hours_to_date", "remaining_hours",
+            "forecast_start", "forecast_finish",
+        ]].dropna(axis=1, how='all')
+        view.rename({old: str.capitalize(old) for old in view.columns})
+        st.dataframe(view, use_container_width=True)
+ 
