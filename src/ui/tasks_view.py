@@ -44,9 +44,9 @@ def render_tasks_table(session):
             value=False
         )
 
-    col_widths = [3,2,2,1]
+    col_widths = [5,2,2,1]
     if show_actual:
-        col_widths = [3, 2, 2, 2, 2, 1]
+        col_widths = [5, 2, 2, 2, 2, 1]
     
     TASK_COLS = TaskColumns(col_widths)
 
@@ -70,18 +70,20 @@ def render_tasks_table(session):
 
             for i, tid in enumerate(phase.task_order):
                 t = phase.tasks[tid]
-                cols[TASK_COLS.name].write(t.name)
-                cols[TASK_COLS.planned_start].write(t.start_date.strftime("%Y-%m-%d %H:%M"))
-                cols[TASK_COLS.planned_finish].write(t.end_date.strftime("%Y-%m-%d %H:%M"))
+
+                with st.container():
+                    cols[TASK_COLS.name].write(t.name)
+                    cols[TASK_COLS.planned_start].write(t.start_date.strftime("%Y-%m-%d %H:%M"))
+                    cols[TASK_COLS.planned_finish].write(t.end_date.strftime("%Y-%m-%d %H:%M"))
 
 
-                if show_actual:
-                    cols[TASK_COLS.actual_start].write(t.actual_start.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_start) else "")
-                    cols[TASK_COLS.actual_finish].write(t.actual_end.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_end) else "")
+                    if show_actual:
+                        cols[TASK_COLS.actual_start].write(t.actual_start.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_start) else "")
+                        cols[TASK_COLS.actual_finish].write(t.actual_end.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_end) else "")
 
 
-                if cols[TASK_COLS.edit].button("✏️", key=f"edit_{phase.name}_{t.name}_{i}"):
-                    render_task_edit(session, phase=phase, task=t)     
+                    if cols[TASK_COLS.edit].button("✏️", key=f"edit_{phase.name}_{t.name}_{i}"):
+                        render_task_edit(session, phase=phase, task=t)     
 
     
 
