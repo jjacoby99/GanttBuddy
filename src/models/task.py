@@ -33,6 +33,34 @@ class Task:
     def __str__(self) -> str:
         return f"Task(name = {self.name}, start_date={self.start_date}, end_date={self.end_date}, actual_start={self.actual_start}, actual_end={self.actual_end}, note={self.note})"
     
+    @property
+    def planned_duration(self) -> timedelta:
+        """Returns the planned duration of the task as a timedelta."""
+        return self.end_date - self.start_date
+    
+    @property
+    def actual_duration(self) -> Optional[timedelta]:
+        """Returns the actual duration of the task as a timedelta, or None if actual start/end are not set."""
+        if self.actual_start is None or self.actual_end is None:
+            return None
+        return self.actual_end - self.actual_start
+    
+    def to_excel_row(self) -> dict:
+        return {
+            "number": None,
+            "name": self.name,
+            "planned_duration": self.planned_duration.total_seconds() / 3600 if self.planned_duration else None,
+            "planned_start": self.start_date,
+            "planned_end": self.end_date,
+            "id": None,
+            "actual_duration": self.actual_duration.total_seconds() / 3600 if self.actual_duration else None,
+            "actual_start": self.actual_start,
+            "actual_end": self.actual_end,
+            "notes": self.note if self.note else "",
+            "predecessors": ",".join(self.predecessor_ids),
+            "uuid": self.uuid
+        } 
+    
     @staticmethod
     def from_dict(data: dict) -> Task:
         if not "Task" in data:
