@@ -4,6 +4,8 @@ from models.phase import Phase
 from models.task import Task
 from models.session import SessionModel
 import time
+from datetime import datetime
+
 
 @st.dialog(f"Edit Task")
 def render_task_edit(session, phase: Phase, task: Task):
@@ -37,8 +39,21 @@ def render_task_edit(session, phase: Phase, task: Task):
     )
 
     st.caption("Edit Task Plan")
+
     edited_planned_df = st.data_editor(
         planned_df,
+        column_config={
+            "Start": st.column_config.DatetimeColumn(
+                "Planned Start",
+                format="D MMM YYYY, h:mm a",
+                step=60,
+            ),
+            "Finish": st.column_config.DatetimeColumn(
+                "Planned End",
+                format="D MMM YYYY, h:mm a",
+                step=60,
+            ),
+        },
         use_container_width=True,
         hide_index=True
     )
@@ -46,8 +61,32 @@ def render_task_edit(session, phase: Phase, task: Task):
     st.caption("Edit actual start / end")
     edited_actual_df = st.data_editor(
         actual_df,
+        column_config={
+            "Actual_Start": st.column_config.DatetimeColumn(
+                "Actual Start",
+                min_value=datetime(2023, 6, 1),
+                max_value=datetime(2025, 1, 1),
+                format="D MMM YYYY, h:mm a",
+                step=60,
+            ),
+            "Actual_Finish": st.column_config.DatetimeColumn(
+                "Actual End",
+                min_value=datetime(2023, 6, 1),
+                max_value=datetime(2025, 1, 1),
+                format="D MMM YYYY, h:mm a",
+                step=60,
+            ),
+        },
         hide_index=True
     )
+
+    new_note = st.text_area(
+        label="Notes",
+        value=task.note if task.note else "",
+        help="Additional information about the task. May explain delays, context, successes, failures, etc.",
+        height="content"
+    )
+
     if st.button("Save"):
         edited_dict = edited_planned_df.iloc[0].to_dict()
 
@@ -60,6 +99,7 @@ def render_task_edit(session, phase: Phase, task: Task):
         edited_dict['Actual_Finish'] = pd.to_datetime(edited_dict['Actual_Finish'])
         edited_dict['Task'] = edited_task_name
         edited_dict['predecessor_ids'] = [p.uuid for p in predecessors]
+        edited_dict['note'] = new_note
 
         new_task = Task.from_dict(edited_dict)
 
