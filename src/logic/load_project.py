@@ -210,7 +210,7 @@ class ExcelProjectLoader():
             if ExcelProjectLoader.is_phase_cell(dur_cell):
                 # Commit previous phase implicitly by starting a new one
                 new_phase = Phase(
-                    name=str(phase_ctr) + ". " + ExcelProjectLoader._coerce_str(row["ACTIVITY"]),
+                    name=ExcelProjectLoader._coerce_str(row["ACTIVITY"]),
                 )
                 project.add_phase(new_phase)
                 phase_ctr += 1
