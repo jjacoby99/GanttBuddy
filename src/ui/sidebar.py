@@ -132,6 +132,28 @@ def render_project_buttons(session):
                      disabled= False if session.project.phases else True):
             render_task_add(session)
             st.session_state.ui.show_add_task = False
+
+    st.caption(f"Export your project")
+    export_json, export_excel = st.columns(2)
+    with export_json:
+        if st.button(":material/file_download: JSON", 
+                     key="export_json", 
+                     help=f"Export {session.project.name} to a JSON file"):
+            st.info(f"coming soon!")
+    with export_excel:
+        if st.button(":material/file_download: Excel", 
+                     key="export_excel", 
+                     help=f"Export {session.project.name} to an Excel file"):
+            from logic.write_project import ExcelProject, ExcelFormat
+            writer = ExcelProject(
+                project=session.project, 
+                path=os.path.join(os.getcwd(), "projects", f"{session.project.name.replace('\n', ' - ')}.xlsx"), 
+                excel_format=ExcelFormat()
+            )
+
+            writer.write_project()
+            st.success(f"Project exported to projects/{session.project.name}.xlsx")
+
     
     
 
