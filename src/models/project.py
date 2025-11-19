@@ -34,6 +34,32 @@ class Project:
         return max(phase.start_date for phase in self.phases.values() if phase.start_date is not None)
     
     @property
+    def actual_start(self) -> Optional[datetime]:
+        if not self.has_actuals:
+            return None
+        
+        return min(phase.actual_start for phase in self.phases.values() if phase.actual_start is not None)
+    
+    @property
+    def actual_end(self) -> Optional[datetime]:
+        if not self.has_actuals:
+            return None
+        
+        return max(phase.actual_end for phase in self.phases.values() if phase.actual_end is not None)
+
+    def completed_hours(self) -> float:
+        """
+            Returns the total completed hours across all tasks in the project up to as_of datetime.
+            If as_of is None, considers all actuals.
+        """
+        total = 0.0        
+        for task in self.get_task_list():
+            if task.actual_duration is not None:
+                total += task.actual_duration.total_seconds() / 3600
+        return total
+        
+    
+    @property
     def has_task(self) -> bool:
         """
             Returns true if the project has at least one task,
@@ -47,6 +73,21 @@ class Project:
                 return True
         return False
     
+    @property
+    def has_actuals(self) -> bool:
+        """
+            Returns true if the project has at least one task with actual start/end,
+            false otherwise.
+        """
+        if not self.phases:
+            return False
+        
+        for phase in self.phases.values():
+            for task in phase.tasks.values():
+                if task.actual_start is not None and task.actual_end is not None:
+                    return True
+        return False
+
     def find_phase(self, task: Task) -> Phase:
         """
             Searches the project phases to see if the provided Task exists.
@@ -138,3 +179,24 @@ class Project:
             "phases": [p.to_dict() for p in self.phases.values()],
             "settings": self.settings.to_dict()
         }
+    
+    def get_task_list(self) -> list[Task]:
+        tasks: list[Task] = []
+        for pid in self.phase_order:
+            phase = self.phases[pid]
+            tasks.extend(phase.get_task_list())
+        return tasks
+    
+    def get_task_idx(self, task: Task) -> int:
+        """
+            Returns the 0 indexed position of the provided task within the project task list.
+
+            If the task does not exist, a ValueError is raised.
+        """
+
+        task_list = self.get_task_list()
+        for i, t in enumerate(task_list):
+            if t.uuid == task.uuid:
+                return i
+        raise ValueError(f"Task {task.name} not found in project {self.name}.")
+
