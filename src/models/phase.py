@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from models.task import Task
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from logic.generate_id import new_id
 from logic.utils import _none_min
 from models.sort_mode import SortMode
@@ -34,15 +34,59 @@ class Phase:
 
     @property
     def actual_start(self) -> Optional[datetime]:
-        if not self.tasks:
+        if not self.has_actuals:
             return None
         return min(task.actual_start for task in self.tasks.values())
 
     @property
     def actual_end(self) -> Optional[datetime]:
-        if not self.tasks:
+        if not self.has_actuals:
             return None
         return max(task.actual_end for task in self.tasks.values())
+
+    @property
+    def has_actuals(self) -> bool:
+        """
+            Returns true if the phase has at least one task with actual start/end,
+            false otherwise.
+        """
+        if not self.tasks:
+            return False
+        
+        for task in self.tasks.values():
+            if task.actual_start is not None and task.actual_end is not None:
+                return True
+        return False
+    
+    @property
+    def planned_duration(self) -> Optional[timedelta]:
+        """Returns the planned duration of the phase as a timedelta."""
+        if not self.tasks:
+            return None
+        return self.end_date - self.start_date
+    
+    @property
+    def actual_duration(self) -> Optional[timedelta]:
+        """Returns the actual duration of the phase as a timedelta, or None if actual start/end are not set."""
+        if not self.actual_start or not self.actual_end:
+            return None
+        return self.actual_end - self.actual_start
+    
+    def to_excel_row(self) -> dict:
+        return {
+            "number": None,
+            "name": self.name,
+            "planned_duration": self.planned_duration.total_seconds() / 3600 if self.planned_duration else None,
+            "planned_start": self.start_date,
+            "planned_end": self.end_date,
+            "id": None,
+            "actual_duration": self.actual_duration.total_seconds() / 3600 if self.actual_duration else None,
+            "actual_start": self.actual_start,
+            "actual_end": self.actual_end,
+            "notes": None,
+            "predecessors": ",".join(self.predecessor_ids),
+            "uuid": self.uuid
+        }
 
     def _sort_tasks(self):
         if self._sort_mode == SortMode.by_planned_start:
@@ -171,3 +215,6 @@ class Phase:
         phase.predecessor_ids = data.get("predecessor_ids", [])
         phase.uuid = data.get("uuid", new_id())
         return phase
+    
+    def get_task_list(self) -> list[Task]:
+        return [self.tasks[tid] for tid in self.task_order]
