@@ -52,9 +52,9 @@ def render_gantt(session):
     # Controls
     col_left, col_right = st.columns(2)
     with col_left:
-        show_actual = st.checkbox("Show actual durations", value=True)
+        show_actual = st.checkbox("Show actual durations", value=False, disabled= not session.project.has_actuals)
     with col_right:
-        use_bta_colors = st.checkbox("Use BTA color scheme", value=False)
+        use_bta_colors = st.checkbox("Use BTA color scheme", value=True)
 
     # Build rows (planned + optional actual), with unique RowIDs
     rows = []
