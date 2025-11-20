@@ -1,25 +1,18 @@
 from typing import List
-from lib.task import Task
-from lib.project import Project
+from models.task import Task
+from models.project import Project
 
 class SessionModel:
     def __init__(self):
-        self.project: Project = None
+        self._project: Project | None = None
 
-    def set_project(self, project: Project):
-        self.project = Project
+    @property
+    def project(self) -> Project | None:
+        return self._project
 
-    def add_task(self, task: Task, preceding_task: Task = None):
-        if not preceding_task:
-            self.project.tasks.append(task) # add to end
-            return
+    @project.setter
+    def project(self, value: Project):
+        if not isinstance(value, Project):
+            raise ValueError("Session project attribute must be an instance of Project")
+        self._project = value
 
-        # add after preceding_task
-        if not preceding_task in self.project.tasks:
-            raise RuntimeError(f"Preceding task {preceding_task} not found.")
-        
-        idx = self.project.tasks.index(preceding_task)
-        self.project.tasks.insert(idx + 1, task)
-
-    def get_tasks(self) -> list[Task]:
-        return self.project.tasks

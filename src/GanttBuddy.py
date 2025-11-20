@@ -2,47 +2,85 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date
-
-from lib.task import Task
-from lib.session import SessionModel
-from ui.add_task import render_task_add
-from ui.plot import render_gantt
+from models.task import Task
+from models.session import SessionModel
+from models.ui_state import UIState
+from ui.plot import render_gantt, render_task_details
 from ui.tasks_view import render_tasks_table
-from ui.sidebar import render_sidebar
+from ui.settings_view import render_settings_view
+from ui.sidebar import render_project_sidebar, render_project_buttons
+from ui.forecast_view import render_forecast
+from ui.compact_buttons import use_compact_buttons
 
 st.set_page_config(layout="wide")
 
-# Initialize once
 if "session" not in st.session_state:
     st.session_state.session = SessionModel()
 
-if "show_add_dialog" not in st.session_state:
-    st.session_state.show_add_dialog = False
+if "ui" not in st.session_state:
+    st.session_state.ui = UIState()
 
-
+use_compact_buttons()
+ui = st.session_state.ui
 
 with st.sidebar:
-    st.subheader(f"Project")
-    render_sidebar(st.session_state.session)
+    st.subheader(f"Project Explorer")
+    render_project_sidebar(st.session_state.session)
 
 if not st.session_state.session.project:
     st.info(f"Create or load a project to view.")
     st.stop()
-    st.title("GanttBuddy")
+
+
+with st.sidebar:
+    render_project_buttons(st.session_state.session)
 
 st.title(st.session_state.session.project.name)
-# Open dialog
-if st.button("Add New Task", key="add_task_button"):
-    st.session_state.show_add_dialog = True
 
-# Render dialog when flagged
-if st.session_state.show_add_dialog:
-    render_task_add(st.session_state.session)
+save_col, _, _, settings_col = st.columns([2, 2, 10, 2])
+
+with save_col:
+    st.caption("Save")
+    if st.button("💾", help="Save project to file"):
+        proj_dict = st.session_state.session.project.to_dict()
+        import json
+        import os
+        project_path = os.path.join(os.getcwd(),
+                                    "projects",)
+        os.makedirs(project_path, exist_ok=True)
+        with open(os.path.join(project_path, st.session_state.session.project.name + ".json"), "w") as f:
+            json.dump(proj_dict, f, default=str, indent=4)
+            st.success("Project saved.")
+
+with settings_col:
+    st.caption("Settings")
+    if st.button("🔧", help="View / Edit settings: work days, hours, holidays, etc."):
+            st.session_state.ui.show_settings = True
+
+if st.session_state.ui.show_settings:
+    render_settings_view(st.session_state.session)
+    st.session_state.ui.show_settings = False
+
+
+if not st.session_state.session.project.phases:
+    st.info(f"Add a phase to your project to begin.")
+    st.stop()
+
+if not st.session_state.session.project.has_task:
+    st.info(f"Add a task to your project to begin.")
+    st.stop()
 
 task_col, plot_col = st.columns(2)
-with task_col:
+
+task_tab, plot_tab, forecast_tab = st.tabs(["Plan", "Visualize", "Forecast"])
+with task_tab:
     render_tasks_table(st.session_state.session)
 
-# Plot
-with plot_col:
+with plot_tab:
     render_gantt(st.session_state.session)
+    st.divider()
+    render_task_details(st.session_state.session)
+
+with forecast_tab:
+    render_forecast(st.session_state.session)
+
