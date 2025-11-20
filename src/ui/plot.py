@@ -48,13 +48,18 @@ def render_gantt(session):
     if not phases:
         st.info("Add a phase and some tasks to your project to view the visualizer.")
         return
-
+    
+    st.subheader(f"Project Plan")
+    
+    expander = st.expander("Gantt Chart")
     # Controls
-    col_left, col_right = st.columns(2)
+    col_left, _ = expander.columns([1,3])
     with col_left:
-        show_actual = st.checkbox("Show actual durations", value=False, disabled= not session.project.has_actuals)
-    with col_right:
-        use_bta_colors = st.checkbox("Use BTA color scheme", value=True)
+        with st.container(border=True):
+            show_actual = st.toggle("Show actual durations", value=False, disabled= not session.project.has_actuals)
+            use_bta_colors = st.toggle("Use BTA color scheme", value=True)
+        
+       
 
     # Build rows (planned + optional actual), with unique RowIDs
     rows = []
@@ -72,8 +77,10 @@ def render_gantt(session):
         })
         # Actual phase (only if both exist)
         if show_actual:
-            astart = getattr(ph, "actual_start", None)
-            aend   = getattr(ph, "actual_end", None)
+            astart = ph.actual_start
+            aend   = ph.actual_end
+            
+            print(f"Actual Start: {astart}, actual end: {aend}")
             if astart is not None and aend is not None:
                 rows.append({
                     "RowID": f"PH:{ph_id}",
@@ -159,6 +166,7 @@ def render_gantt(session):
             custom_data=["_Title", "Start", "_FinishStr", "Type"],
             hover_data={"ColorKey": False},
         )
+
     else:
         # Original per-phase palette + patterns (Phase has hatch)
         pattern_map = {"Phase": "\\", "Task": ""}
@@ -198,9 +206,26 @@ def render_gantt(session):
         categoryarray=tickvals,
         tickmode="array",
         tickvals=tickvals,
-        ticktext=ticktext,
+        ticktext=ticktext
     )
+    fig.update_layout(yaxis_title="")
 
+    # add legend image for BTA colors
+    try:
+        from pathlib import Path
+        from PIL import Image
+        logo_path = Path(__file__).parent.parent / "assets" / "bta_legend.png"
+        src = Image.open(logo_path)
+    except Exception as e:
+        print(f"Exception caught trying to open logo at {logo_path}: {e}")
+        src = None
+    if src is not None:
+        fig.add_layout_image(
+            dict(source=src, xref="paper", yref="paper",
+                x=1.0, y=0.9, sizex=0.25, sizey=0.25,
+                xanchor="right", yanchor="top", layer="above"))
+        fig.update_layout(margin=dict(l=50, r=120, t=80, b=50))
+    
     # Phase-isolation legend: one legend item per phase (the Planned-Phase trace),
     # and group all traces of that phase together so clicking toggles the whole phase.
     for tr in fig.data:
@@ -231,4 +256,59 @@ def render_gantt(session):
                       "Type: %{customdata[3]}<extra></extra>"
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    expander.plotly_chart(fig, use_container_width=True)
+
+def render_task_details(session):
+    st.subheader("Task Details")
+    c1, _, c3, c4 = st.columns([1,7,1,1])
+
+    phase_to_use = c1.selectbox(
+        label="Filter by Phase",
+        options= ["All Phases"] + [pid for pid in session.project.phase_order],
+        format_func=lambda pid: "All Phases" if pid == "All Phases" else session.project.phases[pid].name,
+        help="Filter the task details table to show only tasks from a specific phase"
+    )
+
+    only_show_delayed = c3.toggle(
+        label="Show only delayed tasks",
+        value = True,
+        key="show_delayed_tasks"
+    )
+
+    show_durations = c4.toggle(
+        label="Show task durations",
+        value=False,
+        key="show_task_durations"
+    )
+
+    task_df = session.project.get_task_df()
+    if phase_to_use != "All Phases":
+        task_df = task_df[task_df["pid"] == phase_to_use]
+        task_df.drop(columns=["pid"], axis=1, inplace=True)
+
+    task_df = task_df[task_df["actual_duration"].notna()]
+    task_df["delay"] = task_df["actual_duration"] - task_df["planned_duration"]
+
+    if only_show_delayed:
+        task_df = task_df[task_df["delay"] > 0]
+
+    if not show_durations:
+        task_df.drop(columns=["planned_start","planned_end","actual_start", "actual_end"], axis=1, inplace=True)
+    
+    st.dataframe(
+        task_df,
+        column_config={
+            "task": st.column_config.TextColumn("Task Name"),
+            "planned_start": st.column_config.DatetimeColumn("Planned Start"),
+            "planned_end": st.column_config.DatetimeColumn("Planned End"),
+            "actual_start": st.column_config.DatetimeColumn("Actual Start"),
+            "actual_end": st.column_config.DatetimeColumn("Actual End"),
+            "planned_duration": st.column_config.NumberColumn("Planned Duration (hrs)", format="%.2f"),
+            "actual_duration": st.column_config.NumberColumn("Actual Duration (hrs)", format="%.2f"),
+            "delay": st.column_config.NumberColumn("Delay (hrs)", format="%.2f", help="Positive values indicate the task finished later than planned; negative values indicate it finished earlier."),
+            "notes": st.column_config.TextColumn("Notes")
+        },
+        use_container_width=True,
+        hide_index=True
+    )
+
