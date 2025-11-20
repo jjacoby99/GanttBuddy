@@ -5,7 +5,7 @@ from datetime import date
 from models.task import Task
 from models.session import SessionModel
 from models.ui_state import UIState
-from ui.plot import render_gantt
+from ui.plot import render_gantt, render_task_details
 from ui.tasks_view import render_tasks_table
 from ui.settings_view import render_settings_view
 from ui.sidebar import render_project_sidebar, render_project_buttons
@@ -78,6 +78,8 @@ with task_tab:
 
 with plot_tab:
     render_gantt(st.session_state.session)
+    st.divider()
+    render_task_details(st.session_state.session)
 
 with forecast_tab:
     render_forecast(st.session_state.session)
