@@ -64,15 +64,11 @@ def render_task_edit(session, phase: Phase, task: Task):
         column_config={
             "Actual_Start": st.column_config.DatetimeColumn(
                 "Actual Start",
-                min_value=datetime(2023, 6, 1),
-                max_value=datetime(2025, 1, 1),
                 format="D MMM YYYY, h:mm a",
                 step=60,
             ),
             "Actual_Finish": st.column_config.DatetimeColumn(
                 "Actual End",
-                min_value=datetime(2023, 6, 1),
-                max_value=datetime(2025, 1, 1),
                 format="D MMM YYYY, h:mm a",
                 step=60,
             ),
