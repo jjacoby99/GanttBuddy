@@ -1,5 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+import numpy as np
+import pandas as pd
 from models.task import Task
 from typing import Optional
 from datetime import datetime, timedelta
@@ -36,14 +38,15 @@ class Phase:
     def actual_start(self) -> Optional[datetime]:
         if not self.has_actuals:
             return None
-        return min(task.actual_start for task in self.tasks.values())
+        return min(task.actual_start for task in self.tasks.values() if isinstance(task.actual_start, datetime) and task.actual_start)
 
     @property
     def actual_end(self) -> Optional[datetime]:
         if not self.has_actuals:
             return None
-        return max(task.actual_end for task in self.tasks.values())
 
+        return max(task.actual_end for task in self.tasks.values() if isinstance(task.actual_end, datetime) and task.actual_end)
+    
     @property
     def has_actuals(self) -> bool:
         """
