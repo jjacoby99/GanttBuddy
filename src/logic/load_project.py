@@ -13,6 +13,8 @@ import re
 from openpyxl import load_workbook
 from io import BytesIO
 from typing import Union
+from datetime import datetime
+
 
 @dataclass
 class DataColumn:
@@ -194,10 +196,10 @@ class ExcelProjectLoader():
 
             return Task(
                 name=ExcelProjectLoader._coerce_str(row["ACTIVITY"]),
-                start_date=pd.to_datetime(row["PLANNED START"], errors="coerce") if not ExcelProjectLoader._is_nan(row["PLANNED START"]) else None,
-                end_date=pd.to_datetime(row["PLANNED END"], errors="coerce") if not ExcelProjectLoader._is_nan(row["PLANNED END"]) else None,
-                actual_end=pd.to_datetime(row["ACTUAL END"], errors="coerce") if not ExcelProjectLoader._is_nan(row["ACTUAL END"]) else None,
-                actual_start=pd.to_datetime(row["ACTUAL START"], errors="coerce") if not ExcelProjectLoader._is_nan(row["ACTUAL START"]) else None,
+                start_date=pd.to_datetime(row["PLANNED START"], errors="coerce").to_pydatetime() if not ExcelProjectLoader._is_nan(row["PLANNED START"]) else None,
+                end_date=pd.to_datetime(row["PLANNED END"], errors="coerce").to_pydatetime() if not ExcelProjectLoader._is_nan(row["PLANNED END"]) else None,
+                actual_end=pd.to_datetime(row["ACTUAL END"], errors="coerce").to_pydatetime() if not ExcelProjectLoader._is_nan(row["ACTUAL END"]) else None,
+                actual_start=pd.to_datetime(row["ACTUAL START"], errors="coerce").to_pydatetime() if not ExcelProjectLoader._is_nan(row["ACTUAL START"]) else None,
                 note=ExcelProjectLoader._coerce_str(row["NOTES"]),
                 uuid=uuid,
                 predecessor_ids=ExcelProjectLoader._coerce_str(row["PREDECESSOR"]).split(",") if not ExcelProjectLoader._is_nan(row["PREDECESSOR"]) else [],
