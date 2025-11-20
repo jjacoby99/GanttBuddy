@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+import pandas as pd
 from typing import Optional
 from models.task import Task
 from models.phase import Phase
@@ -199,4 +200,36 @@ class Project:
             if t.uuid == task.uuid:
                 return i
         raise ValueError(f"Task {task.name} not found in project {self.name}.")
+    
+    def get_task_df(self) -> pd.DataFrame:
+        """
+            Returns a pandas DataFrame containing all tasks in the project.
+        """
+        import pandas as pd
+
+        tasks = self.get_task_list()
+        data = {
+            "task": [],
+            "planned_start": [],
+            "planned_end": [],
+            "planned_duration": [],
+            "actual_start": [],
+            "actual_end": [],
+            "actual_duration": [],
+            "notes": [],
+            "pid": []
+        }
+        for task in tasks:
+            data["task"].append(task.name)
+            data["pid"].append(task.phase_id)
+            data["planned_start"].append(task.start_date)
+            data["planned_end"].append(task.end_date)
+            data["planned_duration"].append(task.planned_duration.total_seconds() / 3600 if task.planned_duration else None)
+            data["actual_start"].append(task.actual_start if task.actual_start else None)
+            data["actual_end"].append(task.actual_end if task.actual_end else None)
+            data["actual_duration"].append(task.actual_duration.total_seconds() / 3600 if task.actual_duration else None)
+            data["notes"].append(task.note if task.note else "")
+
+        return pd.DataFrame(data)
+
 
