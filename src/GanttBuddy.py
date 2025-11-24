@@ -37,10 +37,8 @@ with st.sidebar:
 
 st.title(st.session_state.session.project.name)
 
-save_col, _, _, settings_col = st.columns([2, 2, 10, 2])
 
-with save_col:
-    st.caption("Save")
+with st.container(horizontal=True):
     if st.button("💾", help="Save project to file"):
         proj_dict = st.session_state.session.project.to_dict()
         import json
@@ -52,10 +50,10 @@ with save_col:
             json.dump(proj_dict, f, default=str, indent=4)
             st.success("Project saved.")
 
-with settings_col:
-    st.caption("Settings")
+    st.space("stretch")
     if st.button("🔧", help="View / Edit settings: work days, hours, holidays, etc."):
             st.session_state.ui.show_settings = True
+
 
 if st.session_state.ui.show_settings:
     render_settings_view(st.session_state.session)

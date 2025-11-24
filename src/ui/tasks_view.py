@@ -28,22 +28,25 @@ def render_tasks_table(session):
         st.info(f"Add a phase to {session.project.name} to view project planner")
         return
 
-    
+            
+
     c1, _ = st.columns([1,2])
-    with c1.container(border=True):
-        st.caption("Display Preferences")
+    c1.caption("Display Preferences")
+    with st.container(horizontal=True, border=True, vertical_alignment="top", horizontal_alignment="center", width=500):
         
-        show_col, expand_col = st.columns(2)
-        show_actual = show_col.toggle(
+        show_actual = st.toggle(
             label="Show actual start / end",
             value=False
         )
 
-        expand_all = expand_col.toggle(
+        st.space("stretch")
+
+        expand_all = st.toggle(
             label=f"Expand **{len(phases)}** Phases",
             value=False
         )
 
+    st.caption("Project Phases")
     col_widths = [5,2,2,1]
     if show_actual:
         col_widths = [5, 2, 2, 2, 2, 1]

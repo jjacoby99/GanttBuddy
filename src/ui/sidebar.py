@@ -117,15 +117,15 @@ def render_project_buttons(session):
     
     st.divider()
     st.caption(f"Plan your project")
-    add_phase, add_task = st.columns(2)
-    with add_phase:
+    with st.container(horizontal=True):
         if st.button(":material/add_circle: Phase", 
                      key="add_phase", 
                      help=f"Add a phase to {session.project.name}"):
             render_add_phase(session)
             st.session_state.ui.show_add_phase = False
-
-    with add_task:
+        
+        st.space("stretch")
+        
         if st.button(":material/add_circle: Task", 
                      key="add_task", 
                      help=f"Add a task to {session.project.name}",
@@ -134,13 +134,14 @@ def render_project_buttons(session):
             st.session_state.ui.show_add_task = False
 
     st.caption(f"Export your project")
-    export_json, export_excel = st.columns(2)
-    with export_json:
+    with st.container(horizontal=True):
         if st.button(":material/file_download: JSON", 
                      key="export_json", 
                      help=f"Export {session.project.name} to a JSON file"):
             st.info(f"coming soon!")
-    with export_excel:
+        
+        st.space("stretch")
+        
         if st.button(":material/file_download: Excel", 
                      key="export_excel", 
                      help=f"Export {session.project.name} to an Excel file"):
@@ -153,6 +154,7 @@ def render_project_buttons(session):
 
             writer.write_project()
             st.success(f"Project exported to projects/{session.project.name}.xlsx")
+        
 
     
     
