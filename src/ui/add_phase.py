@@ -30,7 +30,6 @@ def render_add_phase(session):
     if st.button(label=f"Add *{phase_name or 'phase'}* to project", disabled=not phase_name):
         new_phase = Phase(
             name=phase_name,
-            tasks=[],
             preceding_phase=preceding_phase
         )
 
