@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 from ui.edit_task import render_task_edit
+from ui.add_task import render_task_add
 from dataclasses import dataclass
 import pandas as pd
 import datetime
@@ -88,6 +89,8 @@ def render_tasks_table(session):
                     if cols[TASK_COLS.edit].button("✏️", key=f"edit_{phase.name}_{t.name}_{i}"):
                         render_task_edit(session, phase=phase, task=t)     
 
+            if cols[TASK_COLS.edit].button(":material/add_circle: Task", key=f"add_task_{phase.name}", type='primary'):
+                render_task_add(session,phase=phase)
     
 
      
