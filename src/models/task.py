@@ -114,3 +114,22 @@ class Task:
         
         #return current_date
 
+
+    def shift(self, delta=timedelta, shift_actuals=False):
+        """
+        Shifts a given task back by the provided delta.
+        Only affects actual start and end_dates if shift_actuals is True
+        Ignores predecessors
+
+        @params
+            delta (datetime.timedelta): change in time to shift task backwards (negative) or forwards (positive)
+            shift_actuals (bool): flag (False by default) to control whether actual durations are effected by shift
+        """
+        self.start_date += delta
+        self.end_date += delta
+
+        if shift_actuals:
+            self.actual_start += delta
+            self.actual_end += delta
+
+
