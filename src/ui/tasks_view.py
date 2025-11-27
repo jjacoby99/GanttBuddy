@@ -98,13 +98,7 @@ def render_tasks_table(session):
                 st.space("stretch")
 
                 if st.button("✏️ Edit Phase", key=f"edit_{phase.name}", type="primary"):
-                    render_phase_edit(session)
-
-            # if cols[TASK_COLS.name].button(":material/add_circle: Task", key=f"add_task_{phase.name}", type='primary'):
-            #     render_task_add(session,phase=phase)
-            
-            # if cols[TASK_COLS.edit].button("✏️ Edit Phase", key=f"edit_{phase.name}"):
-            #     render_phase_edit(session)
+                    render_phase_edit(session,phase=phase)
     
 
      
