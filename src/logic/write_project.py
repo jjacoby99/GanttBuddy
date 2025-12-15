@@ -80,6 +80,14 @@ class ExcelProject:
             if col_name == "number" or col_name == "id":
                 to_write = self.project.get_phase_index(phase) + 1 # 1 indexed
             
+            # write duration formula. This is important for differentiating between
+            # phases and tasks when reading from excel later. Also better UX
+            if col_name == "planned_duration":
+                # =ROUND(E9-D9,1)&" Days ("&ROUND((E9-D9)*24,1)&" Hours)"
+                to_write = f"=ROUND(E{cell.row}-D{cell.row},1)&\" Days (\"&ROUND((E{cell.row}-D{cell.row})*24,1)&\" Hours)\""
+
+            if col_name == "actual_duration":
+                to_write = f"=ROUND(I{cell.row}-H{cell.row},1)&\" Days (\"&ROUND((I{cell.row}-H{cell.row})*24,1)&\" Hours)\""
             cell.value = to_write
 
         self.cur_row += 1
