@@ -11,6 +11,7 @@ from ui.settings_view import render_settings_view
 from ui.sidebar import render_project_sidebar, render_project_buttons
 from ui.forecast_view import render_forecast
 from ui.compact_buttons import use_compact_buttons
+from ui.analyze_view import render_analysis
 
 st.set_page_config(layout="wide")
 
@@ -70,7 +71,7 @@ if not st.session_state.session.project.has_task:
 
 task_col, plot_col = st.columns(2)
 
-task_tab, plot_tab, forecast_tab = st.tabs(["Plan", "Visualize", "Forecast"])
+task_tab, plot_tab, forecast_tab, analyze_tab = st.tabs(["Plan", "Visualize", "Forecast", "Analyze"])
 with task_tab:
     render_tasks_table(st.session_state.session)
 
@@ -82,3 +83,5 @@ with plot_tab:
 with forecast_tab:
     render_forecast(st.session_state.session)
 
+with analyze_tab:
+    render_analysis(st.session_state.session)
