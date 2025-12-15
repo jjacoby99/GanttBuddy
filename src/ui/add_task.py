@@ -61,26 +61,30 @@ def render_task_add(session: SessionModel, phase: Phase = None):
         new_start_time = session.project.settings.work_start_time
         if predecessor_ids:
             new_start_time = new_start_date.time() 
-
+        
+        start_datetime = None
         if not session.project.settings.work_all_day:
             start_time = st.time_input(
                 label=f"Start time",
                 value=new_start_time,
                 key=f"task_start_time_{",".join(predecessor_ids)}"
             )
-            if start_time < new_start_time:
+
+            if predecessor_ids and start_day == new_start_date.date() and start_time < new_start_time:
                 st.error(f"Start time comes before earliest start: {new_start_time.strftime("%H:%M")}")
             if start_day:
-                start_date = datetime.combine(start_day, start_time)
-            else:
-                start_date = None
+                start_datetime = datetime.combine(start_day, start_time)
+
 
     with end_col:
         end_day = st.date_input(
             label=f"End date",
-            value=new_start_date + timedelta(days=1) if predecessor_ids else None,
+            value=start_datetime + timedelta(hours=1) if start_datetime else datetime.today(),
+            min_value=start_datetime + timedelta(minutes=1) if start_datetime else datetime.today(),
             key="task_start_date"
         )
+
+        end_datetime = None
         if not session.project.settings.work_all_day:
             end_time = st.time_input(
                 label=f"End time",
@@ -88,24 +92,22 @@ def render_task_add(session: SessionModel, phase: Phase = None):
                 key="task_end_time"
             )
             if end_day:
-                end_date = datetime.combine(end_day, end_time)
-            else:
-                end_date = None
+                end_datetime = datetime.combine(end_day, end_time)
 
-    if not start_date or not end_date:
+    if not start_datetime or not end_datetime:
         st.info("Select a start and end date to continue.")
         st.stop()
 
     task_note = st.text_input(
-        label=f"Add a note for {task_name}",
+        label=f"Add a note for '{task_name}'",
         key=f"task_note_input"
     )
 
     if st.button(label=f"Add", disabled=not task_name, type='primary'):
         new_task = Task(
             name=task_name, 
-            start_date=start_date, 
-            end_date=end_date, 
+            start_date=start_datetime, 
+            end_date=end_datetime, 
             note=task_note if task_note else "",
             predecessor_ids=predecessor_ids
         )
