@@ -2,9 +2,12 @@ import streamlit as st
 from datetime import date, timedelta
 from models.task import Task
 from models.phase import Phase
+from models.session import SessionModel
 import time
+from datetime import datetime
+
 @st.dialog(f"Add a new phase to your project.")
-def render_add_phase(session):
+def render_add_phase(session: SessionModel, position: int | None = None):
     
     phase_name = st.text_input(
         label="Enter the name of a project phase",
@@ -15,25 +18,31 @@ def render_add_phase(session):
     if not phase_name:
         return
     
-    preceding_phase = None
+    predecessor_ids = []
     if session.project.phases:
-        preceding_phase = st.selectbox(
-            label="Select preceding phase (or nothing for the first phase)",
+        predecessor_options = [None] + [id for id in session.project.phase_order]
+        predecessor_ids = st.multiselect(
+            label=f"Select phases that precede '{phase_name}'",
             placeholder="Admin",
-            key=preceding_phase,
-            options=session.project.phases,
-            format_func=lambda t: "- None -" if t is None else t.name,
-            help="Select the project phase that directly precedes {phase_name}"
+            options=predecessor_options,
+            format_func=lambda id: "- None -" if id is None else session.project.phases[id].name,
+            help=F"Select the project phases that directly precede {phase_name}"
         )
+    
+    # if user inputs predecessors, and at least one has an end date (task has been added)
+    # give them info on when the new phase can start at at the earliest
+    if predecessor_ids and session.project.end_date:        
+        earliest_start = max(session.project.phases[id].end_date for id in predecessor_ids)
+        st.info(f"Based on predecessors, the earliest start for '{phase_name}' is **{earliest_start.strftime("%Y-%m-%d %H:%M")}**")
 
     
-    if st.button(label=f"Add *{phase_name or 'phase'}* to project", disabled=not phase_name):
+    if st.button(label=f"Add '{phase_name or 'phase'}' to project", disabled=not phase_name):
         new_phase = Phase(
             name=phase_name,
-            preceding_phase=preceding_phase
+            predecessor_ids=predecessor_ids
         )
 
-        session.project.add_phase(new_phase)
+        session.project.add_phase(new_phase, position=position)
 
         st.info(f"Phase {phase_name} successfully added to {session.project.name}!")
         time.sleep(1)
