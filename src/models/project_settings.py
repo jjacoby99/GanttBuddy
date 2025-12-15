@@ -11,7 +11,7 @@ class ProjectSettings:
     work_start_time: Optional[time] = time(hour=7, minute=0)  # 7:00 AM
     work_end_time: Optional[time] = time(hour=18, minute=0)   # 5:00 PM
     working_days: tuple[bool]  = (True, True, True, True, False, False, False) # 0=Monday, 6=Sunday
-    observe_state_holidays: bool = True
+    observe_state_holidays: bool = False
     province: Optional[str] = None   # Default province for holidays
     holidays: list[Holiday] = None
 
