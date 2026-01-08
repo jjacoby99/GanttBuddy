@@ -3,7 +3,9 @@ import streamlit as st
 from ui.edit_task import render_task_edit
 from ui.add_task import render_task_add
 from ui.edit_phase import render_phase_edit
+from ui.add_phase import render_add_phase
 from dataclasses import dataclass
+from datetime import datetime
 import pandas as pd
 import datetime
 
@@ -55,11 +57,13 @@ def render_tasks_table(session):
     
     TASK_COLS = TaskColumns(col_widths)
 
+    phase_idx = 0
     for pid in session.project.phase_order:
         phase = session.project.phases[pid]
-        with st.expander(f"**{phase.name}**  "
-                         f"({len(phase.tasks)} tasks)  "
-                         f"- {phase.start_date or '—'} → {phase.end_date or '-'}",
+
+        phase_start = phase.start_date.strftime("%Y-%m-%d %H:%M") if phase.start_date else '-'
+        phase_end = phase.end_date.strftime("%Y-%m-%d %H:%M") if phase.end_date else '-'
+        with st.expander(f"**{phase.name}**\t {len(phase.tasks)} tasks)\t - {phase_start} → {phase_end}",
                          expanded=expand_all):
             # Header row
             cols = st.columns(col_widths)
@@ -92,13 +96,19 @@ def render_tasks_table(session):
 
             st.divider()
             with st.container(horizontal=True):
-                if st.button(":material/add_circle: Task", key=f"add_task_{phase.name}", type='primary'):
+                if st.button(":material/add_circle: Task", key=f"add_task_{phase.name}", type='secondary'):
                     render_task_add(session,phase=phase)
                     
                 st.space("stretch")
 
-                if st.button("✏️ Edit Phase", key=f"edit_{phase.name}", type="primary"):
+                if st.button("✏️ Edit Phase", key=f"edit_{phase.name}", type="secondary"):
                     render_phase_edit(session,phase=phase)
-    
+
+        with st.container(horizontal=True):
+            st.space("stretch")
+            if st.button(":material/add_circle: Phase", key=f"add_phase_{phase_idx}", type='primary'):
+                render_add_phase(session, position=phase_idx+1)
+        
+        phase_idx += 1
 
      
