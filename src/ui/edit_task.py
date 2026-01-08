@@ -54,7 +54,7 @@ def render_task_edit(session, phase: Phase, task: Task):
                 step=60,
             ),
         },
-        use_container_width=True,
+        width='stretch',
         hide_index=True
     )
     
@@ -83,31 +83,43 @@ def render_task_edit(session, phase: Phase, task: Task):
         height="content"
     )
 
-    if st.button("Save"):
-        edited_dict = edited_planned_df.iloc[0].to_dict()
+    with st.container(horizontal=True):
+        if st.button("Save"):
+            edited_dict = edited_planned_df.iloc[0].to_dict()
 
-        actual_edited_dict = edited_actual_df.iloc[0].to_dict()
+            actual_edited_dict = edited_actual_df.iloc[0].to_dict()
 
-        edited_dict = edited_dict | actual_edited_dict # merge 
-        edited_dict['Start'] = pd.to_datetime(edited_dict['Start'])
-        edited_dict['Finish'] = pd.to_datetime(edited_dict['Finish'])
-        edited_dict['Actual_Start'] = pd.to_datetime(edited_dict['Actual_Start'])
-        edited_dict['Actual_Finish'] = pd.to_datetime(edited_dict['Actual_Finish'])
-        edited_dict['Task'] = edited_task_name
-        edited_dict['predecessor_ids'] = [p.uuid for p in predecessors]
-        edited_dict['note'] = new_note
+            edited_dict = edited_dict | actual_edited_dict # merge 
+            edited_dict['Start'] = pd.to_datetime(edited_dict['Start'])
+            edited_dict['Finish'] = pd.to_datetime(edited_dict['Finish'])
+            edited_dict['Actual_Start'] = pd.to_datetime(edited_dict['Actual_Start'])
+            edited_dict['Actual_Finish'] = pd.to_datetime(edited_dict['Actual_Finish'])
+            edited_dict['Task'] = edited_task_name
+            edited_dict['predecessor_ids'] = [p.uuid for p in predecessors]
+            edited_dict['note'] = new_note
 
-        new_task = Task.from_dict(edited_dict)
+            new_task = Task.from_dict(edited_dict)
 
-        session.project.update_task(
-            phase=phase, 
-            old_task=task, 
-            new_task=new_task
-        )
+            session.project.update_task(
+                phase=phase, 
+                old_task=task, 
+                new_task=new_task
+            )
 
-        st.success("Task updated.")
-        time.sleep(1)
-        st.rerun()
+            st.success("Task updated.")
+            time.sleep(1)
+            st.rerun()
+
+        st.space('stretch')
+
+        with st.container(horizontal=False):
+            if st.button('Delete'):
+                name = task.name
+                predecessors_had = phase.delete_task(task)
+
+                st.info(f'\'{name}\' deleted. {predecessors_had} Tasks were preceded.')
+                time.sleep(1)
+                st.rerun()
 
 
         
