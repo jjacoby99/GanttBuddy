@@ -51,7 +51,7 @@ def render_forecast(session: SessionModel):
 
     # Chart (logo will be pulled from assets/bta_logo.png or /mnt/data/bta_logo.png)
     fig = make_forecast_figure(res, project_name=session.project.name)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # Details
     show_table = st.checkbox("Show forecasted task details", value=True)
@@ -63,5 +63,9 @@ def render_forecast(session: SessionModel):
             "actual_start", "actual_finish", "actual_duration",
         ]].dropna(axis=1, how='all')
         view.rename({old: str.capitalize(old) for old in view.columns})
-        st.dataframe(view, use_container_width=True)
- 
+        st.dataframe(view, width='stretch')
+    
+
+    st.dataframe(
+        forecast_df
+    )
