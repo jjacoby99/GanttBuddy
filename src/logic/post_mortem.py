@@ -32,6 +32,7 @@ class PostMortemAnalyzer:
             "Actual End"
             "Actual Duration"
             "Delay"
+            "Notes"
         """
 
         data = {
@@ -43,7 +44,8 @@ class PostMortemAnalyzer:
             "Actual Start": [],
             "Actual End": [],
             "Actual Duration": [],
-            "Delay": []
+            "Delay": [],
+            "Notes": []
         }
 
         for i, tid in enumerate(phase.task_order):
@@ -67,6 +69,7 @@ class PostMortemAnalyzer:
             adur = task.actual_duration.total_seconds() / 3600
             data["Actual Duration"].append(adur)
             data["Delay"].append(adur - pdur) # positive indicates a delay - negative indicates ahead of schedule
+            data["Notes"].append(task.note if task.note else "")
         
         df = pd.DataFrame(data)
         
@@ -92,7 +95,37 @@ class PostMortemAnalyzer:
             delays.append(PostMortemAnalyzer.analyze_phase_delays(phase, n))
         
         return delays
-            
+
+    @staticmethod
+    def major_delays(project: Project, n: int): 
+        """
+        Analyzes the project and returns a DataFrame of the top n major delays across all phases
+        """
+        data = {
+            "Phase": [],
+            "Task No.": [],
+            "Task": [],
+            "Delay": [],
+            "Notes": []
+        }
+
+        for pid in project.phase_order:
+            phase = project.phases[pid]
+            phase_delay_df = PostMortemAnalyzer.analyze_phase_delays(phase, -1)
+
+            for _, row in phase_delay_df.iterrows():
+                data["Phase"].append(phase.name)
+                data["Task No."].append(row["Task No."])
+                data["Task"].append(row["Task"])
+                data["Delay"].append(row["Delay"])
+                data["Notes"].append(row["Notes"])
+        
+        df = pd.DataFrame(data)
+        df = df.sort_values(by='Delay', ascending=False)
+        if n == -1:
+            return df
+        return df.head(n)
+
     #@lru_cache(maxsize=128)
     @staticmethod
     def write_dataframe_to_sheet(df: pd.DataFrame, wb: Workbook, sheet_name: str, include_index: bool = False):
@@ -115,12 +148,21 @@ class PostMortemAnalyzer:
             index=0
         )
 
-        ws.append(["Phase Number", "Phase Name", "Link"])
+        ws.append(["Sheet Name", "Description", "Link"])
+        ws.append(["Major Delays", "Top delayed tasks across all phases", "Go To Sheet"])
+        name_col = ws.cell(row=2, column=1, value="Major Delays")
+        desc_col = ws.cell(row=2, column=2, value="Top delayed tasks across all phases")
+        link_col = ws.cell(row=2, column=3, value="Go To Sheet")
+        link_col.hyperlink = Hyperlink(
+            ref=link_col.coordinate,
+            location=f"{quote_sheetname('Major Delays')}!A1"
+        )
+        link_col.style = "Hyperlink"
         for i, pid in enumerate(project.phase_order):
             name = project.phases[pid].name
-            num_col = ws.cell(row=2+i, column=1, value=i+1)
-            name_cell = ws.cell(row=2+i, column=2, value=name)
-            link_cell = ws.cell(row=2+i, column=3, value="Go To Sheet")
+            num_col = ws.cell(row=3+i, column=1, value=f"Phase-{i+1}")
+            name_cell = ws.cell(row=3+i, column=2, value=name)
+            link_cell = ws.cell(row=3+i, column=3, value="Go To Sheet")
 
             sheet_name = f"Phase-{i+1}"
             if sheet_name not in wb.sheetnames:
@@ -134,10 +176,31 @@ class PostMortemAnalyzer:
 
         return wb
 
+    @staticmethod
+    def write_major_delays(wb: Workbook, project: Project, n: int=10):
+        delays_df = PostMortemAnalyzer.major_delays(project, n)
+        ws = wb.create_sheet(
+            title="Major Delays",
+            index=0
+        )
+
+        PostMortemAnalyzer.write_dataframe_to_sheet(
+            df=delays_df,
+            wb=wb,
+            sheet_name="Major Delays"
+        )
+        return wb
+
     #@lru_cache(maxsize=128)
     @staticmethod
     def write_post_mortem(project: Project, n: int) -> Workbook:
-        wb = Workbook()
+        wb = Workbook() 
+
+        wb = PostMortemAnalyzer.write_major_delays(
+            wb=wb,
+            project=project,
+            n=n
+        )
 
         for i, pid in enumerate(project.phase_order):
             phase = project.phases[pid]
@@ -155,7 +218,6 @@ class PostMortemAnalyzer:
                 wb=wb,
                 sheet_name=sheet_name
             )
-
         try:
             wb = PostMortemAnalyzer.write_index_sheet(
                 project=project,
