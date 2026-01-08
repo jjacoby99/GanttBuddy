@@ -158,3 +158,5 @@ def build_gantt_df(project: Project, inputs: GanttInputs) -> pd.DataFrame:
 
     df["Start_str"] = pd.to_datetime(df["Start"]).dt.strftime("%Y-%m-%d %H:%M")
     df["Finish_str"] = pd.to_datetime(df["Finish"]).dt.strftime("%Y-%m-%d %H:%M")
+
+    return df
