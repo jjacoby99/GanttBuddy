@@ -12,6 +12,7 @@ from ui.sidebar import render_project_sidebar, render_project_buttons
 from ui.forecast_view import render_forecast
 from ui.compact_buttons import use_compact_buttons
 from ui.analyze_view import render_analysis
+from ui.edit_project import render_edit_project
 
 st.set_page_config(layout="wide")
 
@@ -23,6 +24,11 @@ if "ui" not in st.session_state:
 
 use_compact_buttons()
 ui = st.session_state.ui
+
+# Add to ui state
+# todo
+if "show_edit_project" not in st.session_state:
+    st.session_state["show_edit_project"] = False
 
 with st.sidebar:
     st.subheader(f"Project Explorer")
@@ -36,8 +42,16 @@ if not st.session_state.session.project:
 with st.sidebar:
     render_project_buttons(st.session_state.session)
 
-st.title(st.session_state.session.project.name)
+with st.container(horizontal=True):
+    st.title(st.session_state.session.project.name)
+    st.space("stretch")
 
+    if st.button(f"📝 Edit Project"):
+        st.session_state.show_edit_project = True
+
+if st.session_state.show_edit_project:
+    render_edit_project(st.session_state.session)
+    st.session_state.show_edit_project = False
 
 with st.container(horizontal=True):
     if st.button("💾", help="Save project to file"):
