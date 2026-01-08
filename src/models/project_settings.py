@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from models.holiday import Holiday, fetch_holidays
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, Literal
 
 @dataclass
 class ProjectSettings:
@@ -14,6 +14,7 @@ class ProjectSettings:
     observe_state_holidays: bool = False
     province: Optional[str] = None   # Default province for holidays
     holidays: list[Holiday] = None
+    duration_resolution: Literal['hours', 'days'] = 'hours'
 
     @property
     def work_duration(self) -> datetime.timedelta:
