@@ -8,6 +8,9 @@ import numpy as np
 import re
 from colorsys import rgb_to_hls, hls_to_rgb
 
+from logic.post_mortem import PostMortemAnalyzer
+
+
 _rgb_re = re.compile(r"^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*([\d.]+))?\s*\)$", re.IGNORECASE)
 
 def _parse_color_any(c: str):
@@ -154,7 +157,6 @@ def render_gantt(session):
     if df.empty:
         expander.info("No tasks or phases with dates to display.")
         return
-
     # Filter out rows without valid start/finish
     df = df[df["Start"].notna() & df["Finish"].notna()].copy()
     if df.empty:
@@ -464,4 +466,3 @@ def render_task_details(session):
         width='stretch',
         hide_index=True
     )
-
