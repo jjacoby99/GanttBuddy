@@ -240,13 +240,14 @@ class PostMortemAnalyzer:
         }
         
         return delay
-        
+    
+    @staticmethod
     def phase_delay(phase: Phase) -> Optional[float]:
         if not phase.actual_duration:
             return None
         return (phase.actual_duration - phase.planned_duration).total_seconds() / 3600
 
-
+    @staticmethod
     def get_phase_delays(project: Project) -> dict[str, float]:
         delays = {
             project.phases[pid].name:
