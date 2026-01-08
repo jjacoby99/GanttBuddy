@@ -162,12 +162,36 @@ class Phase:
         if not old_task.uuid in self.tasks.keys():
             raise RuntimeError(f"Provided task {old_task} not found.")
         
+        # only edit phase durations if required. 
+        pre_task_edits = False
+        if old_task.start_date != new_task.start_date:
+            pre_task_edits = True
+
+        post_task_edits = False
+        if old_task.end_date != new_task.end_date:
+            post_task_edits = True
+        
         new_task.uuid = old_task.uuid # preserve uuid
         order = self.task_order.index(old_task.uuid) # preserve order
         del self.tasks[old_task.uuid]
         self.tasks[new_task.uuid] = new_task
         self.task_order[order] = new_task.uuid
-        
+
+        return
+        # handle the case where the start date has changed, affecting tasks before and after 
+        if pre_task_edits:
+            pass
+
+        # handle the case where the end date has changed, affecting tasks after 
+        if post_task_edits:
+            for i, tid in enumerate(self.task_order, start=self.task_order[order]):
+                task = self.task_order[tid]
+                predecessor_ids = task.predecessor_ids
+
+                if new_task.uuid in predecessor_ids:
+                    # shift each task after current back by (old_task.end_date - new_task.end_date)
+                    pass
+
 
     def delete_task(self, task: Task) -> int:
         """
