@@ -10,7 +10,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Optional
 import re
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from io import BytesIO
 from typing import Union
 from datetime import datetime
@@ -153,6 +153,18 @@ class ExcelProjectLoader():
             return float(s)
         except ValueError:
             return None
+
+
+    def _infer_columns(wb: Workbook, params: ExcelParameters):
+        """
+            Reads the header row of the provided Workbook
+            Infers data columns present
+        """
+
+        ws = wb[params.sheet_name]
+
+        
+
 
     @staticmethod
     def load_excel_project(file, params: ExcelParameters) -> Project:
