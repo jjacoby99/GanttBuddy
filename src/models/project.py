@@ -9,6 +9,7 @@ from datetime import datetime
 from logic.generate_id import new_id
 from logic.utils import _none_min
 from models.sort_mode import SortMode
+import pandas as pd
 
 @dataclass
 class Project:
@@ -107,7 +108,9 @@ class Project:
             Searches for the old_task, and if found, replaces it with new_task.
             If old_task is not found, a ValueError is thrown.
         """        
-        self.phases[phase.uuid].edit_task(old_task, new_task)        
+        self.phases[phase.uuid].edit_task(old_task, new_task)
+
+        # handle increased / decreased durations based on predecessors   
 
     def add_phase(self, phase: Phase, position: int | None = None):
         self.phases[phase.uuid] = phase
@@ -158,8 +161,6 @@ class Project:
     def add_task_to_phase(self, phase: Phase, task: Task): 
         if not phase.uuid in self.phases.keys():
             raise ValueError(f"Provided phase {phase.name} does not exist.")
-        if not isinstance(task, Task):
-            raise ValueError(f"Provided task {task} is not a valid Task instance.")
         self.phases[phase.uuid].add_task(task)          
 
     def delete_phase(self, phase: Phase):
@@ -202,11 +203,6 @@ class Project:
         raise ValueError(f"Task {task.name} not found in project {self.name}.")
     
     def get_task_df(self) -> pd.DataFrame:
-        """
-            Returns a pandas DataFrame containing all tasks in the project.
-        """
-        import pandas as pd
-
         tasks = self.get_task_list()
         data = {
             "task": [],
@@ -219,17 +215,27 @@ class Project:
             "notes": [],
             "pid": []
         }
+
         for task in tasks:
             data["task"].append(task.name)
             data["pid"].append(task.phase_id)
             data["planned_start"].append(task.start_date)
             data["planned_end"].append(task.end_date)
-            data["planned_duration"].append(task.planned_duration.total_seconds() / 3600 if task.planned_duration else None)
+
+            pdur = task.planned_duration
+            data["planned_duration"].append(pdur.total_seconds() / 3600)
+
             data["actual_start"].append(task.actual_start if task.actual_start else None)
             data["actual_end"].append(task.actual_end if task.actual_end else None)
-            data["actual_duration"].append(task.actual_duration.total_seconds() / 3600 if task.actual_duration else None)
+
+            adur = task.actual_duration
+            data["actual_duration"].append(
+                adur.total_seconds() / 3600 if adur is not None else None
+            )
+
             data["notes"].append(task.note if task.note else "")
 
         return pd.DataFrame(data)
+    
 
 
