@@ -90,6 +90,15 @@ class Project:
                     return True
         return False
 
+    def __len__(self) -> int:
+        """
+            Returns the number of phases and tasks in the project.
+        """
+        count = len(self.phases)
+        for phase in self.phases.values():
+            count += len(phase.tasks)
+        return count
+
     def find_phase(self, task: Task) -> Phase:
         """
             Searches the project phases to see if the provided Task exists.
