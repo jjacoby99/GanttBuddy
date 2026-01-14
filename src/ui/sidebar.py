@@ -5,6 +5,7 @@ from ui.add_phase import render_add_phase
 from ui.edit_phase import render_phase_edit
 from ui.add_task import render_task_add
 from ui.edit_task import render_task_edit
+from ui.template_view import load_from_template
 from logic.load_project import ProjectLoader, ExcelProjectLoader, ExcelParameters, DataColumn
 
 @st.dialog("Create a project")
@@ -100,6 +101,10 @@ def load_from_excel(session) -> Project:
 def render_project_sidebar(session) -> Project:
     if st.button(f"Create Project", help="Create a new project from scratch"):
         create_project(session)
+        return
+    
+    if st.button(f"Create from Template", help="Create a new project from a predefined template"):
+        load_from_template(session)
         return
     
     if st.button(f"Load Project", help="Load an existing project"):
