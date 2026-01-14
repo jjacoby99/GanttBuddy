@@ -32,8 +32,6 @@ def render_tasks_table(session):
         st.info(f"Add a phase to {session.project.name} to view project planner")
         return
 
-            
-
     c1, _ = st.columns([1,2])
     c1.caption("Display Preferences")
     with st.container(horizontal=True, border=True, vertical_alignment="top", horizontal_alignment="center", width=500):
