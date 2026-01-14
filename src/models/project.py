@@ -33,7 +33,7 @@ class Project:
         if not self.phases:
             return None
         
-        return max(phase.start_date for phase in self.phases.values() if phase.start_date is not None)
+        return max(phase.end_date for phase in self.phases.values() if phase.end_date is not None)
     
     @property
     def actual_start(self) -> Optional[datetime]:
