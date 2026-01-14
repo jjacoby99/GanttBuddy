@@ -10,13 +10,11 @@ def render_settings_view(session: SessionModel):
     
     settings = session.project.settings
     work_all_day_val = settings.work_all_day
-    st.write(work_all_day_val)
     work_all_day = st.checkbox(
         label="Work all day?",
         value=settings.work_all_day,
         help="Select if work is 24 hrs/day for this project."
     )
-    st.write(work_all_day)
     work_start = work_end = None
 
     if not work_all_day:
@@ -37,6 +35,7 @@ def render_settings_view(session: SessionModel):
             5: "Sat.",
             6: "Sun."
         }
+    
     working_days_selected = st.pills(
         label="Working Days",
         options=sorted(list(day_map.keys())),
@@ -66,6 +65,13 @@ def render_settings_view(session: SessionModel):
             index=0
         )
     
+    duration_resolution = st.radio(
+        label="Duration Resolution",
+        options=["hours", "days"],
+        index=0 if settings.duration_resolution == "hours" else 1,
+        help="Choose whether task durations are measured in hours or days."
+    )
+
     submitted = st.button("Save Settings")
     if submitted:
         settings.work_all_day = work_all_day
