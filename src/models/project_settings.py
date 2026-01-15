@@ -85,3 +85,9 @@ class ProjectSettings:
         holidays_data = data.get("holidays", [])
         settings.holidays = [Holiday(name=h["name"], date=h["date"]) for h in holidays_data]
         return settings
+    
+    def set_all_working_days(self):
+        """
+            Sets all working days to True
+        """
+        self.working_days = (True, True, True, True, True, True, True)
