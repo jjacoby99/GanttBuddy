@@ -4,6 +4,8 @@ from ui.edit_task import render_task_edit
 from ui.add_task import render_task_add
 from ui.edit_phase import render_phase_edit
 from ui.add_phase import render_add_phase
+from ui.utils.project_info import render_project_info
+
 from dataclasses import dataclass
 from datetime import datetime
 import pandas as pd
@@ -24,13 +26,14 @@ class TaskColumns:
             self.edit = 5
 
 
-
 def render_tasks_table(session):
     phases = session.project.phases
 
     if not phases:
         st.info(f"Add a phase to {session.project.name} to view project planner")
         return
+
+    render_project_info(session.project)
 
     c1, _ = st.columns([1,2])
     c1.caption("Display Preferences")
@@ -48,7 +51,7 @@ def render_tasks_table(session):
             value=False
         )
 
-    st.caption("Project Phases")
+    st.subheader("Project Phases")
     col_widths = [5,2,2,1]
     if show_actual:
         col_widths = [5, 2, 2, 2, 2, 1]
@@ -61,7 +64,7 @@ def render_tasks_table(session):
 
         phase_start = phase.start_date.strftime("%Y-%m-%d %H:%M") if phase.start_date else '-'
         phase_end = phase.end_date.strftime("%Y-%m-%d %H:%M") if phase.end_date else '-'
-        with st.expander(f"**{phase.name}**\t {len(phase.tasks)} tasks)\t - {phase_start} → {phase_end}",
+        with st.expander(f"**{phase.name}**\t ({len(phase.tasks)} tasks)\t - {phase_start} → {phase_end}",
                          expanded=expand_all):
             # Header row
             cols = st.columns(col_widths)
