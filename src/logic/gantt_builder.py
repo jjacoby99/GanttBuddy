@@ -9,8 +9,10 @@ from models.task import Task
 from models.session import SessionModel
 from models.gantt_models import GanttInputs
 
+from streamlit import cache_data
 from logic.plot_utilities import adjust_color_any
 
+@cache_data
 def build_gantt_df(project: Project, inputs: GanttInputs) -> pd.DataFrame:
     
     phases = project.phases
@@ -160,7 +162,7 @@ def build_color_map(df: pd.DataFrame, use_bta_colors: bool) -> dict[str, str]:
         color_map[f"{ph_name}|Task|Actual"] = adjust_color_any(base, lighten=0.55)
     return color_map
 
-
+@cache_data
 def build_timeline(project: Project, inputs: GanttInputs):
     
     df = build_gantt_df(project, inputs)
