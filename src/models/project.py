@@ -5,7 +5,7 @@ from typing import Optional
 from models.task import Task
 from models.phase import Phase
 from models.project_settings import ProjectSettings
-from datetime import datetime
+from datetime import datetime, timedelta
 from logic.generate_id import new_id
 from logic.utils import _none_min
 from models.sort_mode import SortMode
@@ -211,6 +211,14 @@ class Project:
                 return i
         raise ValueError(f"Task {task.name} not found in project {self.name}.")
     
+    @property
+    def planned_duration(self) -> timedelta:
+        """
+            Returns a timedelta object that is the difference of the project's
+            end date and start date.
+        """
+        return self.end_date - self.start_date
+
     def get_task_df(self) -> pd.DataFrame:
         tasks = self.get_task_list()
         data = {
