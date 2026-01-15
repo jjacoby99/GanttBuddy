@@ -1,4 +1,5 @@
 import pandas as pd
+import datetime as dt
 import plotly.express as px
 import streamlit as st
 from typing import Optional
@@ -8,9 +9,14 @@ import numpy as np
 import re
 from colorsys import rgb_to_hls, hls_to_rgb
 
+from ui.utils.phase_controls import prev_phase, next_phase
+from ui.utils.project_info import render_project_info
 from logic.post_mortem import PostMortemAnalyzer
 
 from models.gantt_models import GanttInputs
+from models.project import Project
+from models.session import SessionModel
+from models.phase import Phase 
 from logic.gantt_builder import build_timeline
 
 def render_gantt(session):
@@ -20,29 +26,56 @@ def render_gantt(session):
         return
 
     st.subheader("Project Plan")
+    phase_view = None
+    if st.checkbox("View phase by phase schedules", value=True):
+        phase_idx = st.session_state.ui.analysis_phase_index
+        pid = session.project.phase_order[phase_idx]
+        phase = session.project.phases[pid]
+        with st.container(horizontal=True, horizontal_alignment='center'):
+            if st.button("←", type="secondary", on_click=prev_phase, disabled=(phase_idx == 0)):
+                # reduce phase index by one
+                st.session_state.ui.analysis_phase_index = max(0, st.session_state.ui.analysis_phase_index - 1)
+                st.rerun()
 
-    expander = st.expander("Gantt Chart")
+            st.space(size="stretch")
+            
+            st.write(f"**Phase {phase_idx+1}. {phase.name}**")
+
+            if st.button("→", type="secondary", on_click=next_phase, disabled=(phase_idx == len(session.project.phase_order) - 1)):
+                st.session_state.ui.analysis_phase_index = min(len(session.project.phase_order) - 1, st.session_state.ui.analysis_phase_index + 1)
+                st.rerun()
+
+        phase_idx = st.session_state.ui.analysis_phase_index
+        pid = session.project.phase_order[phase_idx]
+        phase = session.project.phases[pid]
+
+        phase_view = Project(
+            name=session.project.name
+        )
+
+        phase_view.add_phase(phase)
+
     # Controls
-    col_left, _ = expander.columns([1, 3])
-    with col_left:
-        with st.container(border=True):
-            show_actual = st.toggle(
-                "Show actual durations",
-                value=False,
-                disabled=not getattr(session.project, "has_actuals", False),
-                key="gantt_show_actual",
-            )
-            use_bta_colors = st.toggle(  # label text can be changed later if you want
-                "Use BTA color scheme",
-                value=True,
-                key="gantt_use_bta_colors",
-            )
-            shade_non_working = st.toggle(
-                "Shade non-working time",
-                value=True,
-                key="gantt_shade_non_working",
-                help="Go to settings to edit working days/hours for the project"
-            )
+    with st.container(horizontal=True):
+        show_actual = st.toggle(
+            "Show actual durations",
+            value=False,
+            disabled=not getattr(session.project, "has_actuals", False),
+            key="gantt_show_actual",
+        )
+        st.space("stretch")
+        use_bta_colors = st.toggle(  
+            "Use BTA color scheme",
+            value=True,
+            key="gantt_use_bta_colors",
+        )
+        st.space("stretch")
+        shade_non_working = st.toggle(
+            "Shade non-working time",
+            value=True,
+            key="gantt_shade_non_working",
+            help="Go to settings to edit working days/hours for the project"
+        )
 
     inputs = GanttInputs(
         show_actuals=show_actual,
@@ -50,17 +83,22 @@ def render_gantt(session):
         shade_non_working=shade_non_working
     )
 
+    selected_proj = session.project if not phase_view else phase_view
     try:
         fig = build_timeline(
-            project=session.project,
+            project=selected_proj,
             inputs=inputs
         )
     except ValueError as e:
         st.info(f"Add some tasks to your project to view the Gantt chart.")
         return
 
-    expander.plotly_chart(fig)
+    st.plotly_chart(fig)
 
+    st.divider()
+    render_project_info(selected_proj)
+
+    
 
 def render_task_details(session):
     st.subheader("Task Details")
