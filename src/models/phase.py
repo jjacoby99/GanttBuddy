@@ -215,6 +215,11 @@ class Phase:
 
         return predecessor_count
 
+    def __len__(self):
+        """
+        Returns the number of tasks in the phase.s
+        """
+        return len(self.task_order)
 
     def __str__(self):
         return f"Project Phase '{self.name}'. Start date: {self.start_date if self.tasks else None}. End date: {self.end_date if self.tasks else None}"
