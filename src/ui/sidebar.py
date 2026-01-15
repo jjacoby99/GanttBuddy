@@ -37,30 +37,6 @@ def create_project(session):
         st.rerun()
         return
 
-@st.dialog("Load a project")
-def load_project(session) -> Project:
-    projects = os.listdir(os.path.join(os.getcwd(), "projects"))
-    if not projects:
-        st.info("No saved projects found. Create a new project to get started.")
-        st.stop()
-
-    file = st.selectbox(
-        label="Select a saved project",
-        options=projects,
-        help="Select a previously saved project to load",
-        format_func=lambda x: x.replace(".json", "")
-    )
-
-    if st.button("Load Project"):
-        file_path = os.path.join(os.getcwd(), "projects", file)
-        try:
-            proj_dict = ProjectLoader.load_json_file(file_path)
-            project = ProjectLoader.load_project(proj_dict)
-            session.project = project
-            st.success(f"Project '{project.name}' loaded.")
-        except (FileNotFoundError, ValueError) as e:
-            st.error(str(e))
-            return
 
 @st.dialog("Import from Excel")
 def load_from_excel(session) -> Project:
@@ -99,19 +75,18 @@ def load_from_excel(session) -> Project:
 
 
 def render_project_sidebar(session) -> Project:
-    if st.button(f"Create Project", help="Create a new project from scratch"):
+
+    st.caption(f"Create")
+    if st.button(f"New Project", icon=":material/add:",help="Create a new project from scratch"):
         create_project(session)
         return
     
-    if st.button(f"Create from Template", help="Create a new project from a predefined template"):
+    if st.button(f"From Template", icon=":material/dashboard_customize:",help="Create a new project from a predefined template"):
         load_from_template(session)
         return
     
-    if st.button(f"Load Project", help="Load an existing project"):
-        load_project(session)
-        return
-    
-    if st.button(f"Import from Excel", help="Import project data from a BTA Excel template"):
+    st.caption(f"Import")
+    if st.button(f"From Excel", icon=":material/table_view:", help="Import project data from a BTA Excel template"):
         load_from_excel(session)
         return
     
