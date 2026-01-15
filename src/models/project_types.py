@@ -465,6 +465,8 @@ class MillRelineBuilder(ProjectBuilder):
                 predecessor_ids=[prev_task.uuid] if prev_task else []
             )
 
+            phase.add_task(task)
+
             task_start = task_end
             duration = inputs.t_inch
             task_end = task_start + dt.timedelta(minutes=duration)
@@ -475,7 +477,7 @@ class MillRelineBuilder(ProjectBuilder):
                 end_date=task_end,
                 predecessor_ids=[task.uuid]
             ) 
-
+            phase.add_task(inch)
             task_start = task_end
             prev_task = inch
         return phase
