@@ -14,6 +14,14 @@ from ui.compact_buttons import use_compact_buttons
 from ui.analyze_view import render_analysis
 from ui.edit_project import render_edit_project
 
+from PIL import Image
+from pathlib import Path
+
+
+@st.cache_data
+def load_image(path: str):
+    return Image.open(path)
+
 st.set_page_config(layout="wide")
 
 if "session" not in st.session_state:
@@ -35,8 +43,12 @@ with st.sidebar:
     render_project_sidebar(st.session_state.session)
 
 if not st.session_state.session.project:
-    st.info(f"Create or load a project to view.")
-    st.stop()
+    with st.container(horizontal_alignment="center"):
+        st.info(f"Create or load a project to view.")
+        path = Path(__file__).parent.resolve() / "assets" / "ganttbuddy.png"
+        st.space("large")
+        st.image(load_image(path))
+        st.stop()
 
 
 with st.sidebar:
