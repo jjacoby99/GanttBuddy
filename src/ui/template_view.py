@@ -196,7 +196,12 @@ def load_from_template(session: SessionModel):
         builder = MillRelineBuilder(mill=mill)
 
         if st.button("Create Project from Template"):
-            project = builder.build(inputs=candidate)
+            with st.spinner(
+                text="Building project...",
+                show_time=True
+            ):
+                project = builder.build(inputs=candidate)
+            
             session.project = project
             st.success(f"Project '{project.name}' created from template.")
             st.rerun()
