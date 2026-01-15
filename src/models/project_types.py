@@ -6,6 +6,7 @@ from models.phase import Phase
 from models.task import Task
 from models.input_models import RelineScope
 import datetime as dt
+from itertools import cycle, islice
 
 class Location(Enum):
     HVC = 1
@@ -72,7 +73,7 @@ B_MILL = Mill(
     n_shell=30,
     modules_per_shell=2,
     n_discharge_grates=18,
-    n_pulp_lifters=19
+    n_pulp_lifters=17
 )
 
 C_MILL = Mill(
@@ -216,7 +217,7 @@ class MillRelineBuilder(ProjectBuilder):
 
         prev_task = None
 
-        for i in range(inputs.shell_rows):
+        for i in range(inputs.shell_rows // 2):
             # ---------------------------------
             # Stripping Task
             # ---------------------------------
@@ -237,6 +238,11 @@ class MillRelineBuilder(ProjectBuilder):
             #---------------------------------
             # Inching
             #---------------------------------
+
+            # do not inch on the last row of shell
+            if i == inputs.shell_rows / 2 - 1:
+                continue
+            
             task_start = task_end
             task_end = task_start + dt.timedelta(minutes=inputs.t_inch)
 
@@ -251,9 +257,274 @@ class MillRelineBuilder(ProjectBuilder):
             phase.add_task(task)
 
             prev_task = task
+            task_start = task_end
         
         return phase
 
+    def _build_install_fh_shell(self, inputs: RelineScope, start_dt: dt.datetime) -> Phase:
+        phase = Phase(
+            name="Install FH & Shell"
+        )
+
+        num_shell_row = 2
+        num_head = 2
+        num_grate = 1
+
+        task_start = start_dt
+
+        prev_task = None
+        
+        for i in range(inputs.shell_rows // 2):
+            # ---------------------------------
+            # Stripping Task
+            # ---------------------------------
+            duration = inputs.t_shell_row * num_shell_row + num_head * inputs.t_fh + num_grate * inputs.feed_head_grates
+            task_end = task_start + dt.timedelta(minutes=duration)
+            predecessor_id = prev_task.uuid if prev_task else None
+
+            task = Task(
+                name=f"Install {num_shell_row} rows Megaliner Shell, {num_head} Megaliner Head, {num_grate} Grate",
+                start_date=task_start,
+                end_date=task_end,
+                predecessor_ids=[predecessor_id] if prev_task else []
+            )
+            
+            phase.add_task(task)
+            prev_task = task
+
+            #---------------------------------
+            # Inching
+            #---------------------------------
+
+            # do not inch on the last row of shell
+            if i == inputs.shell_rows / 2 - 1:
+                continue
+            
+            task_start = task_end
+            task_end = task_start + dt.timedelta(minutes=inputs.t_inch)
+
+            predecessor_id = prev_task.uuid if prev_task else None
+            
+            task = Task(
+                name=f"Inch {i+1}",
+                start_date=task_start,
+                end_date=task_end,
+                predecessor_ids=[predecessor_id] if prev_task else []
+            )
+
+            phase.add_task(task)
+
+            prev_task = task
+            task_start = task_end
+        
+        return phase
+
+    def _build_strip_discharge_grates_pulps_fillers(self, inputs: RelineScope, start_dt: dt.datetime) -> Phase:
+        phase = Phase(
+            name=f"Strip Discharge Grates, Pulp Lifters, & Fillers"
+        )
+
+        first_task: str = "Strip 1 Row of Grates/Interlock"
+        work_sequence = [
+            "Strip 1 Row of Grates/Interlock & Throat Plate  + Inner, Middle, and Outer Pulp",
+            "Strip 1 Row of Grates/Interlock + Middle & Outer Pulp",
+        ]
+
+        num_iterations = inputs.discharge_grate_rows - 1
+        it = islice(cycle(work_sequence), num_iterations)
+
+        first_duration = 2.67
+
+        task_start = start_dt
+        task_end = start_dt + dt.timedelta(hours=first_duration)
+
+        task = Task(
+            name=f"Strip 1 Row of Grates/Interlock",
+            start_date=task_start,
+            end_date=task_end,
+            predecessor_ids=[]
+        )
+
+        phase.add_task(task)
+
+        inch_end = task_end + dt.timedelta(minutes=inputs.t_inch)
+
+        inch = Task(
+            name="Inch 1",
+            start_date = task_end,
+            end_date=inch_end,
+            predecessor_ids=[task.uuid]
+        )
+        phase.add_task(inch)
+        prev_task = inch
+        task_start = inch_end
+        for i, work_task in enumerate(it):
+            # ---------------------------------
+            # Stripping Task
+            # ---------------------------------
+            
+            duration = inputs.t_discharge_grate_row + inputs.t_pulp_lifter_row
+            
+            # account for interlock 
+            duration += 30 if work_task != "Strip 1 Row of Grates/Interlock + Middle & Outer Pulp" else 0
+
+            task_end = task_start + dt.timedelta(minutes=duration)
+            predecessor_id = prev_task.uuid if prev_task else None
+
+            task = Task(
+                name=work_task,
+                start_date=task_start,
+                end_date=task_end,
+                predecessor_ids=[predecessor_id] if prev_task else []
+            )
+            
+            phase.add_task(task)
+            prev_task = task
+
+            #---------------------------------
+            # Inching
+            #---------------------------------
+
+            # do not inch on the last row of shell
+            if i == inputs.shell_rows - 2:
+                continue
+            
+            task_start = task_end
+            task_end = task_start + dt.timedelta(minutes=inputs.t_inch)
+
+            predecessor_id = prev_task.uuid if prev_task else None
+            
+            task = Task(
+                name=f"Inch {i+2}",
+                start_date=task_start,
+                end_date=task_end,
+                predecessor_ids=[predecessor_id] if prev_task else []
+            )
+
+            phase.add_task(task)
+
+            prev_task = task
+            task_start = task_end
+        
+        return phase
+
+    def _build_install_pulp_lifters(self, inputs: RelineScope, start_dt: dt.datetime) -> Phase:
+        phase = Phase(
+            name="Install Pulp lifters"
+        )
+
+        task_start = start_dt
+        prev_task = None
+        for i in range(inputs.pulp_lifter_rows):
+            duration = inputs.t_pulp_lifter_row
+            task_end = task_start + dt.timedelta(minutes=duration)
+
+            task = Task(
+                name="Install 1 rows pulp lifters",
+                start_date=task_start,
+                end_date=task_end,
+                predecessor_ids=[prev_task.uuid] if prev_task else []
+            )
+            phase.add_task(task)
+
+            task_start = task_end
+            task_end = task_start + dt.timedelta(minutes=inputs.t_inch)
+
+            predecessor_id = prev_task.uuid if prev_task else None
+            
+            task = Task(
+                name=f"Inch {i+1}",
+                start_date=task_start,
+                end_date=task_end,
+                predecessor_ids=[predecessor_id] if prev_task else []
+            )
+
+            phase.add_task(task)
+
+            prev_task = task
+            task_start = task_end
+
+        return phase
+
+    def _build_install_de_grates_fillers(self, inputs: RelineScope, start_dt: dt.datetime) -> Phase:
+        phase = Phase(
+            name="Install Discharge Grates & Fillers"
+        )
+
+        task_start = start_dt
+        prev_task = None
+
+        for i in range(inputs.discharge_grate_rows):
+            duration = inputs.t_discharge_grate_row
+            task_end = task_start + dt.timedelta(minutes=duration)
+
+            task = Task(
+                name="Install Discharger - 1 Inner, Mid and Outer, Filling Segment + add washout repairs",
+                start_date=task_start,
+                end_date=task_end,
+                predecessor_ids=[prev_task.uuid] if prev_task else []
+            )
+
+            task_start = task_end
+            duration = inputs.t_inch
+            task_end = task_start + dt.timedelta(minutes=duration)
+            
+            inch = Task(
+                name=f"Inch {i+1}",
+                start_date=task_start,
+                end_date=task_end,
+                predecessor_ids=[task.uuid]
+            ) 
+
+            task_start = task_end
+            prev_task = inch
+        return phase
+
+
+    def _build_install_discharge_cone(self, t_discharge: int, start_dt: dt.datetime) -> Phase:
+        phase = Phase(
+            name="Milestone - Install Discharge Cone"
+        )
+
+        task = Task(
+            name="Install Discharge Cone",
+            start_date=start_dt,
+            end_date=start_dt + dt.timedelta(minutes=t_discharge)
+        )
+        phase.add_task(task)
+        return phase
+
+    def _build_torque_check(self, start_dt: dt.datetime) -> Phase:
+        phase = Phase(
+            name="Torque Check"
+        )
+        end_date = start_dt + dt.timedelta(minutes=5*60)
+        t1 = Task(
+            name="Torque Check on Shell, Feed & Discharge",
+            start_date=start_dt,
+            end_date=end_date
+        )
+        phase.add_task(t1)
+
+        start_date = end_date
+        end_date = start_date + dt.timedelta(minutes=30)
+        t2 = Task(
+            name="Liner Handler Removal",
+            start_date=start_date,
+            end_date=end_date
+        )
+        phase.add_task(t2)
+
+        start_date = end_date
+        end_date = start_date + dt.timedelta(minutes=60)
+        t3 = Task(
+            name="Housekeeping",
+            start_date=start_date,
+            end_date=end_date
+        )
+        phase.add_task(t3)
+
+        return phase
 
     def build(self, inputs: RelineScope) -> Project:
         project = Project(
@@ -286,4 +557,76 @@ class MillRelineBuilder(ProjectBuilder):
 
         phase_end = project.end_date
 
+        # ------------------------------------------
+        # Phase 3: Stripping FH & Shell
+        # ------------------------------------------
+        project.add_phase(
+            self._build_install_fh_shell(
+                inputs=inputs,
+                start_dt=phase_end
+            )
+        )
+
+        phase_end = project.end_date
+
+
+        # ------------------------------------------
+        # Phase 4: Strip Discharge Grates, Pulp Lifters, & Fillers
+        # ------------------------------------------
+        project.add_phase(
+            self._build_strip_discharge_grates_pulps_fillers(
+                inputs=inputs,
+                start_dt=phase_end
+            )
+        )
+
+        phase_end = project.end_date
+
+
+        # ------------------------------------------
+        # Phase 5: Install Pulp Lifters
+        # ------------------------------------------
+        project.add_phase(
+            self._build_install_pulp_lifters(
+                inputs=inputs,
+                start_dt=phase_end
+            )
+        )
+
+        phase_end = project.end_date
+
+        # ------------------------------------------
+        # Phase 6: Install Discharge Grates & Fillers
+        # ------------------------------------------
+        project.add_phase(
+            self._build_install_de_grates_fillers(
+                inputs=inputs,
+                start_dt=phase_end
+            )
+        )
+
+        phase_end = project.end_date
+
+        # ------------------------------------------
+        # Phase 7: Install Discharge Cone
+        # ------------------------------------------
+        t_discharge = inputs.t_discharge_cone
+        if inputs.replace_discharge_cone:
+            project.add_phase(
+                self._build_install_discharge_cone(
+                    start_dt=phase_end,
+                    t_discharge=t_discharge
+                )
+            )
+            phase_end = project.end_date
+
+        # ------------------------------------------
+        # Phase 8: Torque Check
+        # ------------------------------------------
+        project.add_phase(
+            self._build_torque_check(phase_end)
+        )
+        
+        project.settings.work_all_day = True
+        project.settings.set_all_working_days()
         return project
