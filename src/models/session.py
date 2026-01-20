@@ -12,7 +12,5 @@ class SessionModel:
 
     @project.setter
     def project(self, value: Project):
-        if not isinstance(value, Project):
-            raise ValueError("Session project attribute must be an instance of Project")
         self._project = value
 
