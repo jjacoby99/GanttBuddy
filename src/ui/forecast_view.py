@@ -30,8 +30,6 @@ def render_forecast(session: SessionModel):
         forecast_start=session.project.actual_end
     )
 
-    st.write(f"End of actual data is used as the forecast start: {session.project.actual_end}")
-
     # KPIs
     DTFMT = "%Y-%m-%d %H:%M"
     with st.container(horizontal=True):
