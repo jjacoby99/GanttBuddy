@@ -1,5 +1,6 @@
 import pandas as pd
 import openpyxl
+from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from pathlib import Path
 from models.project import Project
@@ -12,15 +13,13 @@ class ExcelProject:
     project: Project
     excel_format: ExcelFormat
     cur_row: int
-    file_path: str
 
-    def __init__(self, project: Project, path: str, excel_format: ExcelFormat = ExcelFormat()):
+    def __init__(self, project: Project, excel_format: ExcelFormat = ExcelFormat()):
         self.project = project
-        self.file_path = path
         self.excel_format = excel_format
         self.cur_row = excel_format.first_phase_row # 1 indexed
 
-    def write_project(self):
+    def write_project(self) -> Workbook:
         
         wb = openpyxl.load_workbook(Path(__file__).parent.parent / "assets" / "Gantt_Excel_Template.xlsx")
 
@@ -55,7 +54,8 @@ class ExcelProject:
             for tid in phase.task_order:
                 task = phase.tasks[tid]
                 self._write_task_row(wb, task)
-        wb.save(self.file_path)
+        
+        return wb
     
     def _write_phase_row(self, wb: openpyxl.Workbook, phase: Phase):
         if phase.uuid not in [uuid for uuid in self.project.phase_order]:

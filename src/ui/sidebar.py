@@ -1,5 +1,6 @@
 import streamlit as st
-import os
+from io import BytesIO
+
 from models.project import Project
 from ui.add_phase import render_add_phase
 from ui.edit_phase import render_phase_edit
@@ -117,25 +118,30 @@ def render_project_buttons(session):
 
     st.caption(f"Export")
     with st.container(horizontal=True):
-        if st.button(":material/file_download: JSON", 
-                     key="export_json", 
-                     help=f"Export {session.project.name} to a JSON file",
-                     disabled=True):
-            st.info(f"coming soon!")
-    
-        if st.button(":material/file_download: Excel", 
-                     key="export_excel", 
-                     help=f"Export {session.project.name} to an Excel file"):
-            from logic.write_project import ExcelProject, ExcelFormat
-            writer = ExcelProject(
-                project=session.project, 
-                path=os.path.join(os.getcwd(), "projects", f"{session.project.name.replace('\n', ' - ')}.xlsx"), 
-                excel_format=ExcelFormat()
-            )
-
-            writer.write_project()
-            st.success(f"Project exported to projects/{session.project.name}.xlsx")
+        prepare_download = st.toggle(
+            label="Prepare Excel",
+            help="Prepare an Excel schedule for download.",
+        )
         
+        if prepare_download:
+            from logic.write_project import ExcelProject, ExcelFormat
+            with st.spinner("Preparing Excel Export..."):
+                writer = ExcelProject(
+                    project=session.project, 
+                    excel_format=ExcelFormat()
+                )
+                wb = writer.write_project()
+                buffer = BytesIO()
+                wb.save(buffer)
+                buffer.seek(0)
+                if st.download_button(
+                    ":material/file_download: Excel",
+                    data=buffer,
+                    file_name=f"{session.project.name}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ):
+                    st.success(f"BTA Excel Schedule Successfully Exported!")
+            
 
     
     
