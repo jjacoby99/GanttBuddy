@@ -147,7 +147,7 @@ def forecast(df: pd.DataFrame, freq: str = "H") -> pd.DataFrame:
     # Just in case everything is same timestamp, extend by 1 hour so date_range works
     if t_min == t_max:
         t_max = t_max + timedelta(hours=1)
-
+        
     grid = pd.date_range(t_min, t_max, freq=freq)
 
     # ---- 2. Planned curve ----------------------------------------------------

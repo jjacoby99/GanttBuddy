@@ -17,14 +17,10 @@ def render_forecast(session: SessionModel):
 
     raw = build_forecast_df_v2(session.project)
 
-    # No manual As Of. Forecast will infer it from the last actual.
-    st.caption("The red line marks where actuals end and the forecast begins (last actual timestamp).")
-
-    freq = st.selectbox("Time step", options=["H", "30min", "15min", "D"], index=0,
-                        help="Resolution for building cumulative curves.")
+    st.caption("The red line marks where the forecast begins.")
 
     # Let the engine infer as_of=None
-    forecast_df = forecast(raw, freq=freq)
+    forecast_df = forecast(raw, freq="H")
     res = ForecastResult(
         time=forecast_df["time"],
         planned_curve=forecast_df["planned_cum_hours"],
@@ -36,18 +32,25 @@ def render_forecast(session: SessionModel):
 
     st.write(f"End of actual data is used as the forecast start: {session.project.actual_end}")
 
-    #debug
-    res.write_to_csv("forecast_output.csv")
     # KPIs
     DTFMT = "%Y-%m-%d %H:%M"
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Planned End", res.planned_end.strftime(DTFMT) if not pd.isna(res.planned_end) else "—")
-    k2.metric("Forecast End", res.forecast_end.strftime(DTFMT) if not pd.isna(res.forecast_end) else "—",
+    with st.container(horizontal=True):
+        st.metric("Planned End", res.planned_end.strftime(DTFMT) if not pd.isna(res.planned_end) else "—")
+        
+        st.space(f"stretch")
+
+        st.metric("Forecast End", res.forecast_end.strftime(DTFMT) if not pd.isna(res.forecast_end) else "—",
               delta=("+" if (not pd.isna(res.planned_end) and not pd.isna(res.forecast_end) and res.forecast_end > res.planned_end) else "")
                     + (str((res.forecast_end - res.planned_end)) if (not pd.isna(res.planned_end) and not pd.isna(res.forecast_end)) else ""))
-    k3.metric("Completed (to date)", f"{session.project.completed_hours()} h")
-    print(type(session.project.completed_hours()), session.project.completed_hours())
-    k4.metric("Total Planned", f"{res.planned_curve.iloc[-1]:,.1f} h")
+        
+        st.space(f"stretch")
+
+        st.metric("Completed (to date)", f"{session.project.completed_hours():.1f} h")
+        print(type(session.project.completed_hours()), session.project.completed_hours())
+        
+        st.space(f"stretch")
+        
+        st.metric("Total Planned", f"{res.planned_curve.iloc[-1]:,.1f} h")
 
     # Chart (logo will be pulled from assets/bta_logo.png or /mnt/data/bta_logo.png)
     fig = make_forecast_figure(res, project_name=session.project.name)
