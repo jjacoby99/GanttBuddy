@@ -2,9 +2,11 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date
+
 from models.task import Task
 from models.session import SessionModel
 from models.ui_state import UIState
+
 from ui.plot import render_gantt, render_task_details
 from ui.tasks_view import render_tasks_table
 from ui.settings_view import render_settings_view
@@ -13,6 +15,7 @@ from ui.forecast_view import render_forecast
 from ui.compact_buttons import use_compact_buttons
 from ui.analyze_view import render_analysis
 from ui.edit_project import render_edit_project
+from ui.render_plan import render_plan
 
 from PIL import Image
 from pathlib import Path
@@ -42,7 +45,9 @@ with st.sidebar:
     st.subheader(f"Project Explorer")
     render_project_sidebar(st.session_state.session)
 
-if not st.session_state.session.project:
+if st.session_state.session.project is None:
+
+    
     with st.container(horizontal_alignment="center"):
         st.info(f"Create or load a project to view.")
         path = Path(__file__).parent.resolve() / "assets" / "ganttbuddy.png"
@@ -95,11 +100,9 @@ if not st.session_state.session.project.has_task:
     st.info(f"Add a task to your project to begin.")
     st.stop()
 
-task_col, plot_col = st.columns(2)
-
 task_tab, plot_tab, forecast_tab, analyze_tab = st.tabs(["Plan", "Visualize", "Forecast", "Analyze"])
 with task_tab:
-    render_tasks_table(st.session_state.session)
+    render_plan(st.session_state.session)
 
 with plot_tab:
     render_gantt(st.session_state.session)

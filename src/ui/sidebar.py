@@ -8,7 +8,7 @@ from ui.edit_task import render_task_edit
 from ui.template_view import load_from_template
 from logic.load_project import ProjectLoader, ExcelProjectLoader, ExcelParameters, DataColumn
 
-@st.dialog("Create a project")
+@st.dialog(":material/add: Create a project")
 def create_project(session):
     project_name = st.text_input(
         f"Project name",
@@ -31,15 +31,18 @@ def create_project(session):
         description=project_description,
     )
 
-    if st.button("Create Project"):
+    if st.button("Create", icon=":material/add:", type='primary'):
         session.project = new_project
         st.info(f"✅ New project created!")
         st.rerun()
         return
 
 
-@st.dialog("Import from Excel")
+@st.dialog(":material/table_view: Import from Excel")
 def load_from_excel(session) -> Project:
+
+    st.caption("Import project schedule directly from a BTA Consulting template.")
+
     file = st.file_uploader(
         label="Select an Excel file",
         type=["xls", "xlsx"],
@@ -92,20 +95,18 @@ def render_project_sidebar(session) -> Project:
     
 
 def render_project_buttons(session):
-    if not session.project:
+    if session.project is None:
         return
     
     st.divider()
-    st.caption(f"Plan your project")
+    st.caption(f"Plan")
     with st.container(horizontal=True):
         if st.button(":material/add_circle: Phase", 
                      key="add_phase", 
                      help=f"Add a phase to {session.project.name}"):
             render_add_phase(session)
             st.session_state.ui.show_add_phase = False
-        
-        st.space("stretch")
-        
+                
         if st.button(":material/add_circle: Task", 
                      key="add_task", 
                      help=f"Add a task to {session.project.name}",
@@ -113,15 +114,15 @@ def render_project_buttons(session):
             render_task_add(session)
             st.session_state.ui.show_add_task = False
 
-    st.caption(f"Export your project")
+
+    st.caption(f"Export")
     with st.container(horizontal=True):
         if st.button(":material/file_download: JSON", 
                      key="export_json", 
-                     help=f"Export {session.project.name} to a JSON file"):
+                     help=f"Export {session.project.name} to a JSON file",
+                     disabled=True):
             st.info(f"coming soon!")
-        
-        st.space("stretch")
-        
+    
         if st.button(":material/file_download: Excel", 
                      key="export_excel", 
                      help=f"Export {session.project.name} to an Excel file"):
