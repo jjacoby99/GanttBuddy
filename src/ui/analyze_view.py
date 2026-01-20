@@ -268,17 +268,19 @@ def render_analysis(session: SessionModel):
 
 
     with st.container(horizontal=True, horizontal_alignment='center'):
-        if st.button("←", type="secondary", on_click=prev_phase, disabled=(phase_idx == 0)):
+        if st.button("←", type="secondary", on_click=prev_phase, disabled=(phase_idx == 0), key="analysis_left"):
             # reduce phase index by one
             st.session_state.ui.analysis_phase_index = max(0, st.session_state.ui.analysis_phase_index - 1)
+            st.rerun()
         
         st.space(size="stretch")
         
         st.write(f"**Phase {phase_idx+1}. {phase.name}**")
 
-        if st.button("→", type="secondary", on_click=next_phase, disabled=(phase_idx == len(session.project.phase_order) - 1)):
+        if st.button("→", type="secondary", on_click=next_phase, disabled=(phase_idx == len(session.project.phase_order) - 1), key="analysis_right"):
             st.session_state.ui.analysis_phase_index = min(len(session.project.phase_order) - 1, st.session_state.ui.analysis_phase_index + 1)
-    
+            st.rerun()
+            
     phase_idx = st.session_state.ui.analysis_phase_index
     pid = session.project.phase_order[phase_idx]
     phase = session.project.phases[pid]
@@ -309,11 +311,12 @@ def render_analysis(session: SessionModel):
     with st.container(horizontal=True, horizontal_alignment='left'):
         st.info("Use the arrows to navigate between phases. Positive delay indicates the task took longer than planned.",
             width=730)
-        
+        st.space("stretch")
         st.download_button(
-            label="Download Phase Delay Analysis",
+            label="Performance Report",
+            icon=":material/insights:",
             data=buffer,
             file_name=f"{session.project.name}_phase_delay.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-    
+
