@@ -6,6 +6,8 @@ from models.project_settings import ProjectSettings
 from exceptions.date_error import InvalidDateError
 from exceptions.time_error import InvalidTimeError
 from logic.generate_id import new_id
+import pandas as pd
+
 
 @dataclass
 class Task:
@@ -39,9 +41,17 @@ class Task:
         return self.end_date - self.start_date
     
     @property
+    def completed(self) -> bool:
+        if pd.isna(self.actual_start) or pd.isna(self.actual_end):
+            return False
+        if self.actual_start is None or self.actual_end is None:
+            return False
+        return True
+    
+    @property
     def actual_duration(self) -> Optional[timedelta]:
         """Returns the actual duration of the task as a timedelta, or None if actual start/end are not set."""
-        if self.actual_start is None or self.actual_end is None:
+        if not self.completed:
             return None
         return self.actual_end - self.actual_start
     

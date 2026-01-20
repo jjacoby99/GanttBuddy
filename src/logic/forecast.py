@@ -430,7 +430,7 @@ def build_forecast_df_v2(project: Project) -> pd.DataFrame:
             data["actual_finish"].append(task.actual_end) # Can be None
             
             actual_duration = None
-            if task.actual_end and task.actual_start:
+            if task.completed:
                 actual_duration = task.actual_duration.total_seconds() / 3600.0
             
             data["actual_duration"].append(actual_duration)

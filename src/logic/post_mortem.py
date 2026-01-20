@@ -52,7 +52,7 @@ class PostMortemAnalyzer:
             task = phase.tasks[tid]
             
             # ignore tasks with incomplete info
-            if not task.actual_end or not task.actual_start:
+            if not task.completed:
                 continue
             
             data["Task No."].append(i+1)
@@ -65,6 +65,7 @@ class PostMortemAnalyzer:
 
             data["Actual Start"].append(task.actual_start)
             data["Actual End"].append(task.actual_end)
+
 
             adur = task.actual_duration.total_seconds() / 3600
             data["Actual Duration"].append(adur)
