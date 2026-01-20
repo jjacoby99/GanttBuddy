@@ -219,6 +219,38 @@ class Project:
         """
         return self.end_date - self.start_date
 
+    def get_phase_df(self) -> pd.DataFrame:
+        data = {
+            "phase": [],
+            "planned_start": [],
+            "planned_end": [],
+            "planned_duration": [],
+            "actual_start": [],
+            "actual_end": [],
+            "actual_duration": [],
+            "num_tasks": []
+        }
+        for pid in self.phase_order:
+            phase = self.phases[pid]
+            data["phase"].append(phase.name)
+            data["planned_start"].append(phase.start_date)
+            data["planned_end"].append(phase.end_date)
+
+            pdur = phase.planned_duration
+            data["planned_duration"].append(pdur.total_seconds() / 3600)
+
+            data["actual_start"].append(phase.actual_start if phase.actual_start else None)
+            data["actual_end"].append(phase.actual_end if phase.actual_end else None)
+
+            adur = phase.actual_duration
+            data["actual_duration"].append(
+                adur.total_seconds() / 3600 if adur is not None else None
+            )
+
+            data["num_tasks"].append(len(phase))
+
+        return pd.DataFrame(data)
+
     def get_task_df(self) -> pd.DataFrame:
         tasks = self.get_task_list()
         data = {
