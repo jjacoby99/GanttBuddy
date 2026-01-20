@@ -32,8 +32,10 @@ def render_tasks_table(session):
     if not phases:
         st.info(f"Add a phase to {session.project.name} to view project planner")
         return
-
-    render_project_info(session.project)
+    
+    st.caption("Project at a glance")
+    with st.container(border=True):
+        render_project_info(session.project)
 
     c1, _ = st.columns([1,2])
     c1.caption("Display Preferences")
