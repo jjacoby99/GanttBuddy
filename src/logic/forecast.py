@@ -15,6 +15,172 @@ from models.project import Project
 
 DTFMT = "%Y-%m-%d %H:%M"
 
+# NOTE: there are some duplicate imports below; leaving them doesn't hurt,
+# but moving shared helpers out of `forecast()` makes the logic clearer.
+
+
+def _build_curve_on_grid(
+    starts: pd.Series,
+    finishes: pd.Series,
+    durations: pd.Series,
+    grid: pd.DatetimeIndex,
+) -> np.ndarray:
+    """Construct cumulative-hours curve evaluated on `grid` times.
+
+    Each task contributes `durations[i]` hours between `starts[i]` and `finishes[i]`
+    at constant rate = duration / (finish-start).
+
+    Implementation: event-based sweep of piecewise-constant rates.
+    """
+
+    events: list[tuple[pd.Timestamp, float]] = []
+    for s, f, d in zip(starts, finishes, durations):
+        if pd.isna(s) or pd.isna(f) or pd.isna(d):
+            continue
+        dt_hours = (f - s).total_seconds() / 3600.0
+        if dt_hours <= 0 or d <= 0:
+            continue
+        rate = float(d) / dt_hours
+        events.append((pd.Timestamp(s), rate))
+        events.append((pd.Timestamp(f), -rate))
+
+    if not events:
+        return np.zeros(len(grid), dtype=float)
+
+    events.sort(key=lambda x: x[0])
+
+    values = np.zeros(len(grid), dtype=float)
+    current_rate = 0.0
+    cum = 0.0
+    e_idx = 0
+    last_t = grid[0]
+
+    # Fast-forward events strictly before grid start
+    while e_idx < len(events) and events[e_idx][0] < last_t:
+        _, delta_rate = events[e_idx]
+        current_rate += delta_rate
+        e_idx += 1
+
+    for i, t in enumerate(grid):
+        # Apply events up to this grid time
+        while e_idx < len(events) and events[e_idx][0] <= t:
+            ev_t, delta_rate = events[e_idx]
+            dt = (ev_t - last_t).total_seconds() / 3600.0
+            if dt > 0:
+                cum += current_rate * dt
+                last_t = ev_t
+            current_rate += delta_rate
+            e_idx += 1
+
+        # Integrate from last_t to t
+        dt = (t - last_t).total_seconds() / 3600.0
+        if dt > 0:
+            cum += current_rate * dt
+            last_t = t
+        values[i] = cum
+
+    return values
+
+
+def _build_effective_schedule_sequential(
+    df: pd.DataFrame,
+) -> tuple[pd.Series, pd.Series, pd.Series, Optional[pd.Timestamp]]:
+    """Compute an "effective" (actual/forecast) start/finish for each task.
+
+    This follows the simple rule you described:
+    - Any task with (actual_start, actual_finish) is treated as *truth*.
+    - Walk tasks in the provided DataFrame order (your phase/task order).
+    - Maintain a running project delay after each task: delay = eff_finish - planned_finish.
+    - For tasks without actuals, forecast:
+        eff_start = max(planned_start + delay, previous_eff_finish)
+        eff_finish = eff_start + planned_duration
+      (The max() prevents time-travel if the planned schedule has overlaps.)
+    - For an "in-progress" task (actual_start but no actual_finish), we treat
+      the start as truth and forecast the finish as actual_start + planned_duration.
+
+    Returns:
+      eff_start, eff_finish, eff_duration_hours, forecast_start_timestamp
+    """
+
+    eff_start = pd.Series(index=df.index, dtype="datetime64[ns]")
+    eff_finish = pd.Series(index=df.index, dtype="datetime64[ns]")
+    eff_duration = pd.Series(index=df.index, dtype=float)
+
+    delay = timedelta(0)
+    prev_eff_finish: Optional[pd.Timestamp] = None
+    forecast_start: Optional[pd.Timestamp] = None
+
+    for idx, row in df.iterrows():
+        ps = row.get("planned_start")
+        pf = row.get("planned_finish")
+        pdur_h = row.get("planned_duration")
+
+        a_s = row.get("actual_start")
+        a_f = row.get("actual_finish")
+        a_dur_h = row.get("actual_duration")
+
+        planned_dur_td = timedelta(hours=float(pdur_h)) if not pd.isna(pdur_h) else timedelta(0)
+
+        completed = (not pd.isna(a_s)) and (not pd.isna(a_f))
+        in_progress = (not pd.isna(a_s)) and pd.isna(a_f)
+
+        if completed:
+            s = pd.Timestamp(a_s)
+            f = pd.Timestamp(a_f)
+            dur_h = float(a_dur_h) if (not pd.isna(a_dur_h) and float(a_dur_h) > 0) else (
+                (f - s).total_seconds() / 3600.0
+            )
+
+            eff_start.at[idx] = s
+            eff_finish.at[idx] = f
+            eff_duration.at[idx] = dur_h
+
+            prev_eff_finish = f
+            if not pd.isna(pf):
+                delay = f - pd.Timestamp(pf)
+            continue
+
+        if in_progress:
+            s = pd.Timestamp(a_s)
+            f = s + planned_dur_td
+            dur_h = float(pdur_h) if not pd.isna(pdur_h) else 0.0
+
+            if forecast_start is None:
+                forecast_start = s
+
+            eff_start.at[idx] = s
+            eff_finish.at[idx] = f
+            eff_duration.at[idx] = dur_h
+
+            prev_eff_finish = f
+            if not pd.isna(pf):
+                delay = f - pd.Timestamp(pf)
+            continue
+
+        # Not started (or missing actuals)
+        base = pd.Timestamp(ps) + delay if not pd.isna(ps) else prev_eff_finish
+        if prev_eff_finish is not None and base is not None:
+            s = max(base, prev_eff_finish)
+        else:
+            s = base
+
+        if forecast_start is None:
+            forecast_start = s
+
+        f = s + planned_dur_td
+        dur_h = float(pdur_h) if not pd.isna(pdur_h) else 0.0
+
+        eff_start.at[idx] = s
+        eff_finish.at[idx] = f
+        eff_duration.at[idx] = dur_h
+
+        prev_eff_finish = f
+        if not pd.isna(pf):
+            delay = f - pd.Timestamp(pf)
+
+    return eff_start, eff_finish, eff_duration, forecast_start
+
+
 import pandas as pd
 import numpy as np
 from datetime import timedelta
@@ -57,165 +223,32 @@ def forecast(df: pd.DataFrame, freq: str = "H") -> pd.DataFrame:
         if not pd.api.types.is_float_dtype(df[col]):
             df[col] = df[col].astype(float)
 
-    # ---- Helper to build curve on a time grid from (start, finish, duration) ----
-    def _build_curve_on_grid(starts: pd.Series,
-                             finishes: pd.Series,
-                             durations: pd.Series,
-                             grid: pd.DatetimeIndex) -> np.ndarray:
-        """
-        Construct cumulative hours curve evaluated on `grid` times.
+    # ---- 1. Build effective actual/forecast schedule (in provided order) -----
+    eff_start, eff_finish, eff_duration, _ = _build_effective_schedule_sequential(df)
 
-        Each task contributes durations[i] hours between starts[i] and finishes[i],
-        at constant rate = durations[i] / (finish - start in hours).
-
-        The integration is done via an event-based sweep, then integrated to the grid.
-        """
-        # Build events: (time, delta_rate)
-        events = []
-        for s, f, d in zip(starts, finishes, durations):
-            if pd.isna(s) or pd.isna(f) or pd.isna(d):
-                continue
-            dt_hours = (f - s).total_seconds() / 3600.0
-            if dt_hours <= 0 or d <= 0:
-                # Degenerate or zero-duration tasks are ignored
-                continue
-            rate = d / dt_hours
-            events.append((s, rate))
-            events.append((f, -rate))
-
-        if not events:
-            # No valid tasks → just zeros
-            return np.zeros(len(grid), dtype=float)
-
-        events.sort(key=lambda x: x[0])
-
-        # Sweep simultaneously over events and grid
-        values = np.zeros(len(grid), dtype=float)
-        current_rate = 0.0
-        cum = 0.0
-
-        e_idx = 0
-        last_t = grid[0]
-
-        # If first event is before grid start, fast-forward to grid[0]
-        # updating the rate but not integrating before grid start
-        while e_idx < len(events) and events[e_idx][0] < last_t:
-            _, delta_rate = events[e_idx]
-            current_rate += delta_rate
-            e_idx += 1
-
-        for i, t in enumerate(grid):
-            # Process all events up to this grid time
-            while e_idx < len(events) and events[e_idx][0] <= t:
-                ev_t, delta_rate = events[e_idx]
-                dt = (ev_t - last_t).total_seconds() / 3600.0
-                if dt > 0:
-                    cum += current_rate * dt
-                    last_t = ev_t
-                current_rate += delta_rate
-                e_idx += 1
-
-            # Integrate from last_t to t at current_rate
-            dt = (t - last_t).total_seconds() / 3600.0
-            if dt > 0:
-                cum += current_rate * dt
-                last_t = t
-
-            values[i] = cum
-
-        return values
-
-    # ---- 1. Define the time grid --------------------------------------------
-    # Planned start/end bounds
+    # ---- 2. Define the time grid (must include forecasted end) --------------
     planned_starts = df["planned_start"]
     planned_finishes = df["planned_finish"]
 
-    # We'll later compute effective (actual/forecast) intervals as well
-    actual_starts = df["actual_start"]
-    actual_finishes = df["actual_finish"]
-
-    # Compute overall min/max over planned and actual/forecast side
-    t_min_candidates = pd.concat([planned_starts.dropna(), actual_starts.dropna()])
-    t_max_candidates = pd.concat([planned_finishes.dropna(), actual_finishes.dropna()])
-
+    t_min_candidates = pd.concat([planned_starts.dropna(), eff_start.dropna()])
+    t_max_candidates = pd.concat([planned_finishes.dropna(), eff_finish.dropna()])
     if t_min_candidates.empty or t_max_candidates.empty:
         raise ValueError("Cannot determine project time bounds from provided DataFrame.")
 
     t_min = t_min_candidates.min()
     t_max = t_max_candidates.max()
-
-    # Just in case everything is same timestamp, extend by 1 hour so date_range works
     if t_min == t_max:
         t_max = t_max + timedelta(hours=1)
-        
+
     grid = pd.date_range(t_min, t_max, freq=freq)
 
-    # ---- 2. Planned curve ----------------------------------------------------
-    planned_durations = df["planned_duration"].copy()
-
+    # ---- 3. Planned curve ---------------------------------------------------
     planned_cum = _build_curve_on_grid(
         starts=planned_starts,
         finishes=planned_finishes,
-        durations=planned_durations,
+        durations=df["planned_duration"].copy(),
         grid=grid,
     )
-
-    # ---- 3. Build effective actual/forecast schedule for each task ----------
-    n = len(df)
-    eff_start = pd.Series(index=df.index, dtype="datetime64[ns]")
-    eff_finish = pd.Series(index=df.index, dtype="datetime64[ns]")
-    eff_duration = pd.Series(index=df.index, dtype=float)
-
-    # Masks
-    completed_mask = df["actual_start"].notna() & df["actual_finish"].notna()
-    in_progress_mask = df["actual_start"].notna() & df["actual_finish"].isna()
-    not_started_mask = df["actual_start"].isna() & df["actual_finish"].isna()
-
-    # 3.1 Completed tasks: use actuals
-    if completed_mask.any():
-        # Use actual_duration if present; fall back to actual_end - actual_start
-        actual_dur = df.loc[completed_mask, "actual_duration"].copy()
-
-        # Fill missing or zero/negative with difference between timestamps
-        bad = actual_dur.isna() | (actual_dur <= 0)
-        if bad.any():
-            dt_hours = (
-                df.loc[completed_mask & bad, "actual_finish"]
-                - df.loc[completed_mask & bad, "actual_start"]
-            ).dt.total_seconds() / 3600.0
-            actual_dur.loc[bad] = dt_hours
-
-        eff_start.loc[completed_mask] = df.loc[completed_mask, "actual_start"]
-        eff_finish.loc[completed_mask] = df.loc[completed_mask, "actual_finish"]
-        eff_duration.loc[completed_mask] = actual_dur
-
-    # 3.2 In-progress tasks: started, not finished → actual_start + planned_duration
-    if in_progress_mask.any():
-        eff_start.loc[in_progress_mask] = df.loc[in_progress_mask, "actual_start"]
-        eff_duration.loc[in_progress_mask] = df.loc[in_progress_mask, "planned_duration"]
-        eff_finish.loc[in_progress_mask] = eff_start.loc[in_progress_mask] + df.loc[
-            in_progress_mask, "planned_duration"
-        ].apply(lambda h: timedelta(hours=h))
-
-    # 3.3 Not-started tasks: shift plan by global delay Δ
-    delay = timedelta(0)
-    if completed_mask.any():
-        # Start delay per completed task
-        start_delays = (
-            df.loc[completed_mask, "actual_start"]
-            - df.loc[completed_mask, "planned_start"]
-        )
-        # Robust aggregate: median
-        delay = start_delays.median()
-        if pd.isna(delay):
-            delay = timedelta(0)
-
-    if not_started_mask.any():
-        eff_start.loc[not_started_mask] = df.loc[not_started_mask, "planned_start"] + delay
-        eff_duration.loc[not_started_mask] = df.loc[not_started_mask, "planned_duration"]
-        eff_finish.loc[not_started_mask] = eff_start.loc[not_started_mask] + df.loc[
-            not_started_mask, "planned_duration"
-        ].apply(lambda h: timedelta(hours=h))
 
     # ---- 4. Actual + forecast curve -----------------------------------------
     actual_forecast_cum = _build_curve_on_grid(
@@ -251,6 +284,30 @@ class ForecastResult:
             "actual_forecast_cum_hours": self.actual_forecast_curve,
         })
         df.to_csv(path, index=False)
+
+
+def build_forecast_result(df: pd.DataFrame, freq: str = "H") -> tuple[ForecastResult, pd.DataFrame]:
+    """Convenience wrapper that returns both the curves and the KPI timestamps.
+
+    - `ForecastResult` is what the view + figure builder expects.
+    - The returned DataFrame is the time-series used for debugging / table display.
+    """
+
+    eff_start, eff_finish, _, forecast_start = _build_effective_schedule_sequential(df)
+    curves = forecast(df, freq=freq)
+
+    planned_end = pd.to_datetime(df["planned_finish"]).max()
+    forecast_end = pd.to_datetime(eff_finish).max()
+
+    res = ForecastResult(
+        time=curves["time"],
+        planned_curve=curves["planned_cum_hours"],
+        actual_forecast_curve=curves["actual_forecast_cum_hours"],
+        planned_end=planned_end,
+        forecast_end=forecast_end,
+        forecast_start=forecast_start,
+    )
+    return res, curves
 
 
 def make_forecast_figure(
@@ -303,12 +360,13 @@ def make_forecast_figure(
                           x1=result.forecast_start, fillcolor="LightBlue", opacity=0.15, line_width=0)
 
     # Annotation at the forecast start
-    y_asof_series = result.actual_forecast_curve[result.time <= result.forecast_start]
-    y_asof = float(y_asof_series.iloc[-1]) if len(y_asof_series) else 0.0
-    fig.add_annotation(
-        x=result.forecast_start, y=y_asof, text="Forecast", showarrow=True, arrowhead=2,
-        ax=60, ay=-60
-    )
+    if result.forecast_start is not None:
+        y_asof_series = result.actual_forecast_curve[result.time <= result.forecast_start]
+        y_asof = float(y_asof_series.iloc[-1]) if len(y_asof_series) else 0.0
+        fig.add_annotation(
+            x=result.forecast_start, y=y_asof, text="Forecast", showarrow=True, arrowhead=2,
+            ax=60, ay=-60
+        )
 
     # BTA logo in the top-right
     try:
