@@ -1,12 +1,18 @@
 import streamlit as st
 from models.project import Project
+from typing import Literal
 
-def render_project_info(project: Project):
-    st.subheader("At a Glance")
+def render_project_info(project: Project, resolution: Literal["Phase", "Task"] = "Task"):
     with st.container(horizontal=True):
-        n_tasks = len(project) - len(project.phase_order)
+
+        if resolution == "Task":
+            n_tasks = len(project) - len(project.phase_order)
+            label = "Number of Tasks"
+        else:
+            n_tasks = len(project.phase_order)
+            label = "Number of Phases"
         st.metric(
-            label="Number of Tasks",
+            label=label,
             value=n_tasks
         )
         st.space("stretch")
