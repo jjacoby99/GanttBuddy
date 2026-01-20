@@ -25,9 +25,13 @@ def render_gantt(session):
         st.info("Add a phase and some tasks to your project to view the visualizer.")
         return
 
-    st.subheader("Project Plan")
+    c1, _, c3 = st.columns([1,6,1])
+    c1.subheader("Project Plan")
+    view_phase_by_phase = c3.toggle("View phase by phase schedule", value=True)
+    
+    st.divider()
     phase_view = None
-    if st.checkbox("View phase by phase schedules", value=True):
+    if view_phase_by_phase:
         phase_idx = st.session_state.ui.analysis_phase_index
         pid = session.project.phase_order[phase_idx]
         phase = session.project.phases[pid]
@@ -39,7 +43,7 @@ def render_gantt(session):
 
             st.space(size="stretch")
             
-            st.write(f"**Phase {phase_idx+1}. {phase.name}**")
+            st.subheader(f"**Phase {phase_idx+1}. {phase.name}**")
 
             if st.button("→", type="secondary", on_click=next_phase, disabled=(phase_idx == len(session.project.phase_order) - 1)):
                 st.session_state.ui.analysis_phase_index = min(len(session.project.phase_order) - 1, st.session_state.ui.analysis_phase_index + 1)
