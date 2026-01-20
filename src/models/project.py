@@ -56,7 +56,7 @@ class Project:
         """
         total = 0.0        
         for task in self.get_task_list():
-            if task.actual_duration is not None:
+            if task.completed:
                 total += task.actual_duration.total_seconds() / 3600
         return total
         
