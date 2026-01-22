@@ -23,9 +23,6 @@ def render_task_add(session: SessionModel, phase: Phase = None):
             options=[p for p in session.project.phases.values()],
             format_func=lambda p: p.name
         )
-
-    if not phase_selected:
-        return
     
     task_name = st.text_input(
         label="Enter the name of a task",
