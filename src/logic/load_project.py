@@ -187,6 +187,8 @@ class ExcelProjectLoader():
         df = df.drop(0) # remove header row
         
         df['NOTES'] = df['NOTES'].fillna("") # fill notes NaN with empty string
+        df['ACTUAL START'] = df['ACTUAL START'].replace({pd.NaT: None})
+        df['ACTUAL END'] = df['ACTUAL END'].replace({pd.NaT: None})
 
         # Drop fully empty rows based on ACTIVITY being blank
         df["ACTIVITY"] = df["ACTIVITY"].astype(str).str.strip()
