@@ -2,13 +2,14 @@ from __future__ import annotations
 from datetime import datetime, date, timedelta
 from typing import Optional
 from dataclasses import dataclass, field
+from dataclasses_json import dataclass_json
 from models.project_settings import ProjectSettings
 from exceptions.date_error import InvalidDateError
 from exceptions.time_error import InvalidTimeError
 from logic.generate_id import new_id
 import pandas as pd
 
-
+@dataclass_json
 @dataclass
 class Task:
     name: str

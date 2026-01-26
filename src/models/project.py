@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from dataclasses_json import dataclass_json
 import pandas as pd
 from typing import Optional
 from models.task import Task
@@ -11,6 +12,7 @@ from logic.utils import _none_min
 from models.sort_mode import SortMode
 import pandas as pd
 
+@dataclass_json
 @dataclass
 class Project:
     name: str

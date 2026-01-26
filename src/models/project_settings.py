@@ -5,6 +5,9 @@ from models.holiday import Holiday, fetch_holidays
 from functools import lru_cache
 from typing import Optional, Literal
 
+from dataclasses_json import dataclass_json
+
+@dataclass_json
 @dataclass
 class ProjectSettings:
     work_all_day: bool = False

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from dataclasses_json import dataclass_json
 import numpy as np
 import pandas as pd
 from models.task import Task
@@ -10,7 +11,7 @@ from logic.utils import _none_min
 from models.sort_mode import SortMode
 
 
-
+@dataclass_json
 @dataclass
 class Phase:
     name: str
