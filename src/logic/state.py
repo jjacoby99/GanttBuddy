@@ -12,3 +12,11 @@ def initialize_session_state():
 
     if "ui" not in st.session_state:
         st.session_state.ui = UIState()
+
+
+def state_initialized() -> bool:
+    state_vars = ["access_token", "auth_headers", "session"]
+    for var in state_vars:
+        if not var in st.session_state:
+            return False
+    return True
