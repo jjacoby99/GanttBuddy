@@ -13,6 +13,7 @@ class UIState:
 
     execution_phase_index: int = 0
     execution_task_index: int = 0 # task index within the execution phase
+    show_edit_project: bool = False
 
     #selected_phase_id: str | None = None  # for context when adding tasks
 
