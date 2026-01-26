@@ -34,8 +34,6 @@ if not is_logged_in():
     render_login()
     st.stop()
 
-
-
 use_compact_buttons()
 
 ui = st.session_state.ui
