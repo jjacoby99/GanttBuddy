@@ -8,6 +8,7 @@ from exceptions.date_error import InvalidDateError
 from exceptions.time_error import InvalidTimeError
 from logic.generate_id import new_id
 import pandas as pd
+from typing import Literal
 
 @dataclass_json
 @dataclass
@@ -21,6 +22,7 @@ class Task:
     uuid: str = field(default_factory=new_id)
     predecessor_ids: list[str] = field(default_factory=list)
     phase_id: str = ""
+    status: Literal["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETE"] = "NOT_STARTED"
 
     def to_dict(self) -> dict:
         return {"Task": self.name, 
@@ -31,7 +33,9 @@ class Task:
                 "Note": self.note,
                 "predecessor_ids": self.predecessor_ids,
                 "uuid": self.uuid,
-                "phase_id": self.phase_id}
+                "phase_id": self.phase_id,
+                "status": self.status
+                }
     
     def __str__(self) -> str:
         return f"Task(name = {self.name}, start_date={self.start_date}, end_date={self.end_date}, actual_start={self.actual_start}, actual_end={self.actual_end}, note={self.note})"
@@ -92,6 +96,7 @@ class Task:
         task.predecessor_ids = data.get("predecessor_ids", [])
         task.uuid = data.get("uuid", new_id())
         task.phase_id = data.get("phase_id", "")
+        task.status = data.get("status", "NOT_STARTED")
         return task
 
     def calculate_end_date(self, duration: int, settings: ProjectSettings) -> datetime:
