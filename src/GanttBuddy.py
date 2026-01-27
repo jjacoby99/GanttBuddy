@@ -55,7 +55,7 @@ with st.sidebar:
 if st.session_state.session.project is None:
 
     with st.container(horizontal_alignment="center"):
-        st.info(f"Create or load a project to view.")
+        st.info(f"Create or load a project to view.", icon=":material/info:", width=270)
         path = Path(__file__).parent.resolve() / "assets" / "ganttbuddy.png"
         st.space("large")
         st.image(load_image(path))
@@ -86,7 +86,7 @@ with st.container(horizontal=True):
         
     st.space("stretch")
     if st.button("🔧", help="View / Edit settings: work days, hours, holidays, etc."):
-            st.session_state.ui.show_settings = True
+        st.session_state.ui.show_settings = True
 
 
 
