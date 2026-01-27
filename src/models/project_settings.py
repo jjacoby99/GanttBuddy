@@ -73,6 +73,7 @@ class ProjectSettings:
             "working_days": self.working_days,
             "observe_state_holidays": self.observe_state_holidays,
             "province": self.province,
+            "duration_resolution": self.duration_resolution,
             "holidays": [ {"name": h.name, "date": h.date} for h in self.holidays ] if self.holidays else []
         }
     
@@ -83,10 +84,11 @@ class ProjectSettings:
         settings.work_start_time = data.get("work_start_time", time(hour=7, minute=0))
         settings.work_end_time = data.get("work_end_time", time(hour=18, minute=0))
         settings.working_days = tuple(data.get("working_days", (True, True, True, True, False, False, False)))
-        settings.observe_state_holidays = data.get("observe_state_holidays", True)
+        settings.observe_state_holidays = data.get("observe_state_holidays", False)
         settings.province = data.get("province", None)
         holidays_data = data.get("holidays", [])
         settings.holidays = [Holiday(name=h["name"], date=h["date"]) for h in holidays_data]
+        settings.duration_resolution = data.get("duration_resolution", "hours")
         return settings
     
     def set_all_working_days(self):
