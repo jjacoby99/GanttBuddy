@@ -32,9 +32,14 @@ def render_task_add(session: SessionModel, phase: Phase = None):
     task_list = [t for t in phase_selected.tasks.values()]
     
     predecessor_ids = []
-    if task_list and st.checkbox("Has Predecessors", 
-                                 help="Select if the new task has tasks that must complete before the task begins."):
-        
+    has_predecessors = st.checkbox(
+        "Has Predecessors", 
+        help="Select if the new task has tasks that must complete before the task begins.",
+        value=len(predecessor_ids) > 0
+    )
+
+    if task_list and has_predecessors:
+        st.divider()
         precedessor_options = [t.uuid for t in task_list]
         predecessor_ids = st.multiselect(
             label="Preceding tasks",
@@ -43,55 +48,35 @@ def render_task_add(session: SessionModel, phase: Phase = None):
             help=f"Select all tasks that directly precede *{task_name}*"
         )
 
+    new_start_date = None
     if predecessor_ids:
         new_start_date = max(phase_selected.tasks[id].end_date for id in predecessor_ids)
         st.info(f"Earliest start based on predecessors: **{new_start_date.strftime("%Y-%m-%d %H:%M")}**")
     
     start_col, end_col = st.columns(2)
     with start_col:
-        start_day = st.date_input(
-            label=f"Start date",
-            value=new_start_date if predecessor_ids else None,
+        planned_start_dt = st.datetime_input(
+            label=f"Planned Start",
+            value=new_start_date,
             min_value=new_start_date if predecessor_ids else datetime(year=2000,month=1,day=1),
-            key="task_start_date_single"
+            key="task_start_date_single",
+            help="**Planned start** timestamp for *{edited_task_name}*"
         )
-        new_start_time = session.project.settings.work_start_time
-        if predecessor_ids:
-            new_start_time = new_start_date.time() 
+
+
+
+    with end_col:        
+        min_end_day = planned_start_dt + timedelta(minutes=1) if planned_start_dt else datetime.today()
         
-        start_datetime = None
-        if not session.project.settings.work_all_day:
-            start_time = st.time_input(
-                label=f"Start time",
-                value=new_start_time,
-                key=f"task_start_time_{",".join(predecessor_ids)}"
-            )
-
-            if predecessor_ids and start_day == new_start_date.date() and start_time < new_start_time:
-                st.error(f"Start time comes before earliest start: {new_start_time.strftime("%H:%M")}")
-            if start_day:
-                start_datetime = datetime.combine(start_day, start_time)
-
-
-    with end_col:
-        end_day = st.date_input(
-            label=f"End date",
-            value=start_datetime + timedelta(hours=1) if start_datetime else datetime.today(),
-            min_value=start_datetime + timedelta(minutes=1) if start_datetime else datetime.today(),
-            key="task_start_date"
+        planned_end_dt = st.datetime_input(
+            label=f"Planned Finish",
+            value=min_end_day if planned_start_dt else None,
+            min_value=min_end_day,
+            key="task_start_date",
+            help="**Planned end** timestamp for *{edited_task_name}*"
         )
 
-        end_datetime = None
-        if not session.project.settings.work_all_day:
-            end_time = st.time_input(
-                label=f"End time",
-                value=session.project.settings.work_end_time,
-                key="task_end_time"
-            )
-            if end_day:
-                end_datetime = datetime.combine(end_day, end_time)
-
-    if not start_datetime or not end_datetime:
+    if not planned_start_dt or not planned_end_dt:
         st.info("Select a start and end date to continue.")
         st.stop()
 
@@ -103,8 +88,8 @@ def render_task_add(session: SessionModel, phase: Phase = None):
     if st.button(label=f"Add", disabled=not task_name, type='primary'):
         new_task = Task(
             name=task_name, 
-            start_date=start_datetime, 
-            end_date=end_datetime, 
+            start_date=planned_start_dt, 
+            end_date=planned_end_dt, 
             note=task_note if task_note else "",
             predecessor_ids=predecessor_ids
         )
