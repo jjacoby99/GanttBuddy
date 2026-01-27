@@ -94,6 +94,7 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> Project:
                 uuid=t.get("id"),
                 predecessor_ids=pred_map.get(t.get("id"), []),
                 phase_id=phase_id,
+                status=t.get("status", "NOT_STARTED")
             )
             project.add_task_to_phase(project.phases[phase_id], task)
 
