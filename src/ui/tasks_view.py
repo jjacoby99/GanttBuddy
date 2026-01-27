@@ -15,15 +15,16 @@ class TaskColumns:
     name: int = 0
     planned_start: int = 1
     planned_finish: int = 2
+    status: int = 3
     actual_start: int | None = None
     actual_finish: int | None = None
-    edit = 3
+    edit = 4
 
     def __init__(self, col_widths: list[int]):
         if len(col_widths) == 6:
-            self.actual_start = 3
-            self.actual_finish = 4
-            self.edit = 5
+            self.actual_start = 4
+            self.actual_finish = 5
+            self.edit = 6
 
 
 def render_tasks_table(session):
@@ -54,12 +55,18 @@ def render_tasks_table(session):
         )
 
     st.subheader("Project Phases")
-    col_widths = [5,2,2,1]
+    col_widths = [5,2,2,2,1]
     if show_actual:
-        col_widths = [5, 2, 2, 2, 2, 1]
+        col_widths = [5, 2, 2, 2, 2, 2, 1]
     
     TASK_COLS = TaskColumns(col_widths)
-
+    STATUS_BADGES = {
+        "NOT_STARTED": ("Not started", ":material/schedule:", "gray"),
+        "IN_PROGRESS": ("In progress", ":material/autorenew:", "blue"),
+        "COMPLETE": ("Complete", ":material/check_circle:", "green"),
+        "BLOCKED": ("Blocked", ":material/block:", "red"),
+    }
+ 
     phase_idx = 0
     for pid in session.project.phase_order:
         phase = session.project.phases[pid]
@@ -73,6 +80,7 @@ def render_tasks_table(session):
             cols[TASK_COLS.name].markdown("**Task**")
             cols[TASK_COLS.planned_start].markdown("**Start**")
             cols[TASK_COLS.planned_finish].markdown("**Finish**")
+            cols[TASK_COLS.status].markdown("**Status**")
 
             if show_actual:
                 cols[TASK_COLS.actual_start].markdown("**Actual Start**")
@@ -88,6 +96,12 @@ def render_tasks_table(session):
                     cols[TASK_COLS.planned_start].write(t.start_date.strftime("%Y-%m-%d %H:%M"))
                     cols[TASK_COLS.planned_finish].write(t.end_date.strftime("%Y-%m-%d %H:%M"))
 
+                    label, icon, color = STATUS_BADGES.get(
+                        t.status.upper(),
+                        (t.status, ":material/help:", "gray"),
+                    )
+
+                    cols[TASK_COLS.status].badge(label, icon=icon, color=color)
 
                     if show_actual:
                         cols[TASK_COLS.actual_start].write(t.actual_start.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_start) else "")
