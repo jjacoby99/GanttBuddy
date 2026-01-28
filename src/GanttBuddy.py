@@ -26,7 +26,11 @@ from pathlib import Path
 def load_image(path: str):
     return Image.open(path)
 
-st.set_page_config(layout="wide")
+st.set_page_config(
+    page_title="GanttBuddy", 
+    layout="wide", 
+    initial_sidebar_state="auto"
+)
 
 initialize_session_state()
 
