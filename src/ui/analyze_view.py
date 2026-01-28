@@ -302,21 +302,31 @@ def render_analysis(session: SessionModel):
         hide_index=True,
     )
 
-    wb = PostMortemAnalyzer.write_post_mortem(project=session.project, n=-1)
+    prepare_post_mortem = st.checkbox(
+        label="Prepare post mortem report",
+        value=False,
+        help="Select to begin the preparation of a post mortem report for download."
+    )
 
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
+    if prepare_post_mortem:
+        with st.spinner(f"Preparing report..."):
+            wb = PostMortemAnalyzer.write_post_mortem(project=session.project, n=-1)
+            buffer = BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
 
     with st.container(horizontal=True, horizontal_alignment='left'):
         st.info("Use the arrows to navigate between phases. Positive delay indicates the task took longer than planned.",
             width=730)
         st.space("stretch")
-        st.download_button(
-            label="Performance Report",
-            icon=":material/insights:",
-            data=buffer,
-            file_name=f"{session.project.name}_phase_delay.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+
+        if prepare_post_mortem:
+            st.download_button(
+                label="Performance Report",
+                icon=":material/insights:",
+                data=buffer,
+                file_name=f"{session.project.name}_phase_delay.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                disabled=not prepare_post_mortem
+            )
 
