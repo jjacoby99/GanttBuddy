@@ -9,7 +9,8 @@ def initialize_session_state():
         st.session_state["auth_headers"] = None
     if "session" not in st.session_state:
         st.session_state.session = SessionModel()
-
+    if "selected_project_id" not in st.session_state:
+        st.session_state["selected_project_id"] = None
     if "ui" not in st.session_state:
         st.session_state.ui = UIState()
 
