@@ -38,3 +38,13 @@ def save_project(project: Project, headers) -> str:
         except Exception:
             pass
         raise ValueError(f"Failed to save project: {e} {body}")
+    
+@st.cache_data
+def fetch_attention_tasks(headers: dict) -> dict:
+    url = f"{API_BASE}/projects/attention"
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        raise ValueError(f"Failed to fetch attention tasks: {e} {response.text}")
