@@ -26,8 +26,7 @@ def login(email: str, password: str) -> str:
 
 @st.cache_data
 def get_current_user(auth_headers: dict) -> dict:
-    headers = st.session_state.get("auth_headers")
-    r = requests.get(f"{API_BASE}/auth/me", headers=headers, timeout=10)
+    r = requests.get(f"{API_BASE}/auth/me", headers=auth_headers, timeout=10)
     if r.status_code != 200:
         raise RuntimeError(f"Failed to get current user: {r.text}")
     return r.json()
@@ -36,6 +35,8 @@ def get_current_user(auth_headers: dict) -> dict:
 def set_auth(token: str) -> None:
     st.session_state["access_token"] = token
     st.session_state["auth_headers"] = {"Authorization": f"Bearer {token}"}
+
+    st.session_state["auth"] = get_current_user(st.session_state["auth_headers"])
 
 def reset_auth() -> None:
     st.session_state["access_token"] = None
