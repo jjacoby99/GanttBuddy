@@ -132,6 +132,7 @@ def render_task_edit(session, phase: Phase, task: Task):
     if c1.button(label=f"Update", disabled=not edited_task_name, type='primary'):
         new_task = Task(
             name=edited_task_name, 
+            phase_id=phase.uuid,
             start_date=planned_start_dt, 
             end_date=planned_end_dt, 
             actual_start=actual_start_dt if enter_actuals else None,
