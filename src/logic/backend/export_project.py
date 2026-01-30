@@ -160,7 +160,10 @@ def project_to_import_payload(project: Any) -> Dict[str, Any]:
             actual_start = getattr(t, "actual_start", None)
             actual_end = getattr(t, "actual_end", None)
 
-            status = getattr(t, "status", None) or _derive_status(actual_start, actual_end)
+            if t.status:
+                status = t.status
+            else:
+                status = _derive_status(actual_start, actual_end)
 
             payload["tasks"].append(
                 {
