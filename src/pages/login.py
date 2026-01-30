@@ -1,0 +1,59 @@
+import streamlit as st
+
+from logic.backend.login import login, set_auth
+
+from PIL import Image
+from pathlib import Path
+
+def render_login():
+    with st.container(horizontal_alignment="center", vertical_alignment="center"):
+        with st.container(horizontal=True):
+            gb_path = Path(__file__).parent.parent.resolve() / "assets" / "ganttbuddy.png"
+            bta_path = Path(__file__).parent.parent.resolve() / "assets" / "bta_logo.png"
+
+            st.image(Image.open(gb_path), width=100)
+            st.space("stretch")
+            st.image(Image.open(bta_path), width=100)
+        
+        with st.form("login_form", width="content"):
+            st.subheader("Sign in")
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+
+            with st.container(horizontal_alignment="center", vertical_alignment="center"):
+                
+
+                if st.form_submit_button(":material/login: Sign In", type="tertiary"):
+                    try:
+                        token = login(username, password)
+                        st.success("Login successful!")
+                        set_auth(token)
+                        st.rerun()
+                    except Exception:
+                        st.error("Login failed. Please check your credentials.")
+
+  
+
+def render_create_account():
+    
+    with st.container(horizontal_alignment="center", vertical_alignment="center"):
+        st.title("Create Account")
+        
+        with st.form("create_account_form", width="content"):
+            email = st.text_input("Email")
+            password = st.text_input("Password", type="password")
+            confirm_password = st.text_input("Confirm Password", type="password")
+
+            with st.container(horizontal=True):
+                
+                if st.form_submit_button(":material/person_add: Create Account"):
+                    if password != confirm_password:
+                        st.error("Passwords do not match.")
+                    else:
+                        # Here you would add logic to create the account
+                        st.success("Account created successfully! Please log in.")
+
+                st.space("stretch")
+
+if __name__ == "__main__":
+    render_login()
