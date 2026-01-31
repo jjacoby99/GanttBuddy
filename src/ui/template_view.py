@@ -9,7 +9,7 @@ from models.project_types import ProjectType, ProjectBuilder, MillRelineBuilder,
 import datetime as dt
 
 @st.dialog(":material/dashboard_customize: Build from Template")
-def load_from_template(session: SessionModel):
+def load_from_template():
     template_options = [ProjectType.MILL_RELINE, ProjectType.CRUSHER_REBUILD]
     format_dict = {
         ProjectType.MILL_RELINE: "Mill Reline",
@@ -202,7 +202,7 @@ def load_from_template(session: SessionModel):
             ):
                 project = builder.build(inputs=candidate)
             
-            session.project = project
+            st.session_state.session.project = project
             st.success(f"Project '{project.name}' created from template.")
             st.rerun()
             return
