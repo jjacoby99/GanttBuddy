@@ -25,11 +25,11 @@ def render_project_sidebar(session) -> Project:
 
     st.caption(f"Create")
     if st.button(f"New Project", icon=":material/add:",help="Create a new project from scratch", type="secondary"):
-        create_project(session)
+        create_project()
         return
     
     if st.button(f"From Template", icon=":material/dashboard_customize:",help="Create a new project from a predefined template", type="secondary"):
-        load_from_template(session)
+        load_from_template()
         return
 
     st.caption(f"Open")
@@ -38,7 +38,7 @@ def render_project_sidebar(session) -> Project:
         return
 
     if st.button(f"From Excel", icon=":material/table_view:", help="Import project data from a BTA Excel template", type="secondary"):
-        load_from_excel(session)
+        load_from_excel()
         return
     
 
