@@ -91,12 +91,25 @@ def _placeholder_kpis() -> Dict[str, Any]:
     }
 
 
+from logic.backend.api_client import fetch_project_snapshot
+from logic.backend.import_project import snapshot_to_project
+
 # -----------------------------
 # Wiring stubs (replace later)
 # -----------------------------
 def open_project(project_id: str) -> None:
 
     st.session_state["selected_project_id"] = project_id
+    try:
+        snap = fetch_project_snapshot(
+            project_id=st.session_state.get("selected_project_id"), 
+            headers=st.session_state.get("auth_headers",{})
+        )
+    except Exception:
+        st.error(f"Failed to load selected project.")
+        st.stop()
+    
+    st.session_state.session.project = snapshot_to_project(snap)
     st.switch_page("pages/workspace.py")
     st.toast("Loaded project successfully", icon="✅")
 
@@ -266,9 +279,7 @@ def main() -> None:
                         with b:
                             if st.button("Open", key=f"na_open_{idx}", use_container_width=True):
                                 open_project(item.project_id)
-
-        st.caption("Tip: This section gets powerful once your backend provides “late”, “due soon”, and “awaiting actuals” rollups.")
-
+                                
     # Activity summary
     with right_col:
         st.subheader("Activity summary")
