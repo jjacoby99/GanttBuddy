@@ -5,7 +5,7 @@ from models.project import Project
 def create_project():
     project_name = st.text_input(
         f"Project name",
-        placeholder="Super aweseome project"
+        placeholder="Super awesome project"
     )
 
     if not project_name:
