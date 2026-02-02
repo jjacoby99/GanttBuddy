@@ -9,12 +9,13 @@ from models.phase import Phase
 from models.task import Task
 from models.project_settings import ProjectSettings
 
+import pytz
 
 def _parse_dt(x: str | None) -> datetime | None:
     if not x:
         return None
     # Handles "2026-01-26T07:00:00"
-    return datetime.fromisoformat(x)
+    return datetime.fromisoformat(x).astimezone()
 
 
 def _parse_time(x: str | None) -> time | None:
