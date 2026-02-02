@@ -76,6 +76,19 @@ class Phase:
             return None
         return self.actual_end - self.actual_start
     
+    @property
+    def status(self) -> str:
+        if all(task.status == "NOT_STARTED" for task in self.tasks.values()):
+            return "NOT_STARTED"
+        
+        if any(task.status == "IN_PROGRESS" for task in self.tasks.values()):
+            return "IN_PROGRESS"
+        
+        if any(task.status == "IN_PROGRESS" for task in self.tasks.values()):
+            return "IN_PROGRESS"
+        
+        return "BLOCKED"
+
     def to_excel_row(self) -> dict:
         return {
             "number": None,
