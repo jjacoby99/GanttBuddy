@@ -154,7 +154,7 @@ def render_filters(projects: dict, events: list[FeedEvent]) -> dict[str, Any]:
             )
         with c2[2]:
             st.space("small")
-            if st.button("Mark all read", icon=":material/done_all:", use_container_width=True):
+            if st.button("Mark all read", icon=":material/done_all:", width="stretch"):
                 for e in events:
                     st.session_state.feed_read_event_ids.add(e.id)
                 st.rerun()
@@ -249,7 +249,7 @@ def render_event_card(e: FeedEvent, projects: dict, unread: bool = False):
                 "Load",
                 icon=":material/open_in_new:",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 key=f"feed_load_{e.id}_{"unread" if unread else "read"}",
             ):
                 try:
@@ -266,7 +266,7 @@ def render_event_card(e: FeedEvent, projects: dict, unread: bool = False):
                 if st.button(
                     "Mark read",
                     icon=":material/done:",
-                    use_container_width=True,
+                    width="stretch",
                     key=f"feed_mark_read_{e.id}_{"unread" if unread else "read"}",
                     disabled=is_read,
                 ):
@@ -276,7 +276,7 @@ def render_event_card(e: FeedEvent, projects: dict, unread: bool = False):
                 if st.button(
                     "Copy JSON",
                     icon=":material/content_copy:",
-                    use_container_width=True,
+                    width="stretch",
                     key=f"feed_copy_{e.id}_{"unread" if unread else "read"}",
                 ):
                     st.session_state[f"feed_json_{e.id}"] = json.dumps(e.details, indent=2, default=str)
@@ -327,7 +327,7 @@ def render_project_pulse(projects: dict, events: list[FeedEvent]):
             if st.button(
                 "Open",
                 icon=":material/open_in_browser:",
-                use_container_width=True,
+                width="stretch",
                 key=f"pulse_open_{pid}",
             ):
                 try:
@@ -378,7 +378,7 @@ def render_feed():
                     }
                     for e in filtered
                 ],
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -392,10 +392,10 @@ def render_feed():
                 st.caption("No saved views yet.")
             else:
                 for i, v in enumerate(st.session_state.feed_saved_filters):
-                    if st.button(v.get("name", f"View {i+1}"), use_container_width=True, key=f"sv_{i}"):
+                    if st.button(v.get("name", f"View {i+1}"), width="stretch", key=f"sv_{i}"):
                         st.toast("Wire this to restore filters later.")
 
-            if st.button("Save current view", icon=":material/bookmark_add:", use_container_width=True):
+            if st.button("Save current view", icon=":material/bookmark_add:", width="stretch"):
                 st.session_state.feed_saved_filters.append({"name": f"View {len(st.session_state.feed_saved_filters)+1}"})
                 st.toast("Saved (UI-only).")
 

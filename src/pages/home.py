@@ -222,11 +222,11 @@ def main() -> None:
                 st.caption(f"**{last_proj[pid].get('name', '')}**")
                 st.caption(f"**Duration**: {ps} -> {pe}")
                 st.caption(f"**Last updated**: {last_proj[pid].get("updated").strftime("%d/%m/%Y, %H:%M")}")
-                if st.button("Open last project", use_container_width=True, type="primary"):
+                if st.button("Open last project", width="stretch", type="primary"):
                     open_project(pid)
             else:
                 st.caption("No recent project found.")
-                if st.button("Browse projects", use_container_width=True):
+                if st.button("Browse projects", width="stretch"):
                     go_to_projects_load()
 
     st.write("")
@@ -239,17 +239,17 @@ def main() -> None:
         with c1:
             st.markdown("### ✨ Create")
             st.caption("Start a new schedule from scratch.")
-            if st.button("Create project", use_container_width=True):
+            if st.button("Create project", width="stretch"):
                 create_project()
         with c2:
             st.markdown("### 📄 Import")
             st.caption("Bring in an Excel schedule and start working immediately.")
-            if st.button("Import from Excel", use_container_width=True):
+            if st.button("Import from Excel", width="stretch"):
                 load_from_excel()
         with c3:
             st.markdown("### 📁 Browse")
             st.caption("Search, filter, and open projects you have access to.")
-            if st.button("Browse projects", use_container_width=True):
+            if st.button("Browse projects", width="stretch"):
                 render_load_project()
 
     st.write("")
@@ -277,7 +277,7 @@ def main() -> None:
                             st.markdown(f"**{item.title}**")
                             st.caption(f"Due • {item.due_hint}")
                         with b:
-                            if st.button("Open", key=f"na_open_{idx}", use_container_width=True):
+                            if st.button("Open", key=f"na_open_{idx}", width="stretch"):
                                 open_project(item.project_id)
                                 
     # Activity summary
@@ -304,7 +304,7 @@ def main() -> None:
             with top[0]:
                 st.markdown("#### Recent activity")
             with top[1]:
-                if st.button("View full feed", use_container_width=True):
+                if st.button("View full feed", width="stretch"):
                     go_to_projects_feed()
 
             if not activity:

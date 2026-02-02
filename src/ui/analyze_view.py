@@ -255,7 +255,6 @@ def render_analysis(session: SessionModel):
 
     st.plotly_chart(
         fig,
-        use_container_width=True,
         width='stretch',
     )
 
