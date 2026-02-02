@@ -60,6 +60,13 @@ class Task:
             return None
         return self.actual_end - self.actual_start
     
+    @property
+    def is_milestone(self) -> bool:
+        """ 
+            Returns True if the planned start is the same as the actual start within 1 second.
+        """
+        return self.end_date - self.start_date <= timedelta(seconds=1)
+    
     def to_excel_row(self) -> dict:
         return {
             "number": None,
