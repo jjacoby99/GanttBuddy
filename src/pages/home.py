@@ -214,7 +214,7 @@ def main() -> None:
                     _badge(r.get("name", ""))
 
         with right:
-            st.markdown("#### Resume")
+            st.markdown("#### Pick Up Where You Left Off")
             if last_proj:
                 ps = last_proj[pid].get("planned_start", dt.datetime.today()).strftime("%d/%m/%Y, %H:%M")
                 pe = last_proj[pid].get("planned_end", dt.datetime.today()).strftime("%d/%m/%Y, %H:%M")
