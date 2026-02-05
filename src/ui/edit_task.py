@@ -4,8 +4,12 @@ from models.phase import Phase
 from models.task import Task
 from models.session import SessionModel
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC, timezone
+from zoneinfo import ZoneInfo
 
+def is_timezone_aware(dt):
+    """Check if a datetime object is timezone aware."""
+    return dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
 
 @st.dialog(f"Edit Task")
 def render_task_edit(session, phase: Phase, task: Task):
@@ -74,6 +78,7 @@ def render_task_edit(session, phase: Phase, task: Task):
             key="task_start_date_single",
             help="**Planned start** timestamp for *{edited_task_name}*"
         )
+        planned_start_dt = planned_start_dt.astimezone()
 
 
     with end_col:
@@ -88,6 +93,7 @@ def render_task_edit(session, phase: Phase, task: Task):
             key="task_start_date",
             help="**Planned end** timestamp for *{edited_task_name}*"
         )
+        planned_end_dt = planned_end_dt.astimezone()
 
     if enter_actuals:
         actual_start_dt = start_col.datetime_input(
@@ -96,11 +102,16 @@ def render_task_edit(session, phase: Phase, task: Task):
             help=f"**Actual start** timestamp for *{edited_task_name}*"
         )
 
+        if actual_start_dt:
+            actual_start_dt = actual_start_dt.astimezone()
+
         actual_end_dt = end_col.datetime_input(
             label=f"Actual Finish",
             value=None,
             help=f"**Actual end** timestamp for *{edited_task_name}*"
         )
+        if actual_end_dt:
+            actual_end_dt = actual_end_dt.astimezone()
 
 
     if not planned_start_dt or not planned_end_dt:
@@ -124,8 +135,9 @@ def render_task_edit(session, phase: Phase, task: Task):
         selection_mode="single"
     )
 
-    task_note = st.text_input(
+    task_note = st.text_area(
         label=f"Add a note for '{edited_task_name}'",
+        value=task.note if task.note else "",
         key=f"task_note_input"
     )
     c1, c2, c3 = st.columns(3)
