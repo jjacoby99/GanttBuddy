@@ -24,11 +24,12 @@ home = st.Page("pages/home.py", title="Home", icon=":material/home:")
 account = st.Page("pages/account.py", title="Account", icon=":material/person:")
 projects = st.Page("pages/projects.py", title="Load", icon=":material/folder_open:")
 feed = st.Page("pages/feed.py", title="Feed", icon=":material/view_list:")
+build = st.Page("pages/build.py", title="Build", icon=":material/build:")
 workspace = st.Page("pages/workspace.py", title="Workspace", icon=":material/view_timeline:")
 
 pages = {
     "Home": [home, account], 
-    "Projects": [projects, feed],
+    "Projects": [projects, feed, build],
     "Workspace": [workspace]
 }
 
