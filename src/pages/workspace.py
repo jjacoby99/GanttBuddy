@@ -2,7 +2,7 @@ import streamlit as st
 
 from ui.plot import render_gantt, render_task_details
 from ui.settings_view import render_settings_view
-from ui.sidebar import render_project_sidebar, render_project_buttons
+from ui.sidebar import render_project_buttons
 from ui.forecast_view import render_forecast
 from ui.compact_buttons import use_compact_buttons
 from ui.analyze_view import render_analysis
@@ -42,8 +42,6 @@ with st.sidebar:
             reset_auth()
             st.rerun()
         
-    render_project_sidebar(st.session_state.session)
-
 if st.session_state.session.project is None:
 
     with st.container(horizontal_alignment="center"):
