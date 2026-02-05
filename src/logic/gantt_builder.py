@@ -1,55 +1,158 @@
 import pandas as pd
-from plotly.colors import qualitative as q
+import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-import numpy as np
+
+import streamlit as st
+from streamlit import cache_data
+
+from logic.plot_utilities import adjust_color_any
+from plotly.colors import qualitative as q
+
 from models.project import Project
-from models.phase import Phase
-from models.task import Task
-from models.session import SessionModel
 from models.gantt_models import GanttInputs
 
-from streamlit import cache_data
-from logic.plot_utilities import adjust_color_any
 
+# -----------------------------
+# Label formatting helpers
+# -----------------------------
+
+def compute_left_margin(tick_labels: list[str]) -> int:
+    if not tick_labels:
+        return 120
+    max_len = max(len(s) for s in tick_labels)
+
+    return int(min(520, max(140, 8 * max_len + 40)))
+
+_BOLD_MAP = str.maketrans({
+    **{chr(ord('A') + i): chr(0x1D400 + i) for i in range(26)},  # 𝐀..𝐙
+    **{chr(ord('a') + i): chr(0x1D41A + i) for i in range(26)},  # 𝐚..𝐳
+    **{chr(ord('0') + i): chr(0x1D7CE + i) for i in range(10)},  # 𝟎..𝟗
+})
+
+def _unicode_bold(s: str) -> str:
+    # "Bold-ish" axis labels without relying on HTML in tick text
+    return (s or "").translate(_BOLD_MAP)
+
+def _indent_task(name: str) -> str:
+    # Visible hierarchy in the y-axis
+    # (Box drawing chars render nicely in Plotly tick labels.)
+    return f"   {name}"
+
+
+def _format_duration(td, resolution: str = "hours") -> str:
+    if td is None or pd.isna(td):
+        return ""
+    seconds = td.total_seconds()
+    if resolution == "days":
+        return f"{seconds / 86400:.2f} d"
+    return f"{seconds / 3600:.2f} h"
+
+
+# -----------------------------
+# Your color map (kept)
+# -----------------------------
+def build_color_map(df: pd.DataFrame, use_bta_colors: bool) -> dict[str, str]:
+    if df is None or df.empty:
+        return {}
+
+    if use_bta_colors:
+        phase_palette = [
+            "#264653",
+            "#2A9D8F",
+            "#8E5572",
+            "#4361EE",
+            "#F4A261",
+            "#6D597A",
+            "#2F4858",
+        ]
+
+        phase_names = df["Phase"].dropna().unique().tolist()
+        color_map: dict[str, str] = {}
+        for i, ph_name in enumerate(phase_names):
+            base = phase_palette[i % len(phase_palette)]
+            color_map[f"{ph_name}|Phase|Planned"] = adjust_color_any(base, darken=0.20)
+            color_map[f"{ph_name}|Task|Planned"]  = adjust_color_any(base, lighten=0.25)
+            color_map[f"{ph_name}|Phase|Actual"]  = adjust_color_any(base, darken=0.45)
+            color_map[f"{ph_name}|Task|Actual"]   = adjust_color_any(base, lighten=0.55)
+        return color_map
+
+    palette = q.Plotly + q.Set3 + q.Pastel + q.Safe + q.Dark24
+
+    def base_color(key: str) -> str:
+        return palette[hash(key) % len(palette)]
+
+    color_map: dict[str, str] = {}
+    for ph_name in df["Phase"].dropna().unique().tolist():
+        base = base_color(ph_name)
+        color_map[f"{ph_name}|Phase|Planned"] = adjust_color_any(base, darken=0.20)
+        color_map[f"{ph_name}|Task|Planned"]  = adjust_color_any(base, lighten=0.25)
+        color_map[f"{ph_name}|Phase|Actual"]  = adjust_color_any(base, darken=0.45)
+        color_map[f"{ph_name}|Task|Actual"]   = adjust_color_any(base, lighten=0.55)
+    return color_map
+
+
+# -----------------------------
+# Build DF with the extra info you need
+# -----------------------------
 @cache_data
-def build_gantt_df(project: Project, inputs: GanttInputs) -> pd.DataFrame:
-    
-    phases = project.phases
+def build_gantt_df(project: Project, inputs: GanttInputs) -> pd.DataFrame | None:
     rows: list[dict] = []
+    phases = project.phases
 
-    # Prefer explicit phase_order if present, otherwise use dict order
     phase_ids = getattr(project, "phase_order", list(phases.keys()))
+    duration_resolution = getattr(project.settings, "duration_resolution", "hours")
+
     for ph_id in phase_ids:
         ph = phases[ph_id]
 
-        # Planned phase
+        # Planned phase row
+        ph_start = getattr(ph, "start_date", None)
+        ph_end   = getattr(ph, "end_date", None)
         rows.append({
             "RowID": f"PH:{ph_id}",
-            "Label": f"{ph.name}",
+            "DisplayLabel": _unicode_bold(ph.name),
+            "Label": ph.name,
             "Phase": ph.name,
-            "Start": getattr(ph, "start_date", None),
-            "Finish": getattr(ph, "end_date", None),
+            "PhaseID": ph_id,
+            "Start": ph_start,
+            "Finish": ph_end,
             "Level": "Phase",
             "Type": "Planned",
             "UUID": None,
+            "TaskName": None,
+            "Status": ph.status,
+            "PlannedDuration": getattr(ph, "planned_duration", None),
+            "ActualDuration": getattr(ph, "actual_duration", None),
             "Predecessors": [],
+            "Note": None,
+            "IsMilestone": False,
+            "DurationResolution": duration_resolution,
         })
 
-        # Actual phase (only if both exist)
+        # Actual phase row (only if both exist)
         astart = getattr(ph, "actual_start", None)
-        aend = getattr(ph, "actual_end", None)
+        aend   = getattr(ph, "actual_end", None)
         if inputs.show_actuals and astart is not None and aend is not None:
             rows.append({
                 "RowID": f"PH:{ph_id}",
-                "Label": f"{ph.name}",
+                "DisplayLabel": _unicode_bold(ph.name),
+                "Label": ph.name,
                 "Phase": ph.name,
+                "PhaseID": ph_id,
                 "Start": astart,
                 "Finish": aend,
                 "Level": "Phase",
                 "Type": "Actual",
                 "UUID": None,
+                "TaskName": None,
+                "Status": ph.status,
+                "PlannedDuration": getattr(ph, "planned_duration", None),
+                "ActualDuration": getattr(ph, "actual_duration", None),
                 "Predecessors": [],
+                "Note": None,
+                "IsMilestone": False,
+                "DurationResolution": duration_resolution,
             })
 
         # Tasks
@@ -61,307 +164,343 @@ def build_gantt_df(project: Project, inputs: GanttInputs) -> pd.DataFrame:
             preds = getattr(t, "predecessor_ids", None)
             preds = list(preds) if preds is not None else []
 
-            # Planned task
+            planned_start = getattr(t, "start_date", None)
+            planned_end   = getattr(t, "end_date", None)
+
+            # milestone logic (prefer your property if it truly exists in your branch)
+            if hasattr(t, "is_milestone"):
+                is_ms = bool(getattr(t, "is_milestone"))
+            
+
             rows.append({
                 "RowID": f"TK:{t_id}",
+                "DisplayLabel": _indent_task(t.name),
                 "Label": t.name,
+                "TaskName": t.name,
                 "Phase": ph.name,
-                "Start": getattr(t, "start_date", None),
-                "Finish": getattr(t, "end_date", None),
+                "PhaseID": ph_id,
+                "Start": planned_start,
+                "Finish": planned_end,
                 "Level": "Task",
                 "Type": "Planned",
                 "UUID": uuid,
+                "Status": getattr(t, "status", None),
+                "PlannedDuration": getattr(t, "planned_duration", None),
+                # Only show actual duration if COMPLETE / completed
+                "ActualDuration": getattr(t, "actual_duration", None) if getattr(t, "completed", False) else None,
                 "Predecessors": preds,
+                "Note": getattr(t, "note", None),
+                "IsMilestone": is_ms,
+                "DurationResolution": duration_resolution,
             })
 
-            # Actual task (only if both exist)
+            # Actual task row (only if both exist)
             astart_t = getattr(t, "actual_start", None)
-            aend_t = getattr(t, "actual_end", None)
+            aend_t   = getattr(t, "actual_end", None)
             if inputs.show_actuals and astart_t is not None and aend_t is not None:
                 rows.append({
                     "RowID": f"TK:{t_id}",
+                    "DisplayLabel": _indent_task(t.name),
                     "Label": t.name,
+                    "TaskName": t.name,
                     "Phase": ph.name,
+                    "PhaseID": ph_id,
                     "Start": astart_t,
                     "Finish": aend_t,
                     "Level": "Task",
                     "Type": "Actual",
                     "UUID": uuid,
+                    "Status": getattr(t, "status", None),
+                    "PlannedDuration": getattr(t, "planned_duration", None),
+                    "ActualDuration": getattr(t, "actual_duration", None) if getattr(t, "completed", False) else None,
                     "Predecessors": preds,
+                    "Note": getattr(t, "note", None),
+                    "IsMilestone": is_ms,
+                    "DurationResolution": duration_resolution,
                 })
 
     df = pd.DataFrame(rows)
     if df.empty:
         return None
-    # Filter out rows without valid start/finish
+
     df = df[df["Start"].notna() & df["Finish"].notna()].copy()
     if df.empty:
         return None
 
-    
+    # Color key (same concept you had)
+    df["ColorKey"] = df.apply(lambda r: f"{r['Phase']}|{r['Level']}|{r['Type']}", axis=1)
 
-    # ----- Colors -----
-    # New scheme:
-    # - Each phase gets a base color.
-    # - Planned Phase = slightly darkened base
-    # - Planned Task  = slightly lightened base
-    # - Actual Phase  = more darkened base
-    # - Actual Task   = more lightened base
-    df["ColorKey"] = df.apply(
-        lambda r: f"{r['Phase']}|{r['Level']}|{r['Type']}", axis=1
-    )
-
-    
-
-    df["Start_str"] = pd.to_datetime(df["Start"]).dt.strftime("%Y-%m-%d %H:%M")
+    df["Start_str"]  = pd.to_datetime(df["Start"]).dt.strftime("%Y-%m-%d %H:%M")
     df["Finish_str"] = pd.to_datetime(df["Finish"]).dt.strftime("%Y-%m-%d %H:%M")
+
+    df["PlannedDur_str"] = df.apply(
+        lambda r: _format_duration(r["PlannedDuration"], r["DurationResolution"]), axis=1
+    )
+    df["ActualDur_str"] = df.apply(
+        lambda r: _format_duration(r["ActualDuration"], r["DurationResolution"]), axis=1
+    )
 
     return df
 
 
-def build_color_map(df: pd.DataFrame, use_bta_colors: bool) -> dict[str, str]:
-    if df is None or df.empty:
-        return {}
+def _apply_selection_styling(fig: go.Figure, selected_uuid: str | None) -> None:
+    """
+    Visually highlight the selected task:
+      - Selected bar gets thicker outline
+      - Non-selected bars are slightly dimmed
+    This relies on UUID being present in customdata.
+    """
+    if not selected_uuid:
+        # reset-ish defaults
+        for tr in fig.data:
+            if hasattr(tr, "marker") and tr.marker is not None:
+                tr.marker.opacity = 1.0
+        return
 
-    if use_bta_colors:
-        # Custom, muted palette for phases
-        phase_palette = [
-            "#264653",  # deep blue-green
-            "#2A9D8F",  # teal
-            "#8E5572",  # mauve
-            "#4361EE",  # blue
-            "#F4A261",  # soft orange
-            "#6D597A",  # purple
-            "#2F4858",  # slate
-        ]
+    for tr in fig.data:
+        cd = getattr(tr, "customdata", None)
+        if cd is None:
+            continue
 
-        phase_names = df["Phase"].dropna().unique().tolist()
-        color_map: dict[str, str] = {}
-        for i, ph_name in enumerate(phase_names):
-            base = phase_palette[i % len(phase_palette)]
-            # planned
-            color_map[f"{ph_name}|Phase|Planned"] = adjust_color_any(base, darken=0.20)
-            color_map[f"{ph_name}|Task|Planned"] = adjust_color_any(base, lighten=0.25)
-            # actual (more contrast)
-            color_map[f"{ph_name}|Phase|Actual"] = adjust_color_any(base, darken=0.45)
-            color_map[f"{ph_name}|Task|Actual"] = adjust_color_any(base, lighten=0.55)
-        return color_map
-    
-    # Fallback: still per-phase, but use built-in Plotly palettes
-    palette = q.Plotly + q.Set3 + q.Pastel + q.Safe + q.Dark24
+        # customdata schema below:
+        # [Label, Start_str, Finish_str, Type, UUID, Level, PhaseID, Status, PlannedDur_str, ActualDur_str, IsMilestone]
+        uuids = [row[4] for row in cd]
 
-    def base_color(key: str) -> str:
-        return palette[hash(key) % len(palette)]
+        is_selected = [u == selected_uuid for u in uuids]
+        any_selected_here = any(is_selected)
 
-    color_map: dict[str, str] = {}
-    for ph_name in df["Phase"].dropna().unique().tolist():
-        base = base_color(ph_name)
-        color_map[f"{ph_name}|Phase|Planned"] = adjust_color_any(base, darken=0.20)
-        color_map[f"{ph_name}|Task|Planned"] = adjust_color_any(base, lighten=0.25)
-        color_map[f"{ph_name}|Phase|Actual"] = adjust_color_any(base, darken=0.45)
-        color_map[f"{ph_name}|Task|Actual"] = adjust_color_any(base, lighten=0.55)
-    return color_map
+        # dim all bars in this trace if it contains no selected item
+        if hasattr(tr, "marker") and tr.marker is not None:
+            # opacity can be per-point or scalar; here we do per-point so mixed traces work
+            tr.marker.opacity = [1.0 if s else 0.35 for s in is_selected]
+
+            # per-point outline width/color for aesthetic highlight
+            line_w = [3 if s else 1 for s in is_selected]
+            line_c = ["rgba(0,0,0,0.85)" if s else "rgba(0,0,0,0.25)" for s in is_selected]
+
+            tr.marker.line.width = line_w
+            tr.marker.line.color = line_c
+
+        # bring selected trace “forward” a bit
+        if any_selected_here:
+            tr.update(zorder=10)
+
 
 @cache_data
-def build_timeline(project: Project, inputs: GanttInputs):
-    
+def build_timeline(project: Project, inputs: GanttInputs, selected_uuid: str | None = None) -> go.Figure:
     df = build_gantt_df(project, inputs)
-
     if df is None or df.empty:
         raise ValueError(f"No data available to build Gantt timeline for project '{project.name}'.")
-    
-    color_map = build_color_map(
-        df=df,
-        use_bta_colors=inputs.use_bta_colors
-    )
 
+    color_map = build_color_map(df=df, use_bta_colors=inputs.use_bta_colors)
+
+    # preserve your insertion order for y
     order = list(dict.fromkeys(df["RowID"].tolist()))
-
-    # Establish ordering and labels (preserve insertion order)
-    label_map: dict[str, str] = {}
+    labels = list(dict.fromkeys(df["DisplayLabel"].tolist()))
+    label_map = {}
     for _, r in df.iterrows():
         rid = r["RowID"]
         if rid not in label_map:
-            label_map[rid] = r["Label"]
-    
-    # ----- Base timeline -----
+            label_map[rid] = r["DisplayLabel"]
+
+    # Split milestones out (bars with zero duration are basically invisible)
+    is_milestone = (df["Level"] == "Task") & (df["Type"] == "Planned") & (df["IsMilestone"] == True)
+    df_ms = df[is_milestone].copy()
+    df_bar = df[~is_milestone].copy()
+
+    # Base timeline bars
     fig = px.timeline(
-        df,
+        df_bar,
         x_start="Start",
         x_end="Finish",
         y="RowID",
         color="ColorKey",
         color_discrete_map=color_map,
         category_orders={"RowID": order},
-        custom_data=["Label", "Start_str", "Finish_str", "Type"],
+        custom_data=[
+            "Label",                #0
+            "Start_str",            #1
+            "Finish_str",           #2
+            "Type",                 #3
+            "UUID",                 #4
+            "Level",                #5
+            "PhaseID",              #6
+            "Status",               #7
+            "PlannedDur_str",       #8
+            "ActualDur_str",        #9
+            "IsMilestone",          #10
+        ],
     )
 
-    # Y-axis: force order so first phase/task is at the top
+    ticktext = [label_map[v] for v in order]
+    # Y-axis formatting: show phases + indented tasks
     fig.update_yaxes(
         categoryorder="array",
         categoryarray=order,
         tickmode="array",
         tickvals=order,
-        ticktext=[label_map[v] for v in order],
+        ticktext=ticktext,
         autorange="reversed",
         title=None,
+        automargin=True
     )
-    fig.update_xaxes(title=None)
 
-    # Legend grouping by phase so clicking a phase toggles its tasks as well
+    # fig.update_layout(
+    #     margin=dict(l=compute_left_margin(ticktext),right=10,t=20,b=10)
+    # )
+    fig.update_xaxes(
+        title=None,
+        automargin=True
+    )
+
+    # Legend grouping by phase (your approach, but keep the trace name readable)
     for tr in fig.data:
         if isinstance(tr.name, str) and tr.name.count("|") >= 2:
             ph_name, level, typ = tr.name.split("|", 2)
             tr.legendgroup = ph_name
             tr.name = ph_name
             tr.showlegend = (level == "Phase" and typ == "Planned")
-        tr.marker.line.width = 1
-        tr.marker.line.color = "rgba(0,0,0,0.25)"
 
-    # ----- Shade non-working days (weekends) -----
-    if inputs.shade_non_working:
-        working_days = getattr(project.settings, "working_days", None)
+        # base outline (selection styling will override per-point)
+        if hasattr(tr, "marker") and tr.marker is not None:
+            tr.marker.line.width = 1
+            tr.marker.line.color = "rgba(0,0,0,0.25)"
 
-        if not project.settings.work_all_day:
-            work_start_time = getattr(project.settings, "work_start_time", None)
-            work_end_time = getattr(project.settings, "work_end_time", None)
-
-        if working_days and not project.settings.work_all_day:
-            start_min = df["Start"].min()
-            finish_max = df["Finish"].max()
-            if pd.notna(start_min) and pd.notna(finish_max):
-                start_date = start_min.floor("D")
-                end_date = finish_max.ceil("D")
-                cur = start_date
-                while cur <= end_date:
-                    wd = cur.weekday()  # 0 = Monday
-                    if 0 <= wd < len(working_days) and not working_days[wd]:
-                        x0 = cur
-                        x1 = cur + pd.Timedelta(days=1)
-                        fig.add_vrect(
-                            x0=x0,
-                            x1=x1,
-                            fillcolor="lightgrey",
-                            opacity=0.12,
-                            layer="below",
-                            line_width=0,
-                            yref="paper",  # full vertical span, but won't affect scaling
-                            y0=0,
-                            y1=1,
-                        )
-                    cur += pd.Timedelta(days=1)
-
-    # ----- Dependency arrows between tasks (planned only) -----
-    task_planned = df[
-        (df["Level"] == "Task")
-        & (df["Type"] == "Planned")
-        & df["Start"].notna()
-        & df["Finish"].notna()
-    ].copy()
-
-    uuid_to_row: dict[str, pd.Series] = {}
-    for _, row in task_planned.iterrows():
-        uid = row.get("UUID")
-        if pd.notna(uid):
-            uuid_to_row[uid] = row
-
-    for _, rowB in task_planned.iterrows():
-        preds = rowB.get("Predecessors", [])
-        if preds is None:
-            continue
-        if not isinstance(preds, (list, tuple, np.ndarray)):
-            continue
-        for pred_uuid in preds:
-            rowA = uuid_to_row.get(pred_uuid)
-            if rowA is None:
-                continue
-            fig.add_annotation(
-                x=rowB["Start"],
-                y=rowB["RowID"],
-                ax=rowA["Finish"],
-                ay=rowA["RowID"],
-                xref="x",
-                yref="y",
-                axref="x",
-                ayref="y",
-                showarrow=True,
-                arrowhead=3,
-                arrowsize=1,
-                arrowwidth=1,
-                arrowcolor="rgba(80,80,80,0.7)",
-                opacity=0.8,
-            )
-
-    # ----- Phase end markers (planned + actual), with high-contrast colors -----
-    phase_planned = df[
-        (df["Level"] == "Phase")
-        & (df["Type"] == "Planned")
-        & df["Finish"].notna()
-    ]
-    if not phase_planned.empty:
+    # Milestone diamonds (planned tasks only)
+    if not df_ms.empty:
         fig.add_trace(
             go.Scatter(
-                x=phase_planned["Finish"],
-                y=phase_planned["RowID"],
+                x=df_ms["Start"],
+                y=df_ms["RowID"],
                 mode="markers",
-                name="Phase End (Planned)",
-                marker=dict(
-                    symbol="diamond",
-                    size=11,
-                    color="#FFB703",  # bright amber
-                    line=dict(width=1.5, color="black"),
+                name="Milestone",
+                marker=dict(symbol="diamond", size=10, line=dict(width=1.5, color="black")),
+                # mirror the same customdata layout so clicks/hover are consistent
+                customdata=np.stack([
+                    df_ms["Label"],
+                    df_ms["Start_str"],
+                    df_ms["Finish_str"],
+                    df_ms["Type"],
+                    df_ms["UUID"],
+                    df_ms["Level"],
+                    df_ms["PhaseID"],
+                    df_ms["Status"],
+                    df_ms["PlannedDur_str"],
+                    df_ms["ActualDur_str"],
+                    df_ms["IsMilestone"],
+                ], axis=1),
+                hovertemplate=(
+                    "<b>%{customdata[0]}\n</b><br>"
+                    "Start: %{customdata[1]}<br>"
+                    "Type: %{customdata[3]}<br>"
+                    "Planned: %{customdata[8]}<br>"
+                    "Status: %{customdata[7]}<br>"
+                    "<span style='opacity:0.7'>\"Click to select\"</span>"
+                    "<extra></extra>"
                 ),
-                hoverinfo="skip",
                 showlegend=True,
-                legendgroup="PhaseEndPlanned",
+                legendgroup="milestones",
             )
         )
 
-    phase_actual = df[
-        (df["Level"] == "Phase")
-        & (df["Type"] == "Actual")
-        & df["Finish"].notna()
-    ]
-    if inputs.show_actuals and not phase_actual.empty:
-        fig.add_trace(
-            go.Scatter(
-                x=phase_actual["Finish"],
-                y=phase_actual["RowID"],
-                mode="markers",
-                name="Phase End (Actual)",
-                marker=dict(
-                    symbol="circle",
-                    size=10,
-                    color="#E63946",  # strong red/pink
-                    line=dict(width=1.5, color="black"),
-                ),
-                hoverinfo="skip",
-                showlegend=True,
-                legendgroup="PhaseEndActual",
-            )
+    # Hover template for bar traces
+    for tr in fig.data:
+        if getattr(tr, "customdata", None) is None:
+            
+            continue
+        tr.hovertemplate = (
+            "<b>%{customdata[0]}</b><br>"
+            "<b>Start</b>: %{customdata[1]}<br>"
+            "<b>Finish</b>: %{customdata[2]}<br>"
+            "<b>Type</b>: %{customdata[3]}<br>"
+            "<b>Planned</b>: %{customdata[8]}<br>"
+            # Actual only if exists (string will be "" otherwise)
+            "<b>Actual</b>: %{customdata[9]}<br>"
+            "<b>Status</b>: %{customdata[7]}<br>"
+            "<span style='opacity:0.7'>Click to select</span>"
+            "<extra></extra>"
         )
 
-    # ----- Layout / hover -----
-    # Slightly smaller row height + smaller top margin to reduce whitespace
-    legend_title = "Phase"
+    # Layout polish
     row_height = 28
     fig.update_layout(
-        height=max(220, int(row_height * len(order))),
+        title={
+            'text': f"<b>{project.name.split("\n")[0]} Gantt<b>",
+            'y': 1,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top',
+            'font': dict(size=20)
+        },
+        height=max(260, int(row_height * len(order))),
         margin=dict(l=10, r=10, t=20, b=10),
-        legend_title_text=legend_title,
+        legend_title_text="Phase",
         legend_tracegroupgap=6,
         showlegend=True,
-        hoverlabel=dict(namelength=-1),
+        hovermode="closest",
+        hoverlabel=dict(
+            align="left",
+            namelength=-1
+        ),
         legend=dict(groupclick="togglegroup", itemclick="toggleothers"),
+        clickmode="event+select",
     )
 
-    # Only set hovertemplate on traces that actually have customdata
-    for tr in fig.data:
-        if getattr(tr, "customdata", None) is not None:
-            tr.hovertemplate = (
-                "<b>%{customdata[0]}</b><br>"
-                "Start: %{customdata[1]}<br>"
-                "Finish: %{customdata[2]}<br>"
-                "Type: %{customdata[3]}<extra></extra>"
-            )
+    # Apply selection styling after the figure is built
+    _apply_selection_styling(fig, selected_uuid)
+
     return fig
+
+
+# -----------------------------
+# Optional: Click handling in Streamlit
+# -----------------------------
+def render_gantt_with_click_selection(fig: go.Figure, key: str = "gantt"):
+    """
+    Renders the gantt and captures click events if streamlit_plotly_events is available.
+    On click, writes:
+      - gantt_selected_uuid
+      - gantt_selected_phase_id
+      - gantt_selected_payload
+    into st.session_state.
+    """
+    try:
+        from streamlit_plotly_events import plotly_events
+        events = plotly_events(fig, click_event=True, hover_event=False, select_event=False, key=key)
+    except Exception:
+        # Fallback: render without click capture
+        st.plotly_chart(fig, use_container_width=True, key=f"{key}_static")
+        events = []
+
+    if events:
+        # Plotly event points usually include "customdata" from the clicked point
+        pt = events[0]
+        cd = pt.get("customdata", None)
+        if cd:
+            # cd schema:
+            # [Label, Start_str, Finish_str, Type, UUID, Level, PhaseID, Status, PlannedDur_str, ActualDur_str, IsMilestone]
+            uuid = cd[4]
+            level = cd[5]
+            phase_id = cd[6]
+
+            if uuid and level == "Task":
+                st.session_state["gantt_selected_uuid"] = uuid
+                st.session_state["gantt_selected_phase_id"] = phase_id
+                st.session_state["gantt_selected_payload"] = {
+                    "uuid": uuid,
+                    "phase_id": phase_id,
+                    "name": cd[0],
+                    "planned_start_str": cd[1],
+                    "planned_finish_str": cd[2],
+                    "type": cd[3],
+                    "status": cd[7],
+                    "planned_duration_str": cd[8],
+                    "actual_duration_str": cd[9],
+                    "is_milestone": bool(cd[10]),
+                }
+            else:
+                # clicked a phase row or something else
+                st.session_state["gantt_selected_uuid"] = None
+                st.session_state["gantt_selected_phase_id"] = phase_id
+                st.session_state["gantt_selected_payload"] = None
+ 
