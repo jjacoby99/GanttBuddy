@@ -11,6 +11,8 @@ from colorsys import rgb_to_hls, hls_to_rgb
 
 from ui.utils.phase_controls import prev_phase, next_phase
 from ui.utils.project_info import render_project_info
+from ui.utils.status_badges import STATUS_BADGES
+
 from logic.post_mortem import PostMortemAnalyzer
 
 from models.gantt_models import GanttInputs
@@ -18,6 +20,98 @@ from models.project import Project
 from models.session import SessionModel
 from models.phase import Phase 
 from logic.gantt_builder import build_timeline
+
+from streamlit_plotly_events2 import plotly_events 
+
+
+import streamlit as st
+
+def _get_customdata_from_event(fig, pt: dict):
+    """
+    streamlit-plotly-events often returns only curveNumber/pointNumber.
+    Recover the full customdata row from the figure itself.
+    """
+    curve = pt.get("curveNumber", None)
+    idx = pt.get("pointNumber", pt.get("pointIndex", None))  # different keys appear depending on plotly
+    if curve is None or idx is None:
+        return None
+
+    if curve < 0 or curve >= len(fig.data):
+        return None
+
+    tr = fig.data[curve]
+    cd = getattr(tr, "customdata", None)
+    if cd is None:
+        return None
+
+    try:
+        return cd[idx]
+    except Exception:
+        return None
+
+
+def render_gantt_with_click_selection(fig, project_id: str, key: str = "gantt"):
+    """
+    Uses streamlit-plotly-events2 (import name is still streamlit_plotly_events).
+    Writes selection into st.session_state.
+    """
+    
+
+    fig.update_layout(uirevision=f"gantt:{project_id}")
+
+    events = plotly_events(
+        fig,
+        click_event=True,
+        select_event=False,
+        hover_event=False,
+        key=key,
+        override_width="100%",
+        config={"displayModeBar": True, "responsive": True},
+    )
+
+    if not events:
+        return
+
+    pt = events[0]
+
+    # Try direct first (sometimes present), otherwise recover from fig
+    cd = pt.get("customdata", None)
+    if cd is None:
+        cd = _get_customdata_from_event(fig, pt)
+
+    if cd is None:
+        # If this happens, it usually means the clicked trace doesn't have customdata
+        # (e.g., you clicked a trace you didn’t set it on).
+        return
+
+    # customdata schema (from your build_timeline custom_data list):
+    # [Label, Start_str, Finish_str, Type, UUID, Level, PhaseID, Status, PlannedDur_str, ActualDur_str, IsMilestone]
+    uuid = cd[4]
+    level = cd[5]
+    phase_id = cd[6]
+
+    if uuid and level == "Task":
+        st.session_state["gantt_selected_uuid"] = uuid
+        st.session_state["gantt_selected_phase_id"] = phase_id
+        st.session_state["gantt_selected_payload"] = {
+            "uuid": uuid,
+            "phase_id": phase_id,
+            "name": cd[0],
+            "planned_start_str": cd[1],
+            "planned_finish_str": cd[2],
+            "type": cd[3],
+            "status": cd[7],
+            "planned_duration_str": cd[8],
+            "actual_duration_str": cd[9],
+            "is_milestone": bool(cd[10]),
+        }
+    else:
+        st.session_state["gantt_selected_uuid"] = None
+        st.session_state["gantt_selected_phase_id"] = phase_id
+        st.session_state["gantt_selected_payload"] = None
+
+    #st.rerun()
+ 
 
 def render_gantt(session):
     phases = session.project.phases
@@ -88,16 +182,53 @@ def render_gantt(session):
     )
 
     selected_proj = session.project if not phase_view else phase_view
+
+    selected_uuid = st.session_state.get("gantt_selected_uuid", None)
     try:
         fig = build_timeline(
             project=selected_proj,
-            inputs=inputs
+            inputs=inputs,
+            selected_uuid=selected_uuid # phase or task uuid to highlight.
         )
     except ValueError as e:
         st.info(f"Add some tasks to your project to view the Gantt chart.")
         return
 
-    st.plotly_chart(fig)
+    
+    c1, c2 = st.columns([7,1])
+
+    with c1:
+        st.plotly_chart(fig)
+        # render_gantt_with_click_selection(
+        #     fig=fig,
+        #     project_id=selected_proj.uuid,
+        #     key="project_gantt"
+        # )
+    
+    with c2:
+        payload = st.session_state.get("gantt_selected_payload", {})
+        if not payload:
+            st.info("Select a task")
+        else:
+            label, icon, color = STATUS_BADGES.get(
+                payload.get("status", "NOT_COMPLETED"),
+                ("NOT_COMPLETED", ":material/help:", "gray"),
+            )
+
+            
+            with st.popover(
+                label=f"**Info**"
+            ):
+                st.caption(f"**{payload.get("name", "name")}**")
+                st.metric(
+                    f"Planned Start",
+                    value=payload.get("planned_start_str")
+                )
+                st.metric(
+                    f"Planned Start",
+                    value=payload.get("planned_finish_str")
+                )
+                st.badge(label, icon=icon, color=color)
 
     st.divider()
     render_project_info(selected_proj)
