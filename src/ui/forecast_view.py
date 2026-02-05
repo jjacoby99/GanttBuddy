@@ -16,6 +16,8 @@ def render_forecast(session: SessionModel):
     if not session.project.has_actuals:
         st.info("Enter actual start / end dates for at least one task to view forecast.")
         return
+    
+    st.subheader("Forecast")
 
     raw = build_forecast_df_v2(session.project)
 

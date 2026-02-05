@@ -15,15 +15,16 @@ def render_plan(session: SessionModel):
         "Simple": ":material/layers: Simple",
         "Detailed": ":material/format_list_bulleted: Detailed"
     }
+
     with st.container(horizontal=True):
         view_option = st.segmented_control(
             label="Project View",
             options=options.keys(),
             format_func=lambda t: options[t],
+            default="Simple",
             width=300
         )
-        
-
+    
     match view_option:
         case "Simple":
             render_phases_view(session)
