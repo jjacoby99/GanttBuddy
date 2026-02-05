@@ -5,6 +5,7 @@ from ui.add_task import render_task_add
 from ui.edit_phase import render_phase_edit
 from ui.add_phase import render_add_phase
 from ui.utils.project_info import render_project_info
+from ui.utils.status_badges import STATUS_BADGES
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -60,12 +61,6 @@ def render_tasks_table(session):
         col_widths = [5, 2, 2, 2, 2, 2, 1]
     
     TASK_COLS = TaskColumns(col_widths)
-    STATUS_BADGES = {
-        "NOT_STARTED": ("Not started", ":material/schedule:", "gray"),
-        "IN_PROGRESS": ("In progress", ":material/autorenew:", "blue"),
-        "COMPLETE": ("Complete", ":material/check_circle:", "green"),
-        "BLOCKED": ("Blocked", ":material/block:", "red"),
-    }
  
     phase_idx = 0
     for pid in session.project.phase_order:
