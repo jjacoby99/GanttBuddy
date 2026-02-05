@@ -8,15 +8,12 @@ from ui.add_phase import render_add_phase
 from ui.edit_phase import render_phase_edit
 from ui.add_task import render_task_add
 from ui.edit_task import render_task_edit
-from ui.template_view import load_from_template
 
 from logic.backend.project_list import get_projects
 from logic.backend.import_project import snapshot_to_project
 from logic.backend.api_client import fetch_project_snapshot
 
-from ui.create_project import create_project
-from ui.load_project import render_load_project
-from ui.load_from_excel import load_from_excel
+from ui.edit_schedule import edit_shift_schedule
 
 def render_project_buttons(session):
     if session.project is None:
@@ -39,6 +36,9 @@ def render_project_buttons(session):
             render_task_add(session)
             st.session_state.ui.show_add_task = False
 
+    st.caption("Edit")
+    if st.button("Shift Schedule", icon=":material/calendar_month:",help="Edit shift schedule and timezone."):
+        edit_shift_schedule()
 
     st.caption(f"Export")
     with st.container(horizontal=True):
