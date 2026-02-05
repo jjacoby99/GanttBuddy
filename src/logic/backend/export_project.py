@@ -71,9 +71,11 @@ def project_to_import_payload(project: Any) -> Dict[str, Any]:
     # ---- Project basics (what your ProjectImportProjectIn expects)
     payload: Dict[str, Any] = {
         "project": {
+            "id": str(project_uuid),
             "name": getattr(project, "name", ""),
             "description": getattr(project, "description", None),
             "sort_mode": getattr(project, "_sort_mode", "manual"),
+            "project_type": str(getattr(project, "project_type", "GENERIC"))
         },
         "settings": None,
         "phases": [],
