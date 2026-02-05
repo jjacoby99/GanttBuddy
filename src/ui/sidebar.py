@@ -18,30 +18,6 @@ from ui.create_project import create_project
 from ui.load_project import render_load_project
 from ui.load_from_excel import load_from_excel
 
-def render_project_sidebar(session) -> Project:
-
-    st.divider()
-    st.subheader(f"Project Explorer")
-
-    st.caption(f"Create")
-    if st.button(f"New Project", icon=":material/add:",help="Create a new project from scratch", type="secondary"):
-        create_project()
-        return
-    
-    if st.button(f"From Template", icon=":material/dashboard_customize:",help="Create a new project from a predefined template", type="secondary"):
-        load_from_template()
-        return
-
-    st.caption(f"Open")
-    if st.button(f"Saved Project", icon=":material/open_in_browser:", help="Load a saved project from the cloud", type="secondary"):
-        render_load_project()
-        return
-
-    if st.button(f"From Excel", icon=":material/table_view:", help="Import project data from a BTA Excel template", type="secondary"):
-        load_from_excel()
-        return
-    
-
 def render_project_buttons(session):
     if session.project is None:
         return
