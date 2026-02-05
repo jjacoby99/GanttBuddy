@@ -80,7 +80,7 @@ def render_task_add(session: SessionModel, phase: Phase = None):
         st.info("Select a start and end date to continue.")
         st.stop()
 
-    task_note = st.text_input(
+    task_note = st.text_area(
         label=f"Add a note for '{task_name}'",
         key=f"task_note_input"
     )
