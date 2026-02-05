@@ -19,14 +19,29 @@ class TaskColumns:
     status: int = 3
     actual_start: int | None = None
     actual_finish: int | None = None
-    edit = 4
+    edit: int = 4
 
-    def __init__(self, col_widths: list[int]):
-        if len(col_widths) == 6:
+    show_actuals: bool = False
+
+    def __init__(self, show_actuals: bool=False):
+        self.show_actuals = show_actuals
+
+        self.name = 0
+        self.planned_start = 1
+        self.planned_finish = 2
+        self.status = 3
+        self.edit = 4
+        if show_actuals:
             self.actual_start = 4
             self.actual_finish = 5
             self.edit = 6
 
+    def get_col_widths(self) -> list[int]:
+        if self.show_actuals:
+            return [5, 2, 2, 2, 2, 2, 1]
+
+        return [5,2,2,2,1]
+    
 
 def render_tasks_table(session):
     phases = session.project.phases
@@ -56,12 +71,10 @@ def render_tasks_table(session):
         )
 
     st.subheader("Project Phases")
-    col_widths = [5,2,2,2,1]
-    if show_actual:
-        col_widths = [5, 2, 2, 2, 2, 2, 1]
     
-    TASK_COLS = TaskColumns(col_widths)
- 
+    columns = TaskColumns(show_actuals=show_actual)
+    col_widths = columns.get_col_widths()
+
     phase_idx = 0
     for pid in session.project.phase_order:
         phase = session.project.phases[pid]
@@ -72,38 +85,38 @@ def render_tasks_table(session):
                          expanded=expand_all):
             # Header row
             cols = st.columns(col_widths)
-            cols[TASK_COLS.name].markdown("**Task**")
-            cols[TASK_COLS.planned_start].markdown("**Start**")
-            cols[TASK_COLS.planned_finish].markdown("**Finish**")
-            cols[TASK_COLS.status].markdown("**Status**")
+            cols[columns.name].markdown("**Task**")
+            cols[columns.planned_start].markdown("**Start**")
+            cols[columns.planned_finish].markdown("**Finish**")
+            cols[columns.status].markdown("**Status**")
 
             if show_actual:
-                cols[TASK_COLS.actual_start].markdown("**Actual Start**")
-                cols[TASK_COLS.actual_finish].markdown("**Actual Finish**")
+                cols[columns.actual_start].markdown("**Actual Start**")
+                cols[columns.actual_finish].markdown("**Actual Finish**")
 
-            cols[TASK_COLS.edit].markdown("**Edit**")
+            cols[columns.edit].markdown("**Edit**")
 
             for i, tid in enumerate(phase.task_order):
                 t = phase.tasks[tid]
 
                 with st.container():
-                    cols[TASK_COLS.name].write(t.name)
-                    cols[TASK_COLS.planned_start].write(t.start_date.strftime("%Y-%m-%d %H:%M"))
-                    cols[TASK_COLS.planned_finish].write(t.end_date.strftime("%Y-%m-%d %H:%M"))
+                    cols[columns.name].write(t.name)
+                    cols[columns.planned_start].write(t.start_date.strftime("%Y-%m-%d %H:%M"))
+                    cols[columns.planned_finish].write(t.end_date.strftime("%Y-%m-%d %H:%M"))
 
                     label, icon, color = STATUS_BADGES.get(
                         t.status.upper(),
                         (t.status, ":material/help:", "gray"),
                     )
 
-                    cols[TASK_COLS.status].badge(label, icon=icon, color=color)
+                    cols[columns.status].badge(label, icon=icon, color=color)
 
                     if show_actual:
-                        cols[TASK_COLS.actual_start].write(t.actual_start.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_start) else "")
-                        cols[TASK_COLS.actual_finish].write(t.actual_end.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_end) else "")
+                        cols[columns.actual_start].write(t.actual_start.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_start) else "")
+                        cols[columns.actual_finish].write(t.actual_end.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_end) else "")
 
 
-                    if cols[TASK_COLS.edit].button("✏️", key=f"edit_{phase.name}_{t.name}_{i}"):
+                    if cols[columns.edit].button("✏️", key=f"edit_{phase.name}_{t.name}_{i}"):
                         render_task_edit(session, phase=phase, task=t)     
 
             st.divider()
