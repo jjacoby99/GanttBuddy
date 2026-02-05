@@ -11,6 +11,9 @@ from logic.generate_id import new_id
 from logic.utils import _none_min
 from models.sort_mode import SortMode
 import pandas as pd
+from models.project_type import ProjectType
+from models.shift_schedule import ShiftSchedule
+from enum import Enum
 
 @dataclass_json
 @dataclass
@@ -22,6 +25,8 @@ class Project:
     phase_order: list[str] = field(default_factory=list) # list of phase uuids in order
     settings: ProjectSettings = field(default_factory=ProjectSettings)
     _sort_mode: SortMode = SortMode.manual
+    project_type: ProjectType = field(default=ProjectType.GENERIC)
+    shift_schedule: Optional[ShiftSchedule] = field(default=ShiftSchedule)
 
     @property
     def start_date(self) -> Optional[datetime]:
@@ -287,6 +292,3 @@ class Project:
             data["notes"].append(task.note if task.note else "")
 
         return pd.DataFrame(data)
-    
-
-
