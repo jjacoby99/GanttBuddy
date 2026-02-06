@@ -77,6 +77,7 @@ def load_project_into_session(project_id: str):
         headers=st.session_state.auth_headers,
     )
     st.session_state.session.project = snapshot_to_project(proj_snapshot)
+    st.switch_page("pages/plan.py")
 
 from datetime import datetime, timezone, timedelta
 

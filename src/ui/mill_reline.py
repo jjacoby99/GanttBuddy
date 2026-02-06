@@ -453,5 +453,5 @@ def render_mill_reline_inputs():
 
         st.session_state.session.project = project
         st.success(f"Project '{project.name}' created from template.")
-        st.switch_page("pages/workspace.py")
+        st.switch_page("pages/plan.py")
         st.rerun()

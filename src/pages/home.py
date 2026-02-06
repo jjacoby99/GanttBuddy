@@ -110,7 +110,7 @@ def open_project(project_id: str) -> None:
         st.stop()
     
     st.session_state.session.project = snapshot_to_project(snap)
-    st.switch_page("pages/workspace.py")
+    st.switch_page("pages/plan.py")
     st.toast("Loaded project successfully", icon="✅")
 
 

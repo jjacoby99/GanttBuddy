@@ -67,7 +67,7 @@ def render_project_explorer():
         render_select_project(projects) 
 
     if "selected_project_id" in st.session_state: 
-        st.switch_page("pages/workspace.py")
+        st.switch_page("pages/plan.py")
 
 if __name__ == "__main__":
     render_project_explorer()
