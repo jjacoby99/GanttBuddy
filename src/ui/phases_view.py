@@ -13,14 +13,12 @@ def render_phases_view(session: SessionModel):
         return
     
     
-    st.caption("Project at a glance")
-    with st.container(border=True):
+    with st.popover("Project at a glance", width="content"):
         render_project_info(session.project, resolution="Phase")
     
     st.divider()
 
     st.subheader("Project Phases Overview")
-    
     
     phase_df = session.project.get_phase_df()
     phase_df = phase_df[["phase", "planned_start", "planned_end", "planned_duration", "num_tasks"]]
