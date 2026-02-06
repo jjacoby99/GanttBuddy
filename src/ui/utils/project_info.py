@@ -3,37 +3,36 @@ from models.project import Project
 from typing import Literal
 
 def render_project_info(project: Project, resolution: Literal["Phase", "Task"] = "Task"):
-    with st.container(horizontal=True):
-
+    with st.container():
+        c1, c2 = st.columns(2)
         if resolution == "Task":
             n_tasks = len(project) - len(project.phase_order)
             label = "Number of Tasks"
         else:
             n_tasks = len(project.phase_order)
             label = "Number of Phases"
-        st.metric(
+        
+        c1.metric(
             label=label,
             value=n_tasks
         )
-        st.space("stretch")
-
-        st.metric(
-            label="Planned Start",
-            value=project.start_date.strftime("%b %d, %Y %I:%M %p").replace(" 0", " ")
-        )
-
-        st.space("stretch")
-
-        st.metric(
-            label="Planned End",
-            value=project.end_date.strftime("%b %d, %Y %I:%M %p").replace(" 0", " ")
-        )
-        st.space("stretch")
-        
+            
         total_minutes = int(project.planned_duration.total_seconds() // 60)
         h, m = divmod(total_minutes, 60)
         s = f"{h}h {m}m"
-        st.metric(
+        c2.metric(
             label="Planned Duration",
             value=s
         )
+
+        c1.metric(
+            label="Planned Start",
+            value=project.start_date.strftime("%b %d, %Y %I:%M").replace(" 0", " ")
+        )
+
+        c2.metric(
+            label="Planned End",
+            value=project.end_date.strftime("%b %d, %Y %I:%M").replace(" 0", " ")
+        )
+        
+       
