@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from collections import defaultdict
 from enum import Enum
 from typing import Literal
 
@@ -95,3 +96,39 @@ class ShiftSchedule:
             data["end"].append((combined + shift.duration).time())
 
         return data
+
+    def to_project_shift_config_payload(self) -> list[dict]:
+        """
+        Convert ShiftSchedule into backend-compatible
+        per-crew configs: day_start_time, night_start_time, shift_length_hours, timezone.
+        """
+        by_crew: dict[str, dict[str, Shift]] = defaultdict(dict)
+
+        for s in self.shifts:
+            if not s.crew:
+                raise ValueError("Shift.crew is required")
+            by_crew[s.crew][s.shift_type] = s
+
+        payload: list[dict] = []
+        for crew, shifts in by_crew.items():
+            day = shifts.get("day")
+            night = shifts.get("night")
+
+            if day is None or night is None:
+                raise ValueError(f"Crew '{crew}' must have both day and night shifts")
+
+            # durations must match (backend has shift_length_hours)
+            day_h = day.duration.total_seconds() / 3600.0
+            night_h = night.duration.total_seconds() / 3600.0
+            if abs(day_h - night_h) > 1e-6:
+                raise ValueError(f"Crew '{crew}' day/night shift durations differ ({day_h} vs {night_h})")
+
+            payload.append({
+                "crew": crew,
+                "day_start_time": day.start.isoformat(),
+                "night_start_time": night.start.isoformat(),
+                "shift_length_hours": day_h,
+                "timezone": str(self.timezone.key) if hasattr(self.timezone, "key") else str(self.timezone),
+            })
+
+        return payload
