@@ -42,8 +42,11 @@ def _working_days_to_mask(working_days: List[bool]) -> int:
             mask |= (1 << i)
     return mask
 
+from models.project_metadata import RelineMetadata
+from models.shift_schedule import Shift, ShiftSchedule
+from models.project import Project
 
-def project_to_import_payload(project: Any) -> Dict[str, Any]:
+def project_to_import_payload(project: Project, metadata: Optional[RelineMetadata] = None) -> Dict[str, Any]:
     """
     Convert in-memory Streamlit Project object into JSON payload for POST /projects/import.
     Assumes project has:
@@ -51,6 +54,8 @@ def project_to_import_payload(project: Any) -> Dict[str, Any]:
       - phase_order: list[UUID/str]
       - phases: dict[uuid -> Phase]
       - settings: ProjectSettings (optional)
+      - shift_schedule: ShiftSchedule
+      - project_type: ProjectType = Literal[ProjectType.MILL_RELINE, ProjectType.CIVIL, ProjectType.CRUSHER_REBUILD, ProjectType.GENERIC]
     Each Phase has:
       - name, uuid, _sort_mode
       - task_order: list[UUID/str]
@@ -63,26 +68,43 @@ def project_to_import_payload(project: Any) -> Dict[str, Any]:
       - note
       - predecessor_ids: list[UUID/str]
       - status (optional)
+    
+    Metadata:
+      - Additional information, currently only supported for Mill Reline Projects.
+
     """
     project_uuid = getattr(project, "uuid", None)
     if project_uuid is None:
         raise ValueError("Project is missing .uuid")
 
-    # ---- Project basics (what your ProjectImportProjectIn expects)
+    # ---- Project basics (what backend expects)
+    
     payload: Dict[str, Any] = {
         "project": {
             "id": str(project_uuid),
             "name": getattr(project, "name", ""),
             "description": getattr(project, "description", None),
             "sort_mode": getattr(project, "_sort_mode", "manual"),
-            "project_type": str(getattr(project, "project_type", "GENERIC"))
+            "project_type": ""
         },
         "settings": None,
         "phases": [],
         "tasks": [],
         "task_predecessors": [],
         "phase_predecessors": [],
+        "metadata": metadata.model_dump() if metadata is not None else None, #new 
+        "shift_config": project.shift_schedule.to_project_shift_config_payload() #new
     }
+
+    #project type
+    pt = getattr(project, "project_type", "GENERIC")
+    if hasattr(pt, "name"):
+        pt = pt.name
+    payload["project"]["project_type"] = str(pt)
+
+    #shift schedule
+    shift_schedule = getattr(project, "shift_schedule", None)
+    payload["shift_config"] = shift_schedule.to_project_shift_config_payload() if shift_schedule else None
 
     # ---- Settings
     settings = getattr(project, "settings", None)
