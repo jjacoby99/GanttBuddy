@@ -115,11 +115,11 @@ E_MILL = Mill(
 )
 
 HVC_MILLS = {
-    "A-Mill": A_MILL,
-    "B-Mill": B_MILL,
-    "C-Mill": C_MILL,
-    "D-Mill": D_MILL,
-    "E-Mill": E_MILL
+    "A Auto Mill": A_MILL,
+    "B Auto Mill": B_MILL,
+    "C Auto ill": C_MILL,
+    "D SAG Mill": D_MILL,
+    "E SAG Mill": E_MILL
 }
 # -----------------------------------------
 # Project Template and Builder Classes
