@@ -5,7 +5,6 @@ from models.session import SessionModel
 from models.project import Project
 
 import datetime as dt
-import zoneinfo
 
 import pandas as pd
 
@@ -18,9 +17,9 @@ def get_tz_index(zone: str, available_tzs: list[tuple[str,str]]) -> int:
             return i
     return -1
 
-def render_tz_info(edit: bool = False):
-
-    label_info = f"(current: {st.session_state.session.project.shift_schedule.timezone})" if edit and st.session_state.session.project.shift_schedule is not None else f"(default: America/Vancouver)"
+def render_tz_info(current_tz = None):
+    label_info = f"(current: {current_tz})" if current_tz else f"(default: America/Vancouver)"
+    
     if not st.checkbox(
             label=f"Change Timezone {label_info}",
             help="Select to change the timezone associated with the project."
@@ -30,13 +29,7 @@ def render_tz_info(edit: bool = False):
     st.subheader("Timezone")   
     formatted = label_timezones_relative_to_user("America/Vancouver")
 
-    if not edit or st.session_state.session.project.shift_schedule is None:
-        i_user = get_tz_index("America/Vancouver", available_tzs=formatted)
-        
-
-    elif st.session_state.session.project.shift_schedule is not None:
-        cur_tz = st.session_state.session.project.shift_schedule.timezone
-        i_user = get_tz_index(str(cur_tz), available_tzs=formatted)
+    i_user = [tz for (tz, _) in formatted].index(current_tz if current_tz else "America/Vancouver")
     
     tz = st.selectbox(
             label=f"Select timezone",
