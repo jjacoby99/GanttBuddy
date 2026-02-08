@@ -48,3 +48,68 @@ def fetch_attention_tasks(headers: dict) -> dict:
         return response.json()
     except Exception as e:
         raise ValueError(f"Failed to fetch attention tasks: {e} {response.text}")
+
+
+@st.cache_data
+def fetch_sites(headers: dict) -> dict:
+    url = f"{API_BASE}/sites"
+    try:
+        response = requests.get(url, headers=headers,timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        raise ValueError(f"Failed to fetch sites: {e} {response.text}")
+    
+
+@st.cache_data
+def fetch_mills(headers: dict, site_id: str | None = None, active: bool | None = True) -> dict:
+    """
+    Fetch mills for dropdown hydration.
+
+    Args:
+        headers: auth headers (Bearer token etc.)
+        site_id: optional UUID string to filter mills by site
+        active: True/False to filter by active, or None for all
+
+    Returns:
+        JSON response (list of mills) as python object.
+    """
+    url = f"{API_BASE}/mills"
+    params: dict[str, str] = {}
+
+    if site_id:
+        params["site_id"] = site_id
+    if active is not None:
+        # backend expects bool; requests will serialize as 'True'/'False'
+        # FastAPI will parse it fine.
+        params["active"] = str(active).lower()  # "true"/"false" is safest
+
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        # keep your existing error style
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to fetch mills: {e} {body}")
+
+@st.cache_data
+def fetch_site(headers: dict, site_id: str) -> dict:
+    url = f"{API_BASE}/sites/{site_id}"
+
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        # keep your existing error style
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to fetch site: {e} {body}")
