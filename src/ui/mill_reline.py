@@ -7,10 +7,12 @@ from models.input_models import RelineScope, FeedHeadInputs, ShellInputs, Discha
 from models.mill import ProjectType, ProjectBuilder, MillRelineBuilder, HVC_MILLS, Mill
 from models.shift_schedule import Shift, ShiftSchedule
 
+from logic.backend.api_client import fetch_sites, fetch_mills, fetch_site
 import datetime as dt
 from zoneinfo import ZoneInfo
 
 from ui.shift_config import render_shift_schedule_table, render_tz_info
+from ui.project_metadata import render_reline_metadata_form
 
 def render_feed_end(mill: Mill, strip_install: bool, n_cols: int) -> FeedHeadInputs:
     fh_cols = st.columns(n_cols, border=True, width="stretch")
@@ -351,24 +353,30 @@ def render_discharge(mill: Mill, strip_install: bool, n_cols: int) -> DischargeI
     )
 
 def render_mill_reline_inputs():
-    with st.container(horizontal=True):
-        selected_mill = st.selectbox(
-            "Select Mill", 
-            options=list(HVC_MILLS.keys()),
-            width=100
-        )
-        st.space("small")
-        start_date = st.date_input(
-            "Project Start Date", 
-            value=dt.date.today(),
-            width=150
-        )
+        
+    start_date = st.date_input(
+        "Project Start Date", 
+        value=dt.date.today(),
+        width=150
+    )
 
-    mill = HVC_MILLS[selected_mill]
+    if "reline_dialog_open" not in st.session_state:
+        st.session_state.reline_dialog_open = False
+
+    if start_date and st.button(":material/tune: Reline Info"):
+        st.session_state.reline_dialog_open = True
+        
+    # If open, render dialog
+    if st.session_state.reline_dialog_open:
+        render_reline_metadata_form(existing=None, template_version="2026.1")
     
-    st.divider()
-    st.caption("Reline Parameters")
+    if not "reline_metadata" in st.session_state or st.session_state["reline_metadata"] is None:
+        st.stop()
 
+    meta = st.session_state["reline_metadata"]
+    # this is a placeholder for eventually pulling mill info from the backend.
+    # eventually pull from last reline project for that mill. 
+    mill = HVC_MILLS[meta.mill_name]
     params = st.container(horizontal=True)
 
     t_inch = params.number_input(
@@ -420,7 +428,12 @@ def render_mill_reline_inputs():
         )
     
     with tabs[3]:
-        tz = render_tz_info()
+        try:
+            site = fetch_site(headers=st.session_state.get("auth_headers",{}), site_id = meta.site_id)
+            site_tz = site.get("timezone", None)
+        except Exception:
+            pass
+        tz = render_tz_info(current_tz=site_tz)
         edited_df = render_shift_schedule_table()
         try:
             sched = ShiftSchedule.from_df(edited_df)
