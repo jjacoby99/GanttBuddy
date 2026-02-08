@@ -4,10 +4,13 @@ from io import BytesIO
 import datetime as dt
 
 from models.project import Project
+from models.project_type import ProjectType
+
 from ui.add_phase import render_add_phase
 from ui.edit_phase import render_phase_edit
 from ui.add_task import render_task_add
 from ui.edit_task import render_task_edit
+from ui.project_metadata import render_reline_metadata_form
 
 from logic.backend.project_list import get_projects
 from logic.backend.import_project import snapshot_to_project
@@ -37,8 +40,21 @@ def render_project_buttons(session):
             st.session_state.ui.show_add_task = False
 
     st.caption("Edit")
-    if st.button("Shift Schedule", icon=":material/calendar_month:",help="Edit shift schedule and timezone."):
-        edit_shift_schedule()
+    with st.container(horizontal=True):
+        if st.button("Shift Schedule", icon=":material/calendar_month:",help="Edit shift schedule and timezone."):
+            edit_shift_schedule()
+
+        if session.project.project_type == ProjectType.MILL_RELINE:
+            edit_reline_info = st.button(
+                label=":material/tune: Reline Info", 
+                help="Specify reline information", 
+                key="edit_reline_metadata"
+            )
+            
+            if edit_reline_info:
+                existing = st.session_state.get("reline_metadata", None)
+                render_reline_metadata_form(existing)
+            #test
 
     st.caption(f"Export")
     with st.container(horizontal=True):
