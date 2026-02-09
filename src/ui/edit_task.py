@@ -27,10 +27,27 @@ def render_task_edit(session, phase: Phase, task: Task):
 
     predecessor_ids = task.predecessor_ids
     
+    # convert answer to task's boolean planned field
+    type_dict = {
+        ":material/event_available: Planned": True,
+        ":material/bolt: Unplanned": False
+    }
+
+    st.write(f"Loaded task type: {task.planned}")
+    selected_task_type = st.pills(
+        label="Planned / Unplanned",
+        options=[":material/event_available: Planned", ":material/bolt: Unplanned"],
+        default=":material/event_available: Planned" if task.planned else ":material/bolt: Unplanned",
+        help="Select **'Planned'** for tasks known ahead of time. Use **'Unplanned'** when something unforeseen came up that had to be added."
+    )
+
+    task_type = type_dict[selected_task_type]
+
     with st.container(horizontal=True):
         enter_actuals = st.checkbox(
             "Enter Actuals?",
             value=task.completed,
+            disabled=not task_type,
             help="Select to enter the actual start / end timestamps"
         )
 
@@ -65,7 +82,7 @@ def render_task_edit(session, phase: Phase, task: Task):
         st.space("small")
         st.write("**Planned**")
 
-        if enter_actuals:
+        if enter_actuals or not task_type:
             st.space("small")
             st.caption("")
             st.write("**Actual**")
@@ -73,9 +90,10 @@ def render_task_edit(session, phase: Phase, task: Task):
     with start_col:
         planned_start_dt = st.datetime_input(
             label=f"Planned Start",
-            value=new_start_date,
+            value=task.start_date if task.start_date else new_start_date,
             min_value=new_start_date if predecessor_ids else datetime(year=2000,month=1,day=1),
             key="task_start_date_single",
+            disabled=not task_type,
             help="**Planned start** timestamp for *{edited_task_name}*"
         )
         planned_start_dt = planned_start_dt.astimezone()
@@ -88,17 +106,18 @@ def render_task_edit(session, phase: Phase, task: Task):
         
         planned_end_dt = st.datetime_input(
             label=f"Planned Finish",
-            value=min_end_day,
+            value=task.end_date if task.end_date else min_end_day,
             min_value=min_end_day if planned_start_dt else datetime.today(),
+            disabled=not task_type,
             key="task_start_date",
             help="**Planned end** timestamp for *{edited_task_name}*"
         )
         planned_end_dt = planned_end_dt.astimezone()
 
-    if enter_actuals:
+    if enter_actuals or not task_type:
         actual_start_dt = start_col.datetime_input(
             label="Actual Start",
-            value=None,
+            value=task.actual_start if task.actual_start else None,
             help=f"**Actual start** timestamp for *{edited_task_name}*"
         )
 
@@ -107,7 +126,7 @@ def render_task_edit(session, phase: Phase, task: Task):
 
         actual_end_dt = end_col.datetime_input(
             label=f"Actual Finish",
-            value=None,
+            value=task.actual_end if task.actual_end else None,
             help=f"**Actual end** timestamp for *{edited_task_name}*"
         )
         if actual_end_dt:
@@ -145,13 +164,14 @@ def render_task_edit(session, phase: Phase, task: Task):
         new_task = Task(
             name=edited_task_name, 
             phase_id=phase.uuid,
-            start_date=planned_start_dt, 
-            end_date=planned_end_dt, 
-            actual_start=actual_start_dt if enter_actuals else None,
-            actual_end=actual_end_dt if enter_actuals else None,
+            start_date=planned_start_dt if task_type else actual_start_dt, 
+            end_date=planned_end_dt if task_type else actual_start_dt, 
+            actual_start=actual_start_dt if enter_actuals or not task_type else None,
+            actual_end=actual_end_dt if enter_actuals or not task_type else None,
             note=task_note if task_note else "",
             predecessor_ids=predecessor_ids,
-            status=task_status
+            status=task_status,
+            planned=task_type,
         )
         session.project.update_task(phase=phase, old_task=task, new_task=new_task)
 
