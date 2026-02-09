@@ -26,7 +26,7 @@ class Project:
     settings: ProjectSettings = field(default_factory=ProjectSettings)
     _sort_mode: SortMode = SortMode.manual
     project_type: ProjectType = field(default=ProjectType.GENERIC)
-    shift_schedule: Optional[ShiftSchedule] = field(default=ShiftSchedule)
+    shift_schedule: Optional[ShiftSchedule] = field(default_factory=ShiftSchedule)
 
     @property
     def start_date(self) -> Optional[datetime]:
