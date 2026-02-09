@@ -23,6 +23,7 @@ class Task:
     predecessor_ids: list[str] = field(default_factory=list)
     phase_id: str = ""
     status: Literal["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETE"] = "NOT_STARTED"
+    planned: bool = field(default=True) 
 
     def to_dict(self) -> dict:
         return {"Task": self.name, 
@@ -34,7 +35,8 @@ class Task:
                 "predecessor_ids": self.predecessor_ids,
                 "uuid": self.uuid,
                 "phase_id": self.phase_id,
-                "status": self.status
+                "status": self.status,
+                "planned": self.planned
                 }
     
     def __str__(self) -> str:
@@ -67,6 +69,23 @@ class Task:
         """
         return self.end_date - self.start_date <= timedelta(seconds=1)
     
+    def infer_status(self) -> None:
+        """
+            Sets self.status based on actual_start and actual_end 
+        """
+
+        if self.completed:
+            self.status = "COMPLETE"
+            return
+        
+        if self.actual_start:
+            self.status = "IN_PROGRESS"
+            return
+        
+        # no way to infer blocked-ness from available data
+        # assume not started
+        self.status = "NOT_STARTED"
+
     def to_excel_row(self) -> dict:
         return {
             "number": None,
@@ -80,7 +99,8 @@ class Task:
             "actual_end": self.actual_end,
             "notes": self.note if self.note else "",
             "predecessors": ",".join(self.predecessor_ids),
-            "uuid": self.uuid
+            "uuid": self.uuid,
+            "planned": self.planned
         } 
     
     @staticmethod
@@ -104,6 +124,7 @@ class Task:
         task.uuid = data.get("uuid", new_id())
         task.phase_id = data.get("phase_id", "")
         task.status = data.get("status", "NOT_STARTED")
+        task.planned = data.get("planned", True)
         return task
 
     def calculate_end_date(self, duration: int, settings: ProjectSettings) -> datetime:
