@@ -93,7 +93,7 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
         "task_predecessors": [],
         "phase_predecessors": [],
         "metadata": metadata.model_dump() if metadata is not None else None, #new 
-        "shift_config": project.shift_schedule.to_project_shift_config_payload() #new
+        "shift_config": {}
     }
 
     #project type
@@ -103,8 +103,9 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
     payload["project"]["project_type"] = str(pt)
 
     #shift schedule
-    shift_schedule = getattr(project, "shift_schedule", None)
-    payload["shift_config"] = shift_schedule.to_project_shift_config_payload() if shift_schedule else None
+    shift_schedule = project.shift_schedule
+    if shift_schedule is not None:
+        payload["shift_config"] = shift_schedule.to_project_shift_config_payload() if shift_schedule else None
 
     # ---- Settings
     settings = getattr(project, "settings", None)
@@ -146,11 +147,11 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
         payload["phases"].append(
             {
                 "id": _iso(phase_uuid),
-                # Your import schema currently reuses PhaseOut which includes project_id. Fill it.
                 "project_id": _iso(project_uuid),
                 "name": getattr(p, "name", ""),
                 "sort_mode": getattr(p, "_sort_mode", "manual"),
                 "position": int(phase_pos),
+                "planned": getattr(p, "planned", True)
             }
         )
 
@@ -203,6 +204,7 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
                     "note": getattr(t, "note", "") or "",
                     "status": status,
                     "position": int(task_pos),
+                    "planned":getattr(t,"planned", True),
                 }
             )
 
