@@ -110,6 +110,46 @@ class ExcelProjectLoader():
         return str(x).strip()
     
     @staticmethod
+    def _coerce_bool(x: Any) -> bool:
+        """
+        Coerce a pandas-read Excel cell value to a strict Python bool.
+
+        Rules:
+        - NaN/blank -> True (matches your default behavior)
+        - bool -> itself
+        - ints/floats -> 0 is False, non-zero is True
+        - strings -> accepts common true/false tokens (case/whitespace-insensitive)
+        True tokens:  "true", "t", "yes", "y", "1", "on"
+        False tokens: "false", "f", "no", "n", "0", "off"
+        - anything else -> ValueError (fail fast so bad Excel data doesn't silently pass)
+        """
+        if ExcelProjectLoader._is_nan(x):
+            return True
+
+        # Already a Python bool (note: bool is a subclass of int, so do this before int checks)
+        if isinstance(x, bool):
+            return x
+
+        # Numeric (covers numpy numeric types too)
+        if isinstance(x, (int, float)):
+            # handle weird floats like 0.0, 1.0
+            return bool(int(x))
+
+        # Strings (common when Excel column has mixed types or user-entered text)
+        if isinstance(x, str):
+            s = x.strip().lower()
+            if s == "":
+                return True  # treat empty cell as default True
+            if s in {"true", "t", "yes", "y", "1", "on"}:
+                return True
+            if s in {"false", "f", "no", "n", "0", "off"}:
+                return False
+            raise ValueError(f"Invalid boolean string: {x!r}")
+
+        # Pandas sometimes gives Timestamp/other objects if the column is messed up
+        raise ValueError(f"Cannot coerce to bool from type={type(x).__name__}, value={x!r}")
+
+    @staticmethod
     def is_phase_cell(cell: Any) -> bool:
         """
         A row is a phase if PLANNED DURATION looks like a 'Days' string, not a plain number.
@@ -210,13 +250,14 @@ class ExcelProjectLoader():
 
             return Task(
                 name=ExcelProjectLoader._coerce_str(row["ACTIVITY"]),
-                start_date=pd.to_datetime(row["PLANNED START"], errors="coerce").to_pydatetime() if not ExcelProjectLoader._is_nan(row["PLANNED START"]) else None,
-                end_date=pd.to_datetime(row["PLANNED END"], errors="coerce").to_pydatetime() if not ExcelProjectLoader._is_nan(row["PLANNED END"]) else None,
-                actual_end=pd.to_datetime(row["ACTUAL END"], errors="coerce").to_pydatetime() if not ExcelProjectLoader._is_nan(row["ACTUAL END"]) else None,
-                actual_start=pd.to_datetime(row["ACTUAL START"], errors="coerce").to_pydatetime() if not ExcelProjectLoader._is_nan(row["ACTUAL START"]) else None,
+                start_date=pd.to_datetime(row["PLANNED START"], errors="coerce").to_pydatetime().astimezone() if not ExcelProjectLoader._is_nan(row["PLANNED START"]) else None,
+                end_date=pd.to_datetime(row["PLANNED END"], errors="coerce").to_pydatetime().astimezone() if not ExcelProjectLoader._is_nan(row["PLANNED END"]) else None,
+                actual_end=pd.to_datetime(row["ACTUAL END"], errors="coerce").to_pydatetime().astimezone() if not ExcelProjectLoader._is_nan(row["ACTUAL END"]) else None,
+                actual_start=pd.to_datetime(row["ACTUAL START"], errors="coerce").to_pydatetime().astimezone() if not ExcelProjectLoader._is_nan(row["ACTUAL START"]) else None,
                 note=ExcelProjectLoader._coerce_str(row["NOTES"]),
                 uuid=uuid,
                 predecessor_ids=ExcelProjectLoader._coerce_str(row["PREDECESSOR"]).split(",") if not ExcelProjectLoader._is_nan(row["PREDECESSOR"]) else [],
+                planned=ExcelProjectLoader._coerce_bool(row["PLANNED"]) if not ExcelProjectLoader._is_nan(row["PLANNED"]) else True
             )
 
         phase_ctr = 1
@@ -228,12 +269,14 @@ class ExcelProjectLoader():
                 new_phase = Phase(
                     name=ExcelProjectLoader._coerce_str(row["ACTIVITY"]),
                 )
+                new_phase.planned = ExcelProjectLoader._coerce_bool(row["PLANNED"]) if ExcelProjectLoader._is_nan(row["PLANNED"]) else True
                 project.add_phase(new_phase)
                 phase_ctr += 1
                 task_ctr = 1
                 current_phase = new_phase
             else:
                 task = mk_task(row)
+                task.infer_status()
                 task_ctr += 1
                 if current_phase is None:
                     # Task appears before any phase. Put it under an 'Unassigned' bucket
