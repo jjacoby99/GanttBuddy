@@ -65,9 +65,26 @@ class Task:
     @property
     def is_milestone(self) -> bool:
         """ 
-            Returns True if the planned start is the same as the actual start within 1 second.
+            A milestone is a task that has the same start and end datetimes.
+            
+            For a task with no actuals, this means |planned_end - planned_start| <= eps
+            Where eps is some small time.
+
+            For a task with actuals, both the planned and actual duration must be
+            less than some epsilon. 
+
+            It is important to make this distinction because "unplanned" tasks have a 
+            zero planned_duration, but a non-zero actual_duration. Therefore, we want
+            these tasks to not be counted as milestones. 
         """
-        return self.end_date - self.start_date <= timedelta(seconds=1)
+        eps = timedelta(seconds=1)
+        pdur = self.planned_duration
+        if not self.completed:
+            return pdur <= eps
+        
+        adur = self.actual_duration
+        return adur <= eps and pdur <= eps
+        
     
     def infer_status(self) -> None:
         """
