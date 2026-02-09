@@ -21,6 +21,7 @@ class Phase:
     preceding_phase: Optional[Phase] = None
     predecessor_ids: list[str] = field(default_factory=list)
     _sort_mode: SortMode = SortMode.manual
+    planned: bool = True
 
     @property
     def start_date(self) -> Optional[datetime]:
