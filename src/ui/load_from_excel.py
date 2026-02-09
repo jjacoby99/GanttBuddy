@@ -28,6 +28,7 @@ def load_from_excel() -> Project:
             DataColumn(name="NOTES", column=10),
             DataColumn(name="PREDECESSOR", column=11),
             DataColumn(name="UUID", column=12),
+            DataColumn(name="PLANNED", column=13),
         ]
     )
 
