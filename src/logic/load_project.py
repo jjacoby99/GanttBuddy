@@ -4,6 +4,10 @@ import pandas as pd
 from models.project import Project
 from models.phase import Phase
 from models.project_settings import ProjectSettings
+from models.shift_schedule import ShiftSchedule
+from models.project_metadata import RelineMetadata
+from models.project_type import ProjectType
+
 from models.task import Task
 from pprint import pprint
 import math
@@ -13,7 +17,7 @@ import re
 from openpyxl import Workbook, load_workbook
 from io import BytesIO
 from typing import Union
-from datetime import datetime
+import datetime as dt
 
 
 @dataclass
@@ -203,11 +207,9 @@ class ExcelProjectLoader():
 
         ws = wb[params.sheet_name]
 
-        
-
-
+    
     @staticmethod
-    def load_excel_project(file, params: ExcelParameters) -> Project:
+    def load_excel_project(file, params: ExcelParameters) -> tuple[Project, Optional[RelineMetadata]]:
         if file is None:
             raise ValueError("No file provided.")
         
@@ -239,6 +241,13 @@ class ExcelProjectLoader():
         proj_name = plan_sheet[params.project_name_cell].value
 
         project = Project(name=proj_name if proj_name else "Untitled Project")
+
+        project.shift_schedule = ExcelProjectLoader.load_shift_config(file)
+        proj_type = ExcelProjectLoader.load_project_type(wb)
+        project.project_type = proj_type
+        metadata = None
+        if proj_type == ProjectType.MILL_RELINE:
+            metadata = ExcelProjectLoader.load_metadata(wb)
         current_phase = None
         unassigned_phase = None
 
@@ -291,14 +300,69 @@ class ExcelProjectLoader():
                 else:
                     current_phase.add_task(task)
 
-        return project
+        return project, metadata
     
     @staticmethod
-    def load_project_settings(file, sheet_name: str = "Project Inputs") -> ProjectSettings:
-        data = BytesIO(file.read())
-        
-        wb = load_workbook(data, read_only=True, data_only=True)
+    def load_metadata(wb, sheet_name: str="metadata") -> RelineMetadata:
+        if not sheet_name in wb.sheetnames:
+            raise ValueError(f"Provided sheet name {sheet_name} not found in Workbook.")
+        ws = wb[sheet_name]
 
+        site_id =          str(ws.cell(row=2,column=1).value)
+        site_name =        str(ws.cell(row=2,column=2).value)
+        mill_id =          str(ws.cell(row=2,column=3).value)
+        mill_name =        str(ws.cell(row=2,column=4).value)
+        vendor =           str(ws.cell(row=2,column=5).value)
+        liner_system =     str(ws.cell(row=2,column=6).value)
+        campaign_id =      str(ws.cell(row=2,column=7).value)
+        scope =            str(ws.cell(row=2,column=8).value)
+        liner =            str(ws.cell(row=2,column=9).value)
+        crew_count_day =   int(ws.cell(row=2,column=10).value)
+        crew_count_night = int(ws.cell(row=2,column=11).value)
+        supervisor =       str(ws.cell(row=2,column=12).value)
+        notes =            str(ws.cell(row=2,column=13).value)
+        
+        return RelineMetadata(
+            site_id=site_id,
+            site_name=site_name,
+            mill_id=mill_id,
+            mill_name=mill_name,
+            vendor=vendor,
+            liner_system=liner_system,
+            campaign_id=campaign_id,
+            scope=scope,
+            liner_type=liner,
+            crew_count_day=crew_count_day,
+            crew_count_night=crew_count_night,
+            supervisor=supervisor,
+            notes=notes,
+        )
+
+
+    @staticmethod
+    def load_project_type(wb, sheet_name: str="Project Inputs") -> ProjectType:
+        if not sheet_name in wb.sheetnames:
+            raise ValueError(f"Provided sheet name {sheet_name} not found in Workbook.")
+        
+        ws = wb[sheet_name]
+        
+        type_str = str(ws.cell(row=13, column=4).value) # D13
+        print(f"Read from 'Project Inputs' sheet for the type: {type_str}")
+        proj_type = ProjectType.GENERIC
+        match type_str:
+            case "MILL_RELINE":
+                return ProjectType.MILL_RELINE
+            case "CIVIL":
+                return ProjectType.CIVIL
+            case "CRUSHER_REBUILD":
+                return ProjectType.CRUSHER_REBUILD
+            case _:
+                return ProjectType.GENERIC
+        return proj_type
+    
+    @staticmethod
+    def load_project_settings(wb, sheet_name: str = "Project Inputs") -> ProjectSettings:
+        
         if not sheet_name in wb.sheetnames:
             raise ValueError(f"Provided sheet name {sheet_name} not found in Workbook.")
         
@@ -331,8 +395,61 @@ class ExcelProjectLoader():
             idx = (row - work_day_start_row + 1) % 7
             work_days[work_days_idx[idx]] = True if ws.cell(row=row,column=work_day_col).value == "yes" else False
 
+        # get project_type
+        
+            
+        
         # get working hours
 
+    @staticmethod
+    def coerce_time(x) -> dt.time | None:
+        if pd.isna(x):
+            return None
 
+        # If it's already a python time
+        if isinstance(x, dt.time) and not isinstance(x, dt.datetime):
+            return x
+
+        # If it's a datetime / pandas Timestamp -> take the time part
+        if isinstance(x, (dt.datetime, pd.Timestamp)):
+            return x.time()
+
+        # Excel numeric time (fraction of day)
+        if isinstance(x, (int, float)):
+            # 0.5 -> 12:00:00, etc.
+            total_seconds = int(round(float(x) * 24 * 60 * 60))
+            total_seconds %= 24 * 60 * 60
+            hh, rem = divmod(total_seconds, 3600)
+            mm, ss = divmod(rem, 60)
+            return dt.time(hh, mm, ss)
+
+        # Strings like "07:30" or "7:30 AM"
+        if isinstance(x, str):
+            s = x.strip()
+            # Try a couple common formats
+            for fmt in ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I:%M:%S %p"):
+                try:
+                    return dt.datetime.strptime(s, fmt).time()
+                except ValueError:
+                    pass
+            # Last resort: let pandas try
+            t = pd.to_datetime(s, errors="coerce")
+            if pd.isna(t):
+                raise ValueError(f"Unrecognized time string: {x!r}")
+            return t.time()
+
+        raise TypeError(f"Unsupported time value type: {type(x)} ({x!r})")
+
+    @staticmethod
+    def load_shift_config(file, sheet_name: str="shift_config") -> ShiftSchedule:
+        df = pd.read_excel(
+            file,
+            sheet_name=sheet_name,
+            header=0,
+            usecols="A:D",
+            names=["shift_type", "start", "end", "crew"]
+        )
+        df["start"] = df["start"].map(ExcelProjectLoader.coerce_time)
+        df["start"] = df["start"].map(ExcelProjectLoader.coerce_time)
         
-        
+        return ShiftSchedule.from_df(df)

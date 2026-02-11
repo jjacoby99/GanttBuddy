@@ -33,9 +33,14 @@ def load_from_excel() -> Project:
     )
 
     try:
-        st.session_state.session.project = ExcelProjectLoader.load_excel_project(file, params)
+        project, metadata = ExcelProjectLoader.load_excel_project(file, params)
     except (FileNotFoundError, ValueError) as e:
         st.error(str(e))
         return
+    
+    st.session_state.session.project = project
+    if metadata is not None:
+        st.session_state["reline_metadata"] = metadata
+        
     st.success(f"Project '{st.session_state.session.project.name}' imported from Excel.")
     st.rerun()

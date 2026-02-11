@@ -6,7 +6,8 @@ from zoneinfo import ZoneInfo
 
 @st.dialog(f"Edit Shift Schedule")
 def edit_shift_schedule():
-    tz = render_tz_info(edit=True)
+    current_tz = st.session_state.session.project.shift_schedule.timezone
+    tz = render_tz_info(current_tz=current_tz)
     df = render_shift_schedule_table(edit=True)
     c1, c2 = st.columns(2)
     if c1.button("Update Schedule"):            
