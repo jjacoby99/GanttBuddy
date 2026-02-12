@@ -12,7 +12,7 @@ from logic.utils import _none_min
 from models.sort_mode import SortMode
 import pandas as pd
 from models.project_type import ProjectType
-from models.shift_schedule import ShiftSchedule
+from models.shift_schedule import ShiftAssignment, ShiftDefinition
 from enum import Enum
 
 @dataclass_json
@@ -26,7 +26,8 @@ class Project:
     settings: ProjectSettings = field(default_factory=ProjectSettings)
     _sort_mode: SortMode = SortMode.manual
     project_type: ProjectType = field(default=ProjectType.GENERIC)
-    shift_schedule: Optional[ShiftSchedule] = field(default_factory=ShiftSchedule)
+    shift_assignments: Optional[ShiftAssignment] = None
+    shift_definition: Optional[ShiftDefinition] = None
 
     @property
     def start_date(self) -> Optional[datetime]:
