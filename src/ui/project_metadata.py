@@ -82,7 +82,7 @@ def render_reline_metadata_form(
 
         liner_system = st.selectbox(
             "Liner System",
-            options=["Megaliner"]
+            options=["Megaliner", "Generic"]
         )
 
         scope_options = ["", "Full", "Partial", "Other"]
