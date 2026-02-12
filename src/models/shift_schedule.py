@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from collections import defaultdict
 from enum import Enum
-from typing import Literal
+from typing import Literal, Optional
 
 import datetime as dt
 from zoneinfo import ZoneInfo
@@ -43,6 +43,68 @@ class Shift:
         self.duration = data.get("duration", dt.timedelta(hours=12))
         self.crew = data.get("crew", "")
         self.shift_type = data.get("shift_type", "day")
+
+from pydantic import BaseModel
+
+class ShiftDefinition(BaseModel):
+    day_start_time: dt.time
+    night_start_time: dt.time
+    shift_length_hours: float
+    timezone: ZoneInfo = field(default=ZoneInfo("America/Vancouver"))
+
+
+class ShiftAssignment(BaseModel):
+    project_id: str
+    crew_id: str
+    shift_type: Literal["day", "night"]
+    start_date: dt.date
+    end_date: Optional[dt.date] = None
+
+    @staticmethod
+    def from_df(df: pd.DataFrame, project_id: str) -> list[ShiftAssignment]:
+        required = ["crew_id", "shift_type", "start_date", "end_date"]
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            raise KeyError(f"Provided dataframe is missing required columns: {", ".join(missing)}")
+        
+        assignments = []
+        for _, row in df.iterrows():
+            start = row["start_date"]
+            end = row["end_date"]
+            shift_type = row["shift_type"]
+            crew_id = row["crew_id"]
+
+            assignments.append(
+                ShiftAssignment(
+                    project_id=project_id,
+                    crew_id=crew_id,
+                    shift_type=shift_type,
+                    start_date=start,
+                    end_date=end
+                )
+            )
+        return assignments
+        
+import pandas as pd
+def assignments_to_df(assignments: list[ShiftAssignment]) -> pd.DataFrame:
+    data = {
+        "project_id": [],
+        "crew_id": [],
+        "shift_type": [],
+        "start_date": [],
+        "end_date": []
+    }
+    if assignments is None:
+        return data
+    
+    for assn in assignments:
+        data["project_id"].append(assn.project_id)
+        data["crew_id"].append(assn.crew_id)
+        data["shift_type"].append(assn.shift_type)
+        data["start_date"].append(assn.start_date)
+        data["end_date"].append(assn.end_date)
+
+    return pd.DataFrame(data)
 
 @dataclass
 class ShiftSchedule:
