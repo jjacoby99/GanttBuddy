@@ -4,6 +4,7 @@ import streamlit as st
 from logic.backend.export_project import project_to_import_payload
 
 from models.project import Project
+from models.crew import CrewOut
 
 API_BASE = "http://127.0.0.1:8000"  # change for deployed
 
@@ -113,3 +114,36 @@ def fetch_site(headers: dict, site_id: str) -> dict:
         except Exception:
             pass
         raise ValueError(f"Failed to fetch site: {e} {body}")
+    
+
+@st.cache_data
+def fetch_crews(headers: dict, site_id: str) -> dict:
+    url = f"{API_BASE}/crews"
+    params = {}
+    params["site_id"] = site_id
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to fetch crews: {e} {body}")
+
+def post_crew(headers: dict, crew: CrewOut) -> dict:
+    url = f"{API_BASE}/crews"
+
+    try:
+        response = requests.post(url, data=crew.model_dump_json(), headers=headers, timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to post new crew: {e} {body}")
