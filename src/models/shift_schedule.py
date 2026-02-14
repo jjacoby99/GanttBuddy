@@ -44,22 +44,41 @@ class Shift:
         self.crew = data.get("crew", "")
         self.shift_type = data.get("shift_type", "day")
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 class ShiftDefinition(BaseModel):
+    id: Optional[str] = None # filled from backend
     day_start_time: dt.time
     night_start_time: dt.time
     shift_length_hours: float
     timezone: ZoneInfo = field(default=ZoneInfo("America/Vancouver"))
 
+class ShiftDefinitionIn(BaseModel):
+    id: str
+    day_start_time: dt.time
+    night_start_time: dt.time
+    shift_length_hours: float
+    timezone: ZoneInfo = field(default=ZoneInfo("America/Vancouver"))
 
 class ShiftAssignment(BaseModel):
+    id: Optional[str] = None # filled on backend.
     project_id: str
     crew_id: str
     shift_type: Literal["day", "night"]
     start_date: dt.date
     end_date: Optional[dt.date] = None
 
+    @field_validator("shift_type", mode="before")
+    @classmethod
+    def normalize_shift_type(cls, v):
+        if v is None:
+            return v
+        s = str(v).strip().lower()
+        # allow "day"/"night" as well as "DAY"/"NIGHT"
+        if s in ("day", "night"):
+            return s
+        raise ValueError(f"Invalid shift_type: {v!r}. Expected DAY or NIGHT.")
+    
     @staticmethod
     def from_df(df: pd.DataFrame, project_id: str) -> list[ShiftAssignment]:
         required = ["crew_id", "shift_type", "start_date", "end_date"]
@@ -84,8 +103,7 @@ class ShiftAssignment(BaseModel):
                 )
             )
         return assignments
-        
-import pandas as pd
+    
 def assignments_to_df(assignments: list[ShiftAssignment]) -> pd.DataFrame:
     data = {
         "project_id": [],
