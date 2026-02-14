@@ -28,11 +28,13 @@ build = st.Page("pages/build.py", title="Build", icon=":material/build:")
 plan = st.Page("pages/plan.py", title="Plan", icon=":material/view_timeline:")
 execute = st.Page("pages/execute.py", title="Execute", icon=":material/construction:")
 analyze = st.Page("pages/analyze.py", title="Analyze", icon=":material/query_stats:")
+manage = st.Page("pages/manage.py", title="Manage", icon=":material/manage_accounts:")
 
 pages = {
     "Home": [home, account], 
     "Projects": [projects, feed, build],
-    "Workspace": [plan, execute, analyze]
+    "Workspace": [plan, execute, analyze],
+    "Manage": [manage]
 }
 
 # Admin-only
