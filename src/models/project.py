@@ -26,7 +26,7 @@ class Project:
     settings: ProjectSettings = field(default_factory=ProjectSettings)
     _sort_mode: SortMode = SortMode.manual
     project_type: ProjectType = field(default=ProjectType.GENERIC)
-    shift_assignments: Optional[ShiftAssignment] = None
+    shift_assignments: Optional[list[ShiftAssignment]] = None
     shift_definition: Optional[ShiftDefinition] = None
 
     @property
