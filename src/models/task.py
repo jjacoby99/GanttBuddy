@@ -10,6 +10,14 @@ from logic.generate_id import new_id
 import pandas as pd
 from typing import Literal
 
+from enum import Enum
+class TaskType(str, Enum):
+    INCH = "INCH"
+    STRIP = "STRIP"
+    INSTALL = "INSTALL"
+    GENERIC = "GENERIC"
+
+
 @dataclass_json
 @dataclass
 class Task:
@@ -24,6 +32,7 @@ class Task:
     phase_id: str = ""
     status: Literal["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETE"] = "NOT_STARTED"
     planned: bool = field(default=True) 
+    task_type: TaskType = field(default=TaskType.GENERIC)
 
     def to_dict(self) -> dict:
         return {"Task": self.name, 
