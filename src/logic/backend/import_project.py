@@ -6,8 +6,9 @@ from typing import Any
 
 from models.project import Project
 from models.phase import Phase
-from models.task import Task
+from models.task import Task, TaskType
 from models.project_settings import ProjectSettings
+from models.shift_schedule import ShiftAssignment, ShiftDefinition
 
 import pytz
 
@@ -34,9 +35,37 @@ def _mask_to_working_days(mask: int) -> tuple[bool, bool, bool, bool, bool, bool
     return tuple(bool((mask >> i) & 1) for i in range(7))  # type: ignore[return-value]
 
 
+def coerce_task_type(x: Any) -> TaskType:
+    if x is None:
+        return TaskType.GENERIC
+
+    # if backend ever sends a TaskType-like object or weird type
+    s = str(x).strip().upper()
+
+    try:
+        return TaskType(s)
+    except ValueError:
+        # Backward/forward compatibility: unknown types won’t crash old clients
+        return TaskType.GENERIC
+
+def get_shift_assignments(shift_assignments: list) -> list[ShiftAssignment]:
+    return [ShiftAssignment(**sa) for sa in shift_assignments]
+
+
+def get_shift_definition(shift_definition: dict) -> ShiftDefinition:
+    try:
+        sd = ShiftDefinition(**shift_definition)
+        if not sd.id:
+            raise KeyError("Shift definition from backend must have an id.")
+        return sd
+    except Exception as e:
+        raise e
+
 def snapshot_to_project(snapshot: dict[str, Any]) -> Project:
     p = snapshot["project"]
     s = snapshot["settings"]
+    shift_def = snapshot["shift_definition"]
+    shift_assignments = snapshot["shift_assignments"]
     phases = snapshot.get("phases", [])
     tasks = snapshot.get("tasks", [])
     task_preds = snapshot.get("task_predecessors", [])
@@ -65,6 +94,11 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> Project:
         settings=settings,
     )
 
+    sd = get_shift_definition(shift_definition=shift_def)
+    project.shift_definition = sd
+
+    sas = get_shift_assignments(shift_assignments=shift_assignments)
+    project.shift_assignments = sas
     # Create phases ordered by backend "position"
     phases_sorted = sorted(phases, key=lambda x: x.get("position", 0))
     for ph in phases_sorted:
@@ -97,7 +131,8 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> Project:
                 predecessor_ids=pred_map.get(t.get("id"), []),
                 phase_id=phase_id,
                 status=t.get("status", "NOT_STARTED"),
-                planned=t.get("planned", True)
+                planned=t.get("planned", True),
+                task_type=coerce_task_type(t.get("task_type", TaskType.GENERIC)),
             )
             project.add_task_to_phase(project.phases[phase_id], task)
 
