@@ -12,12 +12,6 @@ from ui.add_task import render_task_add
 from ui.edit_task import render_task_edit
 from ui.project_metadata import render_reline_metadata_form
 
-from logic.backend.project_list import get_projects
-from logic.backend.import_project import snapshot_to_project
-from logic.backend.api_client import fetch_project_snapshot
-
-from ui.edit_schedule import edit_shift_schedule
-
 def render_project_buttons(session):
     if session.project is None:
         return
@@ -41,9 +35,6 @@ def render_project_buttons(session):
 
     st.caption("Edit")
     with st.container(horizontal=True):
-        if st.button("Shift Schedule", icon=":material/calendar_month:",help="Edit shift schedule and timezone."):
-            edit_shift_schedule()
-
         if session.project.project_type == ProjectType.MILL_RELINE:
             edit_reline_info = st.button(
                 label=":material/tune: Reline Info", 
@@ -54,7 +45,6 @@ def render_project_buttons(session):
             if edit_reline_info:
                 existing = st.session_state.get("reline_metadata", None)
                 render_reline_metadata_form(existing)
-            #test
 
     st.caption(f"Export")
     with st.container(horizontal=True):
