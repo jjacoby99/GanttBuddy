@@ -1,13 +1,9 @@
 import streamlit as st
 
 from models.session import SessionModel
-from models.shift_schedule import ShiftSchedule
 
 from ui.phases_view import render_phases_view
 from ui.tasks_view import render_tasks_table
-
-from ui.edit_schedule import edit_shift_schedule
-from zoneinfo import ZoneInfo
 
 # @st.cache_data: throws Unhashable Error for SessionModel
 def render_plan(session: SessionModel):
