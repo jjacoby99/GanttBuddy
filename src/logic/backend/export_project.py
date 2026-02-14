@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import is_dataclass, asdict
-from datetime import datetime, time
+from datetime import datetime, time, date
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -17,6 +17,8 @@ def _iso(v: Any) -> Any:
         # If you use aware datetimes, this preserves offset. If naive, it stays naive.
         return v.isoformat()
     if isinstance(v, time):
+        return v.isoformat()
+    if isinstance(v, date):
         return v.isoformat()
     if isinstance(v, UUID):
         return str(v)
@@ -43,7 +45,6 @@ def _working_days_to_mask(working_days: List[bool]) -> int:
     return mask
 
 from models.project_metadata import RelineMetadata
-from models.shift_schedule import Shift, ShiftSchedule
 from models.project import Project
 
 def project_to_import_payload(project: Project, metadata: Optional[RelineMetadata] = None) -> Dict[str, Any]:
@@ -54,7 +55,8 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
       - phase_order: list[UUID/str]
       - phases: dict[uuid -> Phase]
       - settings: ProjectSettings (optional)
-      - shift_schedule: ShiftSchedule
+      - shift_assignments: ShiftAssignment
+      - shift_definition: ShiftDefinition
       - project_type: ProjectType = Literal[ProjectType.MILL_RELINE, ProjectType.CIVIL, ProjectType.CRUSHER_REBUILD, ProjectType.GENERIC]
     Each Phase has:
       - name, uuid, _sort_mode
@@ -93,7 +95,8 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
         "task_predecessors": [],
         "phase_predecessors": [],
         "metadata": metadata.model_dump() if metadata is not None else None, #new 
-        "shift_config": {}
+        "shift_definition": {},
+        "shift_assignments": []
     }
 
     #project type
@@ -103,9 +106,31 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
     payload["project"]["project_type"] = str(pt)
 
     #shift schedule
-    shift_schedule = project.shift_schedule
-    if shift_schedule is not None:
-        payload["shift_config"] = shift_schedule.to_project_shift_config_payload() if shift_schedule else None
+    shift_definition = project.shift_definition
+    if shift_definition is not None:
+        payload["shift_definition"] = {
+            "id": _iso(shift_definition.id) if shift_definition.id else None,
+            "project_id": _iso(project.uuid),
+            "day_start_time": _iso(shift_definition.day_start_time),
+            "night_start_time": _iso(shift_definition.night_start_time),
+            "shift_length_hours": float(shift_definition.shift_length_hours),
+            "timezone": str(shift_definition.timezone)
+        }
+
+    #shift assignments
+    shift_assignments = project.shift_assignments
+    if shift_assignments is not None:
+        payload["shift_assignments"] = [
+            {
+                "id": _iso(assn.id) if assn.id else None,
+                "project_id": _iso(assn.project_id),
+                "crew_id": _iso(assn.crew_id),
+                "shift_type": str(assn.shift_type),
+                "start_date": _iso(assn.start_date),
+                "end_date": _iso(assn.end_date)
+            }
+            for assn in shift_assignments
+        ]
 
     # ---- Settings
     settings = getattr(project, "settings", None)
@@ -204,7 +229,8 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
                     "note": getattr(t, "note", "") or "",
                     "status": status,
                     "position": int(task_pos),
-                    "planned":getattr(t,"planned", True),
+                    "planned": getattr(t,"planned", True),
+                    "task_type": t.task_type
                 }
             )
 
@@ -216,6 +242,5 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
                         "predecessor_task_id": _iso(pred_task_id),
                     }
                 )
-
     return payload
 
