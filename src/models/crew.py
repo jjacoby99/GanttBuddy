@@ -31,4 +31,5 @@ class CrewIn(BaseModel):
 class CrewOut(BaseModel):
     site_id: str
     name: str
+    members: int
     members: Optional[int] = None
