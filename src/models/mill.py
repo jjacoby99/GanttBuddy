@@ -556,7 +556,7 @@ class MillRelineBuilder(ProjectBuilder):
         project.add_phase(
             self._build_stripping_fh(
                 inputs=inputs,
-                start_dt=phase_end,
+                start_dt=phase_end if inputs.discharge.replace_dc else dt.datetime.combine(inputs.start_date, dt.time(hour=7)),
             )
         )
 
