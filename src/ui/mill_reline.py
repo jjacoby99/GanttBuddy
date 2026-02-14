@@ -2,17 +2,19 @@ import streamlit as st
 from models.project import Project
 from models.phase import Phase
 from models.task import Task
-from models.session import SessionModel
 from models.input_models import RelineScope, FeedHeadInputs, ShellInputs, DischargeInputs
 from models.mill import ProjectType, ProjectBuilder, MillRelineBuilder, HVC_MILLS, Mill
-from models.shift_schedule import Shift, ShiftSchedule
+from models.shift_schedule import ShiftAssignment
 
 from logic.backend.api_client import fetch_sites, fetch_mills, fetch_site
+from logic.backend.crews.fetch_crews import get_crews
+
 import datetime as dt
 from zoneinfo import ZoneInfo
 
-from ui.shift_config import render_shift_schedule_table, render_tz_info
+from ui.shift_config import render_shift_assignment_table, render_tz_info
 from ui.project_metadata import render_reline_metadata_form
+from ui.shift_definition import render_shift_definition
 
 def render_feed_end(mill: Mill, strip_install: bool, n_cols: int) -> FeedHeadInputs:
     fh_cols = st.columns(n_cols, border=True, width="stretch")
@@ -426,23 +428,23 @@ def render_mill_reline_inputs():
         discharge_inputs = render_discharge(
             mill=mill, strip_install=strip_install, n_cols=n_cols
         )
-    
+
     with tabs[3]:
+        headers = st.session_state.get("auth_headers",{})
         try:
-            site = fetch_site(headers=st.session_state.get("auth_headers",{}), site_id = meta.site_id)
+            site = fetch_site(headers=headers, site_id=meta.site_id)
             site_tz = site.get("timezone", None)
         except Exception:
             pass
-        tz = render_tz_info(current_tz=site_tz)
-        edited_df = render_shift_schedule_table()
-        try:
-            sched = ShiftSchedule.from_df(edited_df)
-            sched.timezone = ZoneInfo(tz)
-        except Exception as e:
-            st.error(f"Error updating project schedule: {e}")
+
+        try: 
+            crews = get_crews(headers=headers, site_id=meta.site_id)
+        except Exception:
+            pass
         
-    
-    st.divider()
+        tz = render_tz_info(current_tz=site_tz)
+        shift_def = render_shift_definition(current_tz=site_tz)
+        edited_df = render_shift_assignment_table(crews, project_id="change_me")
 
     candidate = RelineScope(
         start_date=dt.datetime.combine(start_date, dt.time(hour=7,minute=0,second=0)),
@@ -453,18 +455,22 @@ def render_mill_reline_inputs():
     )
 
     builder = MillRelineBuilder(mill=mill)
-
+    st.divider()
+    st.caption("Happy with your reline parameters? Build the project!")
     if st.button("Create",icon=":material/add:", type='primary'):
         with st.spinner(
             text="Building project...",
             show_time=True
         ):
             project = builder.build(inputs=candidate)
-        
-            if sched is not None:
-                project.shift_schedule = sched
-
-        st.session_state.session.project = project
-        st.success(f"Project '{project.name}' created from template.")
-        st.switch_page("pages/plan.py")
-        st.rerun()
+            try:
+                shift_assigmnents = ShiftAssignment.from_df(df=edited_df, project_id=project.uuid)
+                project.shift_assignments = shift_assigmnents
+                project.shift_definition = shift_def
+            except Exception as e:
+                st.error(f"Error updating project schedule: {e}")
+                st.stop()
+            st.session_state.session.project = project
+            st.success(f"Project '{project.name}' created from template.")
+            st.switch_page("pages/plan.py")
+            st.rerun()
