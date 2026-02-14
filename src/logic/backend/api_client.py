@@ -1,5 +1,6 @@
 import requests
 import streamlit as st
+import pydantic
 
 from logic.backend.export_project import project_to_import_payload
 
@@ -133,11 +134,11 @@ def fetch_crews(headers: dict, site_id: str) -> dict:
             pass
         raise ValueError(f"Failed to fetch crews: {e} {body}")
 
-def post_crew(headers: dict, crew: CrewOut) -> dict:
+def post_new_crew(headers: dict, crew: CrewOut) -> dict:
     url = f"{API_BASE}/crews"
 
     try:
-        response = requests.post(url, data=crew.model_dump_json(), headers=headers, timeout=30)
+        response = requests.post(url, json=crew.model_dump(mode="json"), headers=headers, timeout=30)
         response.raise_for_status()
         return response.json()
     except Exception as e:
