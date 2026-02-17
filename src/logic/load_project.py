@@ -4,11 +4,12 @@ import pandas as pd
 from models.project import Project
 from models.phase import Phase
 from models.project_settings import ProjectSettings
-from models.shift_schedule import ShiftSchedule
 from models.project_metadata import RelineMetadata
 from models.project_type import ProjectType
 
-from models.task import Task
+from models.shift_schedule import ShiftDefinition, ShiftAssignment
+
+from models.task import Task, TaskType
 from pprint import pprint
 import math
 from dataclasses import dataclass, field
@@ -198,6 +199,19 @@ class ExcelProjectLoader():
         except ValueError:
             return None
 
+    @staticmethod
+    def _infer_task_type(task_str: str) -> TaskType:
+        check = task_str.lower()
+        if "inch" in check:
+            return TaskType.INCH
+        
+        if "strip" in check:
+            return TaskType.STRIP
+        
+        if "install" in check:
+            return TaskType.INSTALL
+        
+        return TaskType.GENERIC
 
     def _infer_columns(wb: Workbook, params: ExcelParameters):
         """
@@ -242,7 +256,13 @@ class ExcelProjectLoader():
 
         project = Project(name=proj_name if proj_name else "Untitled Project")
 
-        project.shift_schedule = ExcelProjectLoader.load_shift_config(file)
+        project_id = ExcelProjectLoader.load_project_id(wb)
+        print(f"Loaded project_id {project_id}. Type: {type(project_id)}")
+        if project_id is not None:
+            project.uuid = project_id #existing project, preserve uuid for backend.
+
+        project.shift_definition = ExcelProjectLoader.load_shift_definition(file, project_id=project.uuid)
+        project.shift_assignments = ExcelProjectLoader.load_shift_assignments(file, project_id=project.uuid)
         proj_type = ExcelProjectLoader.load_project_type(wb)
         project.project_type = proj_type
         metadata = None
@@ -256,9 +276,9 @@ class ExcelProjectLoader():
             if uuid == "":
                 from models.task import new_id
                 uuid = new_id()
-
+            name = ExcelProjectLoader._coerce_str(row["ACTIVITY"])
             return Task(
-                name=ExcelProjectLoader._coerce_str(row["ACTIVITY"]),
+                name=name,
                 start_date=pd.to_datetime(row["PLANNED START"], errors="coerce").to_pydatetime().astimezone() if not ExcelProjectLoader._is_nan(row["PLANNED START"]) else None,
                 end_date=pd.to_datetime(row["PLANNED END"], errors="coerce").to_pydatetime().astimezone() if not ExcelProjectLoader._is_nan(row["PLANNED END"]) else None,
                 actual_end=pd.to_datetime(row["ACTUAL END"], errors="coerce").to_pydatetime().astimezone() if not ExcelProjectLoader._is_nan(row["ACTUAL END"]) else None,
@@ -266,7 +286,8 @@ class ExcelProjectLoader():
                 note=ExcelProjectLoader._coerce_str(row["NOTES"]),
                 uuid=uuid,
                 predecessor_ids=ExcelProjectLoader._coerce_str(row["PREDECESSOR"]).split(",") if not ExcelProjectLoader._is_nan(row["PREDECESSOR"]) else [],
-                planned=ExcelProjectLoader._coerce_bool(row["PLANNED"]) if not ExcelProjectLoader._is_nan(row["PLANNED"]) else True
+                planned=ExcelProjectLoader._coerce_bool(row["PLANNED"]) if not ExcelProjectLoader._is_nan(row["PLANNED"]) else True,
+                task_type=ExcelProjectLoader._infer_task_type(name),
             )
 
         phase_ctr = 1
@@ -317,10 +338,8 @@ class ExcelProjectLoader():
         campaign_id =      str(ws.cell(row=2,column=7).value)
         scope =            str(ws.cell(row=2,column=8).value)
         liner =            str(ws.cell(row=2,column=9).value)
-        crew_count_day =   int(ws.cell(row=2,column=10).value)
-        crew_count_night = int(ws.cell(row=2,column=11).value)
-        supervisor =       str(ws.cell(row=2,column=12).value)
-        notes =            str(ws.cell(row=2,column=13).value)
+        supervisor =       str(ws.cell(row=2,column=10).value)
+        notes =            str(ws.cell(row=2,column=11).value)
         
         return RelineMetadata(
             site_id=site_id,
@@ -332,8 +351,6 @@ class ExcelProjectLoader():
             campaign_id=campaign_id,
             scope=scope,
             liner_type=liner,
-            crew_count_day=crew_count_day,
-            crew_count_night=crew_count_night,
             supervisor=supervisor,
             notes=notes,
         )
@@ -360,6 +377,17 @@ class ExcelProjectLoader():
                 return ProjectType.GENERIC
         return proj_type
     
+    @staticmethod
+    def load_project_id(wb, sheet_name: str = "Project Inputs") -> str:
+        if not sheet_name in wb.sheetnames:
+            raise ValueError(f"Provided sheet name {sheet_name} not found in Workbook.")
+
+        ws = wb[sheet_name]
+        val = ws.cell(row=14, column=4).value
+        if val is None:
+            return None
+        return str(val)
+
     @staticmethod
     def load_project_settings(wb, sheet_name: str = "Project Inputs") -> ProjectSettings:
         
@@ -394,12 +422,6 @@ class ExcelProjectLoader():
         for row in range(work_day_start_row, work_day_start_row+7):
             idx = (row - work_day_start_row + 1) % 7
             work_days[work_days_idx[idx]] = True if ws.cell(row=row,column=work_day_col).value == "yes" else False
-
-        # get project_type
-        
-            
-        
-        # get working hours
 
     @staticmethod
     def coerce_time(x) -> dt.time | None:
@@ -441,15 +463,33 @@ class ExcelProjectLoader():
         raise TypeError(f"Unsupported time value type: {type(x)} ({x!r})")
 
     @staticmethod
-    def load_shift_config(file, sheet_name: str="shift_config") -> ShiftSchedule:
+    def load_shift_definition(file, project_id: str, sheet_name: str="shift_definition") -> ShiftDefinition:
         df = pd.read_excel(
             file,
             sheet_name=sheet_name,
             header=0,
-            usecols="A:D",
-            names=["shift_type", "start", "end", "crew"]
+            usecols="A:E",
+            names=["project_id", "day_start_time", "night_start_time", "shift_length_hours", "timezone"]
         )
-        df["start"] = df["start"].map(ExcelProjectLoader.coerce_time)
-        df["start"] = df["start"].map(ExcelProjectLoader.coerce_time)
-        
-        return ShiftSchedule.from_df(df)
+
+        df["day_start_time"] = df["day_start_time"].map(ExcelProjectLoader.coerce_time)
+        df["night_start_time"] = df["night_start_time"].map(ExcelProjectLoader.coerce_time)
+        if project_id is not None and (df["project_id"] != project_id).any():
+            df["project_id"] = project_id # fall back on provided project id (existing project)
+
+        return ShiftDefinition.from_df(df, project_id)
+    
+    @staticmethod
+    def load_shift_assignments(file, project_id: str, sheet_name: str="shift_assignments") -> list[ShiftAssignment]:
+        df = pd.read_excel(
+            file,
+            sheet_name=sheet_name,
+            header=0,
+            usecols="A:F",
+            names=["id", "project_id", "shift_type", "crew_id", "start_date", "end_date"],
+        )
+        df["start_date"] = pd.to_datetime(df["start_date"], errors="raise").dt.to_pydatetime()
+        df["end_date"] = pd.to_datetime(df["end_date"], errors="raise").dt.to_pydatetime()
+
+        return ShiftAssignment.from_df(df, project_id=project_id)
+
