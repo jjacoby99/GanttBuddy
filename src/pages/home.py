@@ -248,8 +248,7 @@ def main() -> None:
             st.caption("Bring in an Excel schedule and start working immediately.")
             if st.button("Import from Excel", width="stretch"):
                 load_from_excel()
-                if st.session_state.session.project is not None:
-                    st.switch_page("pages/plan.py")
+
         with c3:
             st.markdown("### 📁 Browse")
             st.caption("Search, filter, and open projects you have access to.")
