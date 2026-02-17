@@ -443,7 +443,7 @@ def render_mill_reline_inputs():
             pass
         
         tz = render_tz_info(current_tz=site_tz)
-        shift_def = render_shift_definition(current_tz=site_tz)
+        shift_def = render_shift_definition(project_id="change_me", current_tz=site_tz)
         edited_df = render_shift_assignment_table(crews, project_id="change_me")
 
     candidate = RelineScope(
@@ -466,6 +466,8 @@ def render_mill_reline_inputs():
             try:
                 shift_assigmnents = ShiftAssignment.from_df(df=edited_df, project_id=project.uuid)
                 project.shift_assignments = shift_assigmnents
+                
+                shift_def.project_id = project.uuid # didn't have project id at original time of calling, update now.
                 project.shift_definition = shift_def
             except Exception as e:
                 st.error(f"Error updating project schedule: {e}")
