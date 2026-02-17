@@ -94,7 +94,7 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
         "tasks": [],
         "task_predecessors": [],
         "phase_predecessors": [],
-        "metadata": metadata.model_dump() if metadata is not None else None, #new 
+        "metadata": metadata.model_dump(mode="json") if metadata is not None else None, #new 
         "shift_definition": {},
         "shift_assignments": []
     }
@@ -123,7 +123,7 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
         payload["shift_assignments"] = [
             {
                 "id": _iso(assn.id) if assn.id else None,
-                "project_id": _iso(assn.project_id),
+                "project_id": _iso(project.uuid),
                 "crew_id": _iso(assn.crew_id),
                 "shift_type": str(assn.shift_type),
                 "start_date": _iso(assn.start_date),
