@@ -3,11 +3,10 @@ from dataclasses import dataclass
 from enum import Enum
 from models.project import Project
 from models.phase import Phase
-from models.task import Task
+from models.task import Task, TaskType
 from models.input_models import RelineScope, FeedHeadInputs, DischargeInputs, ShellInputs
 import datetime as dt
 from itertools import cycle, islice
-from typing import Optional
 from models.project_type import ProjectType
 
 class Location(Enum):
@@ -175,7 +174,8 @@ class MillRelineBuilder(ProjectBuilder):
         task1 = Task(
             name="Load Level Check",
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            task_type=TaskType.GENERIC
         )
         phase.add_task(task1)
 
@@ -184,7 +184,8 @@ class MillRelineBuilder(ProjectBuilder):
         task2 = Task(
             name="Drain Mill and Clean Out",
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            task_type=TaskType.GENERIC
         )
         phase.add_task(task2)
 
@@ -193,7 +194,8 @@ class MillRelineBuilder(ProjectBuilder):
         task3 = Task(
             name="Safety Talk, Tool & Work Area Setup",
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            task_type=TaskType.GENERIC,
         )
         phase.add_task(task3)
         return phase
@@ -228,7 +230,8 @@ class MillRelineBuilder(ProjectBuilder):
                 name=f"Remove 2 Rows Shell ({2 * inputs.shell.modules_per_row_strip}) {num_fh} FH & {num_filler} Filler",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else []
+                predecessor_ids=[predecessor_id] if prev_task else [],
+                task_type=TaskType.STRIP,
             )
             
             phase.add_task(task)
@@ -251,7 +254,8 @@ class MillRelineBuilder(ProjectBuilder):
                 name=f"Inch {i+1}",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else []
+                predecessor_ids=[predecessor_id] if prev_task else [],
+                task_type=TaskType.INCH,
             )
             phase.add_task(task)
 
@@ -285,7 +289,8 @@ class MillRelineBuilder(ProjectBuilder):
                 name=f"Install {num_shell_row} rows Megaliner Shell, {num_head} Megaliner Head, {num_grate} Grate",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else []
+                predecessor_ids=[predecessor_id] if prev_task else [],
+                task_type=TaskType.INSTALL,
             )
             
             phase.add_task(task)
@@ -308,7 +313,8 @@ class MillRelineBuilder(ProjectBuilder):
                 name=f"Inch {i+1}",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else []
+                predecessor_ids=[predecessor_id] if prev_task else [],
+                task_type=TaskType.INCH,
             )
 
             phase.add_task(task)
@@ -341,7 +347,8 @@ class MillRelineBuilder(ProjectBuilder):
             name=f"Strip 1 Row of Grates/Interlock",
             start_date=task_start,
             end_date=task_end,
-            predecessor_ids=[]
+            predecessor_ids=[],
+            task_type=TaskType.STRIP,
         )
 
         phase.add_task(task)
@@ -352,8 +359,10 @@ class MillRelineBuilder(ProjectBuilder):
             name="Inch 1",
             start_date = task_end,
             end_date=inch_end,
-            predecessor_ids=[task.uuid]
+            predecessor_ids=[task.uuid],
+            task_type=TaskType.INCH,
         )
+
         phase.add_task(inch)
         prev_task = inch
         task_start = inch_end
@@ -374,7 +383,8 @@ class MillRelineBuilder(ProjectBuilder):
                 name=work_task,
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else []
+                predecessor_ids=[predecessor_id] if prev_task else [],
+                task_type=TaskType.STRIP,
             )
             
             phase.add_task(task)
@@ -398,7 +408,8 @@ class MillRelineBuilder(ProjectBuilder):
                 name=f"Inch {i+2}",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else []
+                predecessor_ids=[predecessor_id] if prev_task else [],
+                task_type=TaskType.INCH,
             )
 
             phase.add_task(task)
@@ -423,7 +434,8 @@ class MillRelineBuilder(ProjectBuilder):
                 name="Install 1 rows pulp lifters",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[prev_task.uuid] if prev_task else []
+                predecessor_ids=[prev_task.uuid] if prev_task else [],
+                task_type=TaskType.INSTALL,
             )
             phase.add_task(task)
 
@@ -436,7 +448,8 @@ class MillRelineBuilder(ProjectBuilder):
                 name=f"Inch {i+1}",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else []
+                predecessor_ids=[predecessor_id] if prev_task else [],
+                task_type=TaskType.INCH,
             )
 
             phase.add_task(task)
@@ -462,7 +475,8 @@ class MillRelineBuilder(ProjectBuilder):
                 name="Install Discharger - 1 Inner, Mid and Outer, Filling Segment + add washout repairs",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[prev_task.uuid] if prev_task else []
+                predecessor_ids=[prev_task.uuid] if prev_task else [],
+                task_type=TaskType.INSTALL,
             )
 
             phase.add_task(task)
@@ -475,7 +489,8 @@ class MillRelineBuilder(ProjectBuilder):
                 name=f"Inch {i+1}",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[task.uuid]
+                predecessor_ids=[task.uuid],
+                task_type=TaskType.INCH,
             ) 
             phase.add_task(inch)
             task_start = task_end
@@ -491,7 +506,8 @@ class MillRelineBuilder(ProjectBuilder):
         task = Task(
             name="Install Discharge Cone",
             start_date=start_dt,
-            end_date=start_dt + dt.timedelta(minutes=t_discharge)
+            end_date=start_dt + dt.timedelta(minutes=t_discharge),
+            task_type=TaskType.INSTALL,
         )
         phase.add_task(task)
         return phase
@@ -504,7 +520,8 @@ class MillRelineBuilder(ProjectBuilder):
         t1 = Task(
             name="Torque Check on Shell, Feed & Discharge",
             start_date=start_dt,
-            end_date=end_date
+            end_date=end_date,
+            task_type=TaskType.GENERIC,
         )
         phase.add_task(t1)
 
@@ -513,7 +530,8 @@ class MillRelineBuilder(ProjectBuilder):
         t2 = Task(
             name="Liner Handler Removal",
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            task_type=TaskType.GENERIC,
         )
         phase.add_task(t2)
 
@@ -522,7 +540,8 @@ class MillRelineBuilder(ProjectBuilder):
         t3 = Task(
             name="Housekeeping",
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            task_type=TaskType.GENERIC,
         )
         phase.add_task(t3)
 
