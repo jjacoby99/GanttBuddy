@@ -1,6 +1,9 @@
 import requests
 import streamlit as st
 import pydantic
+import datetime as dt
+
+from typing import Optional
 
 from logic.backend.export_project import project_to_import_payload
 
@@ -26,7 +29,8 @@ def fetch_projects(headers) -> dict:
     return r.json()
 
 def save_project(project: Project, headers) -> str:
-    payload = project_to_import_payload(project)
+    metadata = st.session_state.get("reline_metadata", None)
+    payload = project_to_import_payload(project, metadata=metadata)
 
     try:
         response = requests.post(f"{API_BASE}/projects/import", json=payload, headers=headers)
@@ -148,3 +152,53 @@ def post_new_crew(headers: dict, crew: CrewOut) -> dict:
         except Exception:
             pass
         raise ValueError(f"Failed to post new crew: {e} {body}")
+    
+
+@st.cache_data
+def fetch_analytics(headers: dict, project_id: str, date_from: Optional[dt.date], date_to: Optional[dt.date]):
+    url = f"{API_BASE}/projects/{project_id}/analytics/dashboard"
+    params = {}
+    if date_from:
+        params["date_from"] = date_from.isoformat()
+    if date_to:
+        params["date_to"] = date_to.isoformat()
+    
+    try:
+        response = requests.get(url=url, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to fetch analytics for {project_id}: {e} {body}")
+    
+def fetch_inching_performance(
+    *,
+    headers: dict,
+    project_id: str,
+    date_from=None,
+    date_to=None,
+):
+    params = {"project_id": project_id}
+    if date_from:
+        params["date_from"] = date_from.isoformat()
+    if date_to:
+        params["date_to"] = date_to.isoformat()
+
+    # Adjust base_url / request helper to match how fetch_analytics is implemented in your codebase.
+    url = f"{API_BASE}/projects/{project_id}/analytics/inching-performance"
+
+    try:
+        response = requests.get(url=url, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to fetch analytics for {project_id}: {e} {body}")
