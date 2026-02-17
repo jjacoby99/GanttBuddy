@@ -48,10 +48,35 @@ from pydantic import BaseModel, field_validator
 
 class ShiftDefinition(BaseModel):
     id: Optional[str] = None # filled from backend
+    project_id: str
     day_start_time: dt.time
     night_start_time: dt.time
     shift_length_hours: float
     timezone: ZoneInfo = field(default=ZoneInfo("America/Vancouver"))
+
+    @staticmethod
+    def from_df(df: pd.DataFrame, project_id: str) -> ShiftDefinition:
+        required = ["project_id", "day_start_time", "night_start_time", "shift_length_hours", "timezone"]
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            raise KeyError(f"Provided dataframe is missing required columns: {", ".join(missing)}")
+        
+        first_row = df.iloc[0]
+        pid = first_row["project_id"]
+        dst = first_row["day_start_time"]
+        nst = first_row["night_start_time"]
+        slh = first_row["shift_length_hours"]
+        tz = first_row["timezone"]
+
+        return ShiftDefinition(
+            project_id=pid,
+            day_start_time=dst,
+            night_start_time=nst,
+            shift_length_hours=slh,
+            timezone=tz,
+        )
+
+
 
 class ShiftDefinitionIn(BaseModel):
     id: str
@@ -95,7 +120,7 @@ class ShiftAssignment(BaseModel):
 
             assignments.append(
                 ShiftAssignment(
-                    project_id=project_id,
+                    project_id=project_id if project_id else "",
                     crew_id=crew_id,
                     shift_type=shift_type,
                     start_date=start,
