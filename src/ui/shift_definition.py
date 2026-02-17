@@ -4,7 +4,7 @@ import datetime as dt
 
 from models.shift_schedule import ShiftDefinition
 
-def render_shift_definition(current_tz: ZoneInfo = ZoneInfo("America/Vancouver")):
+def render_shift_definition(project_id: str, current_tz: ZoneInfo = ZoneInfo("America/Vancouver")) -> ShiftDefinition:
     st.subheader(f"Shift Definition")
     st.caption(f"Specify the start of day / night shift during the project.")
     
@@ -42,6 +42,7 @@ def render_shift_definition(current_tz: ZoneInfo = ZoneInfo("America/Vancouver")
         )
     
     defn = ShiftDefinition(
+        project_id=project_id,
         day_start_time=day_shift_start,
         night_start_time=night_shift_start,
         shift_length_hours=shift_length,
