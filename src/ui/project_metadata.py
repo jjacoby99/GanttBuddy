@@ -117,7 +117,7 @@ def render_reline_metadata_form(
 
     notes = st.text_area("Notes", value=_s(ex.notes), height=90)
 
-    submitted = st.button("Save Setup", use_container_width=True) if require_submit else True
+    submitted = st.button("Save Setup", width="stretch") if require_submit else True
 
     # If we require submit, only validate/return after click
     if require_submit and not submitted:

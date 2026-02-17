@@ -469,7 +469,7 @@ def render_gantt_with_click_selection(fig: go.Figure, key: str = "gantt"):
         events = plotly_events(fig, click_event=True, hover_event=False, select_event=False, key=key)
     except Exception:
         # Fallback: render without click capture
-        st.plotly_chart(fig, use_container_width=True, key=f"{key}_static")
+        st.plotly_chart(fig, key=f"{key}_static")
         events = []
 
     if events:
