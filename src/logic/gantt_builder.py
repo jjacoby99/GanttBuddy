@@ -11,7 +11,7 @@ from plotly.colors import qualitative as q
 
 from models.project import Project
 from models.gantt_models import GanttInputs
-
+from models.gantt_state import GanttState
 
 # -----------------------------
 # Label formatting helpers
@@ -52,51 +52,42 @@ def _format_duration(td, resolution: str = "hours") -> str:
 # -----------------------------
 # Your color map (kept)
 # -----------------------------
-def build_color_map(df: pd.DataFrame, use_bta_colors: bool) -> dict[str, str]:
+def build_color_map(df: pd.DataFrame, planned_color: str, actual_color: str) -> dict[str, str]:
+    """
+    Semantic colors:
+      - Planned bars are based on planned_color
+      - Actual bars are based on actual_color
+      - Phase vs Task are shade variations for hierarchy
+    """
     if df is None or df.empty:
         return {}
 
-    if use_bta_colors:
-        phase_palette = [
-            "#264653",
-            "#2A9D8F",
-            "#8E5572",
-            "#4361EE",
-            "#F4A261",
-            "#6D597A",
-            "#2F4858",
-        ]
+    # tune these once and forget them
+    # (idea: Phase a bit darker / heavier; Task a bit lighter / cleaner)
+    def color_for(level: str, typ: str) -> str:
+        base = planned_color if typ == "Planned" else actual_color
 
-        phase_names = df["Phase"].dropna().unique().tolist()
-        color_map: dict[str, str] = {}
-        for i, ph_name in enumerate(phase_names):
-            base = phase_palette[i % len(phase_palette)]
-            color_map[f"{ph_name}|Phase|Planned"] = adjust_color_any(base, darken=0.20)
-            color_map[f"{ph_name}|Task|Planned"]  = adjust_color_any(base, lighten=0.25)
-            color_map[f"{ph_name}|Phase|Actual"]  = adjust_color_any(base, darken=0.45)
-            color_map[f"{ph_name}|Task|Actual"]   = adjust_color_any(base, lighten=0.55)
-        return color_map
-
-    palette = q.Plotly + q.Set3 + q.Pastel + q.Safe + q.Dark24
-
-    def base_color(key: str) -> str:
-        return palette[hash(key) % len(palette)]
+        if level == "Phase":
+            # phase: darker / stronger
+            return adjust_color_any(base, darken=0.20)
+        else:
+            # task: lighter
+            return adjust_color_any(base, lighten=0.20)
 
     color_map: dict[str, str] = {}
-    for ph_name in df["Phase"].dropna().unique().tolist():
-        base = base_color(ph_name)
-        color_map[f"{ph_name}|Phase|Planned"] = adjust_color_any(base, darken=0.20)
-        color_map[f"{ph_name}|Task|Planned"]  = adjust_color_any(base, lighten=0.25)
-        color_map[f"{ph_name}|Phase|Actual"]  = adjust_color_any(base, darken=0.45)
-        color_map[f"{ph_name}|Task|Actual"]   = adjust_color_any(base, lighten=0.55)
-    return color_map
+    phases = df["Phase"].dropna().unique().tolist()
+    for ph_name in phases:
+        for level in ("Phase", "Task"):
+            for typ in ("Planned", "Actual"):
+                color_map[f"{ph_name}|{level}|{typ}"] = color_for(level, typ)
 
+    return color_map
 
 # -----------------------------
 # Build DF with the extra info you need
 # -----------------------------
 @cache_data
-def build_gantt_df(project: Project, inputs: GanttInputs) -> pd.DataFrame | None:
+def build_gantt_df(project: Project, inputs: GanttState) -> pd.DataFrame | None:
     rows: list[dict] = []
     phases = project.phases
 
@@ -133,7 +124,7 @@ def build_gantt_df(project: Project, inputs: GanttInputs) -> pd.DataFrame | None
         # Actual phase row (only if both exist)
         astart = getattr(ph, "actual_start", None)
         aend   = getattr(ph, "actual_end", None)
-        if inputs.show_actuals and astart is not None and aend is not None:
+        if inputs.show_actual and astart is not None and aend is not None:
             rows.append({
                 "RowID": f"PH:{ph_id}",
                 "DisplayLabel": _unicode_bold(ph.name),
@@ -168,7 +159,8 @@ def build_gantt_df(project: Project, inputs: GanttInputs) -> pd.DataFrame | None
             planned_end   = getattr(t, "end_date", None)
 
             # milestone logic (prefer your property if it truly exists in your branch)
-            if hasattr(t, "is_milestone"):
+            is_ms = False
+            if t.is_milestone:
                 is_ms = bool(getattr(t, "is_milestone"))
             
 
@@ -197,7 +189,7 @@ def build_gantt_df(project: Project, inputs: GanttInputs) -> pd.DataFrame | None
             # Actual task row (only if both exist)
             astart_t = getattr(t, "actual_start", None)
             aend_t   = getattr(t, "actual_end", None)
-            if inputs.show_actuals and astart_t is not None and aend_t is not None:
+            if inputs.show_actual and astart_t is not None and aend_t is not None:
                 rows.append({
                     "RowID": f"TK:{t_id}",
                     "DisplayLabel": _indent_task(t.name),
@@ -287,12 +279,16 @@ def _apply_selection_styling(fig: go.Figure, selected_uuid: str | None) -> None:
 
 
 @cache_data
-def build_timeline(project: Project, inputs: GanttInputs, selected_uuid: str | None = None) -> go.Figure:
+def build_timeline(project: Project, inputs: GanttState, selected_uuid: str | None = None) -> go.Figure:
     df = build_gantt_df(project, inputs)
     if df is None or df.empty:
         raise ValueError(f"No data available to build Gantt timeline for project '{project.name}'.")
 
-    color_map = build_color_map(df=df, use_bta_colors=inputs.use_bta_colors)
+    color_map = build_color_map(
+        df=df,
+        planned_color=inputs.planned_color,
+        actual_color=inputs.actual_color,
+    )
 
     # preserve your insertion order for y
     order = list(dict.fromkeys(df["RowID"].tolist()))
@@ -308,6 +304,11 @@ def build_timeline(project: Project, inputs: GanttInputs, selected_uuid: str | N
     df_ms = df[is_milestone].copy()
     df_bar = df[~is_milestone].copy()
 
+    x_range = [min(project.start_date, project.actual_start if project.actual_start else project.start_date), 
+               max(project.end_date, project.actual_end if project.actual_end else project.end_date)]
+    if inputs.x_axis_start and inputs.x_axis_end:
+        x_range = [inputs.x_axis_start, inputs.x_axis_end]
+
     # Base timeline bars
     fig = px.timeline(
         df_bar,
@@ -315,6 +316,7 @@ def build_timeline(project: Project, inputs: GanttInputs, selected_uuid: str | N
         x_end="Finish",
         y="RowID",
         color="ColorKey",
+        range_x=x_range,
         color_discrete_map=color_map,
         category_orders={"RowID": order},
         custom_data=[
@@ -349,8 +351,10 @@ def build_timeline(project: Project, inputs: GanttInputs, selected_uuid: str | N
     #     margin=dict(l=compute_left_margin(ticktext),right=10,t=20,b=10)
     # )
     fig.update_xaxes(
-        title=None,
-        automargin=True
+        title="Project Time",
+        automargin=True,
+        showgrid=True,
+        gridwidth=1,
     )
 
     # Legend grouping by phase (your approach, but keep the trace name readable)
