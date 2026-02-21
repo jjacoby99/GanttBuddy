@@ -25,12 +25,6 @@ def format_timedelta(
 
     total = td.total_seconds()
 
-    sign = ""
-    if total < 0:
-        sign = "-"
-    elif total > 0 and show_sign:
-        sign = "+"
-
     total = abs(total)
 
     # Choose the rounding quantum in seconds
@@ -74,4 +68,4 @@ def format_timedelta(
             return ("+" if (show_sign and td.total_seconds() > 0) else "") + ("0s" if round_to == "second" else "0m")
         parts = ["0s" if round_to == "second" else "0m"]
 
-    return sign + " ".join(parts)
+    return " ".join(parts)
