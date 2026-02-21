@@ -1,6 +1,7 @@
 import streamlit as st
 from models.session import SessionModel
 from models.ui_state import UIState
+from models.gantt_state import GanttState
 
 def initialize_session_state():
     if "access_token" not in st.session_state:
@@ -13,6 +14,8 @@ def initialize_session_state():
         st.session_state["selected_project_id"] = None
     if "ui" not in st.session_state:
         st.session_state.ui = UIState()
+    if "gantt_state" not in st.session_state:
+        st.session_state.gantt_state = GanttState()
 
 
 def state_initialized() -> bool:
