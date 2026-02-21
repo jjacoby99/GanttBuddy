@@ -57,14 +57,25 @@ class Project:
         
         return max(phase.actual_end for phase in self.phases.values() if phase.actual_end is not None)
 
-    def completed_hours(self) -> float:
+    def completed_hours(self) -> tuple[float, float]:
         """
-            Returns the total completed hours across all tasks in the project up to as_of datetime.
-            If as_of is None, considers all actuals.
+            Returns the total actual hours and planned hours across all tasks in the project up to as_of datetime.
+        """
+        total_act = 0.0
+        total_planned = 0.0     
+        for task in self.get_task_list():
+            if task.completed and task.planned:
+                total_act += task.actual_duration.total_seconds() / 3600
+                total_planned += task.planned_duration.total_seconds() / 3600
+        return total_act, total_planned
+    
+    def unplanned_hours(self) -> float:
+        """
+            Returns the total hours of work that have been completed but were not planned.
         """
         total = 0.0        
         for task in self.get_task_list():
-            if task.completed:
+            if task.completed and not task.planned:
                 total += task.actual_duration.total_seconds() / 3600
         return total
         
@@ -175,10 +186,10 @@ class Project:
         
         return self.phase_order.index(phase.uuid)
 
-    def add_task_to_phase(self, phase: Phase, task: Task): 
+    def add_task_to_phase(self, phase: Phase, task: Task, position: int | None = None): 
         if not phase.uuid in self.phases.keys():
             raise ValueError(f"Provided phase {phase.name} does not exist.")
-        self.phases[phase.uuid].add_task(task)          
+        self.phases[phase.uuid].add_task(task, position=position)          
 
     def delete_phase(self, phase: Phase):
         if not phase.uuid in self.phases.keys():
