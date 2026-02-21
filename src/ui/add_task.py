@@ -24,13 +24,23 @@ def render_task_add(session: SessionModel, phase: Phase = None):
             format_func=lambda p: p.name
         )
     
+    task_list = [phase_selected.tasks[tid] for tid in phase.task_order]
+    
     task_name = st.text_input(
         label="Enter the name of a task",
         key=f"{phase_selected.name}_task_name"
     )
 
-    task_list = [t for t in phase_selected.tasks.values()]
+    before_task = st.selectbox(
+        label="Add task before",
+        key=f"add_before_task",
+        options=task_list,
+        format_func=lambda t: t.name
+    )
+
+    insert_idx = task_list.index(before_task)
     
+    st.write(f"Insert Index: {insert_idx}")
     type_col, preds_col = st.columns(2)
     
     # convert answer to task's boolean planned field
@@ -149,7 +159,7 @@ def render_task_add(session: SessionModel, phase: Phase = None):
             planned=task_type
         )
 
-        session.project.add_task_to_phase(phase=phase_selected, task=new_task,)
+        session.project.add_task_to_phase(phase=phase_selected, task=new_task, position=insert_idx)
 
         st.info(f"'{task_name}' added successfully.")
 
