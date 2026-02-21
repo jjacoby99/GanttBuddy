@@ -57,14 +57,14 @@ class PostMortemAnalyzer:
             
             data["Task No."].append(i+1)
             data["Task"].append(task.name)
-            data["Planned Start"].append(task.start_date)
-            data["Planned End"].append(task.end_date)
+            data["Planned Start"].append(task.start_date.replace(tzinfo=None))
+            data["Planned End"].append(task.end_date.replace(tzinfo=None))
 
             pdur = task.planned_duration.total_seconds() / 3600
             data["Planned Duration"].append(pdur)
 
-            data["Actual Start"].append(task.actual_start)
-            data["Actual End"].append(task.actual_end)
+            data["Actual Start"].append(task.actual_start.replace(tzinfo=None) if task.actual_start else None)
+            data["Actual End"].append(task.actual_end.replace(tzinfo=None) if task.actual_end else None)
 
 
             adur = task.actual_duration.total_seconds() / 3600
