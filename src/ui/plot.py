@@ -12,6 +12,7 @@ from colorsys import rgb_to_hls, hls_to_rgb
 from ui.utils.phase_controls import prev_phase, next_phase
 from ui.utils.project_info import render_project_info
 from ui.utils.status_badges import STATUS_BADGES
+from ui.gantt_state_options import render_gantt_options
 
 from logic.post_mortem import PostMortemAnalyzer
 
@@ -126,13 +127,13 @@ def render_gantt(session):
     st.divider()
     phase_view = None
     if view_phase_by_phase:
-        phase_idx = st.session_state.ui.analysis_phase_index
+        phase_idx = st.session_state.gantt_state.phase_idx
         pid = session.project.phase_order[phase_idx]
         phase = session.project.phases[pid]
         with st.container(horizontal=True, horizontal_alignment='center'):
             if st.button("←", type="secondary", on_click=prev_phase, disabled=(phase_idx == 0)):
                 # reduce phase index by one
-                st.session_state.ui.analysis_phase_index = max(0, st.session_state.ui.analysis_phase_index - 1)
+                st.session_state.gantt_state.phase_idx = max(0, st.session_state.gantt_state.phase_idx - 1)
                 st.rerun()
 
             st.space(size="stretch")
@@ -140,10 +141,10 @@ def render_gantt(session):
             st.subheader(f"**Phase {phase_idx+1}. {phase.name}**")
 
             if st.button("→", type="secondary", on_click=next_phase, disabled=(phase_idx == len(session.project.phase_order) - 1)):
-                st.session_state.ui.analysis_phase_index = min(len(session.project.phase_order) - 1, st.session_state.ui.analysis_phase_index + 1)
+                st.session_state.gantt_state.phase_idx = min(len(session.project.phase_order) - 1, st.session_state.gantt_state.phase_idx + 1)
                 st.rerun()
 
-        phase_idx = st.session_state.ui.analysis_phase_index
+        phase_idx = st.session_state.gantt_state.phase_idx
         pid = session.project.phase_order[phase_idx]
         phase = session.project.phases[pid]
 
@@ -153,33 +154,10 @@ def render_gantt(session):
 
         phase_view.add_phase(phase)
 
-    # Controls
-    with st.container(horizontal=True):
-        show_actual = st.toggle(
-            "Show actual durations",
-            value=False,
-            disabled=not getattr(session.project, "has_actuals", False),
-            key="gantt_show_actual",
-        )
-        st.space("stretch")
-        use_bta_colors = st.toggle(  
-            "Use BTA color scheme",
-            value=True,
-            key="gantt_use_bta_colors",
-        )
-        st.space("stretch")
-        shade_non_working = st.toggle(
-            "Shade non-working time",
-            value=True,
-            key="gantt_shade_non_working",
-            help="Go to settings to edit working days/hours for the project"
-        )
+    
 
-    inputs = GanttInputs(
-        show_actuals=show_actual,
-        use_bta_colors=use_bta_colors,
-        shade_non_working=shade_non_working
-    )
+    with st.popover(label="Gantt Chart Options"):
+        render_gantt_options(st.session_state.gantt_state) # modifies the gantt_state in-place
 
     selected_proj = session.project if not phase_view else phase_view
 
@@ -187,7 +165,7 @@ def render_gantt(session):
     try:
         fig = build_timeline(
             project=selected_proj,
-            inputs=inputs,
+            inputs=st.session_state.gantt_state,
             selected_uuid=selected_uuid # phase or task uuid to highlight.
         )
     except ValueError as e:
@@ -230,6 +208,7 @@ def render_gantt(session):
                 )
                 st.badge(label, icon=icon, color=color)
 
+        
     st.divider()
     render_project_info(selected_proj)
 
