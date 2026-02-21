@@ -94,7 +94,13 @@ class Task:
         adur = self.actual_duration
         return adur <= eps and pdur <= eps
         
-    
+    @property
+    def variance(self) -> Optional[timedelta]:
+        """Returns the variance of the task (actual duration - planned duration) as a timedelta, or None if actual start/end are not set."""
+        if not self.completed:
+            return None
+        return self.actual_duration - self.planned_duration
+
     def infer_status(self) -> None:
         """
             Sets self.status based on actual_start and actual_end 
