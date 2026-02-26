@@ -205,7 +205,7 @@ class ExcelProjectLoader():
         if "inch" in check:
             return TaskType.INCH
         
-        if "strip" in check:
+        if "strip" in check or "remove" in check:
             return TaskType.STRIP
         
         if "install" in check:
