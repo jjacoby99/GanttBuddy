@@ -9,8 +9,10 @@ import pandas as pd
 import streamlit as st
 import altair as alt
 
-from logic.backend.api_client import fetch_analytics, fetch_inching_performance
+from models.task import TaskType
 
+from logic.backend.api_client import fetch_analytics, fetch_inching_performance
+from ui.utils.phase_delay_plot import generate_phase_delay_plot
 
 # -------------------------
 # Config
@@ -103,7 +105,7 @@ def _card_css():
         }
         .pill-good { background: rgba(0, 200, 0, 0.10); color: rgba(0, 110, 0, 0.95); }
         .pill-bad  { background: rgba(255, 0, 0, 0.10); color: rgba(150, 0, 0, 0.95); }
-        .pill-neutral { background: rgba(0, 0, 0, 0.06); color: rgba(49, 51, 63, 0.75); }
+        .pill-neutral { background: rgba(144, 213, 255, 1); color: rgba(49, 51, 63, 0.75); }
         </style>
         """,
         unsafe_allow_html=True,
@@ -118,9 +120,10 @@ def _kpi_card(title: str, value: str, subtitle: str = "", pill: Optional[Tuple[s
     st.markdown(
         f"""
         <div class="gb-card">
-          <div class="gb-title">{title}{pill_html}</div>
+          <div class="gb-title">{title}</div>
           <div class="gb-value">{value}</div>
           <div class="gb-sub">{subtitle}</div>
+          <div class="gb-pill">{pill_html}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -345,8 +348,9 @@ def df_inching_shift_rows(payload: dict) -> pd.DataFrame:
     df["inch_count"] = pd.to_numeric(df["inch_count"], errors="coerce").fillna(0).astype(int)
     return df.sort_values(["shift_date", "shift_type", "crew"])
 
+from typing import Literal
 
-def df_inching_series(payload: dict) -> pd.DataFrame:
+def df_inching_series(payload: dict, start_dt: Optional[datetime] = None) -> pd.DataFrame:
     # payload.series: list[{name, points:[{x(date), y(float)}]}]
     series = payload.get("series") or []
     rows = []
@@ -354,15 +358,21 @@ def df_inching_series(payload: dict) -> pd.DataFrame:
         name = s.get("name", "Series")
         for p in s.get("points") or []:
             rows.append({"series": name, "x": p.get("x"), "y": p.get("y")})
+
     df = pd.DataFrame(rows)
+
     if df.empty:
         return pd.DataFrame(columns=["x", "series", "y"])
+
     df["x"] = pd.to_datetime(df["x"]).dt.date
-    df["y"] = pd.to_numeric(df["y"], errors="coerce")
+    
+    if start_dt and isinstance(start_dt, datetime):
+        df = df[df["x"] >= start_dt.date()]
+
     return df.sort_values(["x", "series"])
 
 
-def chart_inching_series(df: pd.DataFrame):
+def chart_inching_series(df: pd.DataFrame, units: Literal["mins", "hours"] = "mins"):
     if df.empty:
         st.info("No inching timeseries data yet.")
         return
@@ -371,18 +381,54 @@ def chart_inching_series(df: pd.DataFrame):
         alt.Chart(df)
         .mark_line(point=True)
         .encode(
-            x=alt.X("x:T", title=None),
-            y=alt.Y("y:Q", title="Avg inch time (min)"),
+            x=alt.X("x:T", title="Date"),
+            y=alt.Y("y:Q", title=f"Avg inch time ({units})"),
             color=alt.Color("series:N", title=None),
             tooltip=[
                 alt.Tooltip("x:T", title="Date"),
                 alt.Tooltip("series:N", title="Series"),
-                alt.Tooltip("y:Q", title="Avg (min)", format=",.2f"),
+                alt.Tooltip("y:Q", title=f"Avg ({units})", format=",.2f"),
             ],
         )
     )
-    st.altair_chart(c.properties(height=260), width="stretch")
+    st.altair_chart(c, width="stretch")
 
+import altair as alt
+import pandas as pd
+import streamlit as st
+
+def chart_avg_inch_time_by_shift_over_time(df: pd.DataFrame):
+    if df.empty:
+        st.info("No shift inching performance rows yet.")
+        return
+
+    d = df.copy()
+    d["shift_date"] = pd.to_datetime(d["shift_date"])
+    # bucket to day so the x-axis is clean
+    d["shift_day"] = d["shift_date"].dt.floor("D")
+
+    c = (
+        alt.Chart(d)
+        .transform_aggregate(
+            mean_avg_inch_time="mean(avg_inch_time)",
+            groupby=["shift_type", "shift_day"],
+        )
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("shift_day:T", title="Date"),
+            y=alt.Y("mean_avg_inch_time:Q", title="Avg inch time (min)"),
+            color=alt.Color("shift_type:N", title="Shift", sort=["day", "night"]),
+            tooltip=[
+                alt.Tooltip("shift_day:T", title="Date"),
+                alt.Tooltip("shift_type:N", title="Shift"),
+                alt.Tooltip("mean_avg_inch_time:Q", title="Avg (min)", format=",.2f"),
+            ],
+        )
+        .properties(height=320)
+        .configure_view(stroke=None)
+    )
+
+    st.altair_chart(c, width="stretch") # test
 
 def chart_inching_shift_bars(df: pd.DataFrame):
     if df.empty:
@@ -390,26 +436,44 @@ def chart_inching_shift_bars(df: pd.DataFrame):
         return
 
     top = df.copy()
-    top["label"] = top["shift_date"].astype(str) + " · " + top["shift_type"] + " · " + top["crew"]
 
-    c = (
-        alt.Chart(top)
-        .mark_bar()
-        .encode(
-            y=alt.Y("label:N", sort="-x", title=None),
-            x=alt.X("avg_inch_time:Q", title="Avg inch time (min)"),
-            tooltip=[
-                alt.Tooltip("shift_date:T", title="Shift date"),
-                alt.Tooltip("shift_type:N", title="Shift"),
-                alt.Tooltip("crew:N", title="Crew"),
-                alt.Tooltip("avg_inch_time:Q", title="Avg (min)", format=",.2f"),
-                alt.Tooltip("min_inch_time:Q", title="Fastest (min)", format=",.2f"),
-                alt.Tooltip("max_inch_time:Q", title="Slowest (min)", format=",.2f"),
-                alt.Tooltip("inch_count:Q", title="Count"),
-            ],
-        )
+    # Normalize for consistent legend + consistent color mapping
+    top["shift_type_norm"] = top["shift_type"].astype(str).str.strip().str.upper()
+    top["shift_label"] = top["shift_type_norm"].map({"DAY": "Day", "NIGHT": "Night"}).fillna(top["shift_type_norm"])
+
+    top["label"] = top["shift_date"].astype(str) + " · " + top["shift_label"]
+
+    base = alt.Chart(top).encode(
+        y=alt.Y("label:N", sort="-x", title=None, axis=alt.Axis(labelLimit=0)),
+        x=alt.X("avg_inch_time:Q", title="Avg inch time (min)"),
+        color=alt.Color(
+            "shift_label:N",
+            title="Shift",
+            # lock ordering so "Day" / "Night" are stable in the legend and colors
+            sort=["Day", "Night"],
+        ),
+        tooltip=[
+            alt.Tooltip("shift_date:T", title="Shift date"),
+            alt.Tooltip("shift_label:N", title="Shift"),
+            alt.Tooltip("crew:N", title="Crew"),
+            alt.Tooltip("avg_inch_time:Q", title="Avg (min)", format=",.2f"),
+            alt.Tooltip("min_inch_time:Q", title="Fastest (min)", format=",.2f"),
+            alt.Tooltip("max_inch_time:Q", title="Slowest (min)", format=",.2f"),
+            alt.Tooltip("inch_count:Q", title="Count"),
+        ],
     )
-    st.altair_chart(c.properties(height=min(520, 22 * len(top) + 60)), width="stretch")
+
+    bars = base.mark_bar()
+
+    labels = base.mark_text(
+        align="left",
+        dx=6,  # push text a bit right of the bar end
+    ).encode(
+        text=alt.Text("avg_inch_time:Q", format=",.1f")
+    )
+
+    c = (bars + labels).properties(height=alt.Step(24))
+    st.altair_chart(c, width="stretch")
 
 # -------------------------
 # Page
@@ -565,31 +629,44 @@ def main():
     # Main visuals: burnup + breakdowns
     tab1, tab2, tab3 = st.tabs(["Progress", "Breakdowns", "Inching"])
     with tab1:
-        st.subheader("Progress vs Plan")
-        df_bu = df_burnup(dash)
-        chart_burnup(df_bu)
 
-        # quick stats beneath the chart
-        if not df_bu.empty:
-            latest = df_bu.sort_values("x").groupby("series").tail(1).set_index("series")
-            p_end = float(latest.loc["Planned", "y"]) if "Planned" in latest.index else None
-            a_end = float(latest.loc["Actual", "y"]) if "Actual" in latest.index else None
-            if p_end is not None and a_end is not None:
-                gap = a_end - p_end
-                st.caption(f"End-of-window actual minus planned: {_fmt_num(gap)} h")
+        plot_col, metrics_col = st.columns([5,1])
+        
+        with plot_col:
+            st.subheader("Progress vs Plan")
+            df_bu = df_burnup(dash)
+            chart_burnup(df_bu)
 
+            # quick stats beneath the chart
+            if not df_bu.empty:
+                latest = df_bu.sort_values("x").groupby("series").tail(1).set_index("series")
+                p_end = float(latest.loc["Planned", "y"]) if "Planned" in latest.index else None
+                a_end = float(latest.loc["Actual", "y"]) if "Actual" in latest.index else None
+                if p_end is not None and a_end is not None:
+                    gap = a_end - p_end
+                    st.caption(f"End-of-window actual minus planned: {_fmt_num(gap)} h")
+        
+        with metrics_col:
+            _kpi_card("Planned Hours", f"{_fmt_num(planned_h)} h", f"Planned tasks: {task_counts.get('planned','—')}")
+            st.space("small")
+            _kpi_card("Actual Hours", f"{_fmt_num(actual_h)} h", f"Unplanned tasks: {task_counts.get('unplanned','—')}")
+            st.space("small")
+            _kpi_card("Variance", f"{_fmt_num(delta_h)} h", "Negative is good", pill=pill)
+    
     with tab2:
-        left, right = st.columns([1.2, 1])
+        left, right = st.columns([2, 1])
 
         with left:
             st.subheader("By Phase")
             df_ph = df_by_phase(dash)
-
+            
             # highlight top contributors
-            chart_phase_delta(df_ph)
+            fig = generate_phase_delay_plot(project=st.session_state.session.project, units="hours")
+            st.plotly_chart(fig, width="stretch")
 
         with right:
-            st.subheader("Phase Table")
+            st.space("large")
+            st.space("medium")
             if df_ph.empty:
                 st.info("No phase data yet.")
             else:
@@ -608,11 +685,12 @@ def main():
                 st.dataframe(
                     show,
                     width="stretch",
-                    height=430,
                     hide_index=True,
                 )
 
         st.write("")
+        st.divider()
+
         st.subheader("By Task Type")
         df_tt = df_by_task_type(dash)
 
@@ -644,7 +722,6 @@ def main():
             tshow["Delta (h)"] = tshow["Delta (h)"].round(2)
             st.dataframe(tshow, width="stretch", hide_index=True)
 
-    from models.project import ProjectType
 
     with tab3:
         st.subheader("Inching Performance")
@@ -672,16 +749,52 @@ def main():
         d_avg, _ = _kpi_value(ikpis, "Day shift_avg")
         n_avg, _ = _kpi_value(ikpis, "Night shift_avg")
 
-        c1, c2, c3, c4, c5 = st.columns(5)
-        with c1:
-            _kpi_card("Project Avg", f"{_fmt_num(p_avg)} min", "All INCH tasks")
-        with c2:
-            _kpi_card("Fastest", f"{_fmt_num(p_min)} min", "Best single INCH")
-        with c3:
-            _kpi_card("Slowest", f"{_fmt_num(p_max)} min", "Worst single INCH")
-        with c4:
-            _kpi_card("Count", _fmt_num(p_cnt, decimals=0), "INCH tasks with actuals")
-        with c5:
+        
+        # --- Timeseries: avg per shift-date (day/night) ---
+        plot_col, metrics_col = st.columns([3,1])
+        with plot_col:
+            st.markdown("**Avg inch time by date**")
+            ttfi_cutoff = st.session_state.session.project.first_ttfi_cutoff
+            df_is_raw = df_inching_series(inch, start_dt=ttfi_cutoff)
+            df_is_filtered = df_is_raw[df_is_raw['series'].isin(["Day shift avg inch time (min)", "Night shift avg inch time (min)"])].copy()
+
+            ttfi_cols = ["Day Shift Time to First Inch (min)", "Night Shift Time to First Inch (min)"]
+            df_ttfi_filtered = df_is_raw[df_is_raw['series'].isin(ttfi_cols)].copy()
+            
+            chart_inching_series(df_is_filtered, units="mins")
+            
+
+        with metrics_col:
+            c1, c2 = st.columns(2)
+
+            # compare fastest vs slowest
+            diff_pill = None
+            try:
+                if p_min is not None and p_max is not None:
+                    gap = p_max - p_min
+                    if gap > 0.01:
+                        diff_pill = (f"{_fmt_num(gap)} min gap", "pill-bad")
+                    else:
+                        diff_pill = ("Similar", "pill-neutral")
+            except Exception:
+                pass
+            
+            avg_inch_pill = None
+            avg_planned_inch = st.session_state.session.project.average_planned_duration(TaskType.INCH)
+            if avg_planned_inch > p_avg:
+                # faster than planned is good
+                avg_inch_pill = (f"Planned: {_fmt_num(avg_planned_inch*60)} min", "pill-good")
+            elif abs(avg_planned_inch - p_avg) < 0.01:
+                avg_inch_pill = ("On par with planned", "pill-neutral")
+            else:
+                avg_inch_pill = (f"Planned: {_fmt_num(avg_planned_inch*60)} min", "pill-bad")
+
+            with c1.container():
+                _kpi_card("Project Avg", f"{_fmt_num(p_avg)} min", "All Inch tasks", pill=avg_inch_pill)
+                st.space("stretch")
+                _kpi_card("Fastest vs Slowest", f"{_fmt_num(p_min)} / {_fmt_num(p_max)} min", f"{_fmt_num(p_max - p_min)} min gap", pill=diff_pill)
+            
+            
             # quick compare pill day vs night avg
             pill = None
             try:
@@ -689,36 +802,81 @@ def main():
                 nv = float(n_avg) if n_avg is not None else None
                 if dv is not None and nv is not None:
                     if dv < nv - 0.01:
-                        pill = ("Day faster", "pill-good")
+                        pill = (f"Day {_fmt_num(nv - dv)} min faster", "pill-good")
                     elif dv > nv + 0.01:
-                        pill = ("Night faster", "pill-good")
+                        pill = (f"Night {_fmt_num(dv - nv)} min faster", "pill-good")
                     else:
                         pill = ("Similar", "pill-neutral")
             except Exception:
                 pill = None
-            _kpi_card("Day vs Night Avg", f"{_fmt_num(d_avg)} / {_fmt_num(n_avg)} min", "Avg inch time", pill=pill)
 
+            with c2.container():
+                _kpi_card("Count", _fmt_num(p_cnt, decimals=0), "Inch tasks with actuals")
+                st.space("stretch")
+                _kpi_card("Day vs Night Avg", f"{_fmt_num(d_avg)} / {_fmt_num(n_avg)} min", "Avg inch time", pill=pill)
+        
         st.write("")
 
-        # --- Timeseries: avg per shift-date (day/night) ---
-        st.markdown("**Avg inch time by date**")
-        df_is = df_inching_series(inch)
-        chart_inching_series(df_is)
+        st.divider()
+        
+        st.markdown("**Time to First Inch: Day vs. Night**")
+        
+        met_col_2, plot_col_2 = st.columns([1,3])
+        with met_col_2:
+            ft_avg_day, _ = _kpi_value(ikpis, "Day Shift Time to First Inch_avg")
+            ft_avg_night, _ = _kpi_value(ikpis, "Night Shift Time to First Inch_avg")
+            
+            ft_min_day, _ = _kpi_value(ikpis, "Day Shift Time to First Inch_min")
+            ft_min_night, _ = _kpi_value(ikpis, "Night Shift Time to First Inch_min")
 
-        st.write("")
+            ft_max_day, _ = _kpi_value(ikpis, "Day Shift Time to First Inch_max")
+            ft_max_night, _ = _kpi_value(ikpis, "Night Shift Time to First Inch_max")
+
+            def generate_day_night_pill(day_val, night_val):
+                try:
+                    dv = float(day_val) if day_val is not None else None
+                    nv = float(night_val) if night_val is not None else None
+                    if dv is not None and nv is not None:
+                        if dv < nv - 0.01:
+                            return (f"Day {_fmt_num(nv - dv)} min faster", "pill-neutral")
+                        elif dv > nv + 0.01:
+                            return (f"Night {_fmt_num(dv - nv)} min faster", "pill-neutral")
+                        else:
+                            return ("Similar", "pill-neutral")
+                except Exception:
+                    pass
+                return None
+            
+            avg_ttfi_pill = generate_day_night_pill(ft_avg_day, ft_avg_night)
+            
+
+            fastest_ttfi_pill = generate_day_night_pill(ft_min_day, ft_min_night)
+            
+            slowest_ttfi_pill = generate_day_night_pill(ft_max_day, ft_max_night)
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                _kpi_card("Average", f"{_fmt_num(ft_avg_day)} / {_fmt_num(ft_avg_night)} min", "Day / Night shifts", pill=avg_ttfi_pill)
+            with c2:
+                _kpi_card("Fastest", f"{_fmt_num(ft_min_day)} / {_fmt_num(ft_min_night)} min", f"Day / Night shifts", pill=fastest_ttfi_pill)
+                st.space("small")
+                _kpi_card("Slowest", f"{_fmt_num(ft_max_day)} / {_fmt_num(ft_max_night)} min", f"Day / Night shifts", pill=slowest_ttfi_pill)
+        
+        
+        with plot_col_2:
+            chart_inching_series(df_ttfi_filtered, units="mins")
+
+        st.divider()
 
         # --- Shift-level breakdown ---
         st.markdown("**Shift-by-shift performance**")
         df_ir = df_inching_shift_rows(inch)
 
         # Filter controls
-        cfa, cfb, cfc = st.columns([1, 1, 1])
-        with cfa:
+        with st.popover('Filter'):
             shift_filter = st.multiselect("Shift", options=["DAY", "NIGHT"], default=["DAY", "NIGHT"])
-        with cfb:
             crews = sorted([c for c in df_ir["crew"].dropna().unique().tolist()]) if not df_ir.empty else []
             crew_filter = st.multiselect("Crew", options=crews, default=crews[:10] if len(crews) > 10 else crews)
-        with cfc:
             sort_mode = st.selectbox("Sort", ["Most recent", "Slowest avg", "Fastest avg"], index=0)
 
         view = df_ir.copy()
@@ -758,11 +916,8 @@ def main():
             for c in ["Avg (min)", "Fastest (min)", "Slowest (min)"]:
                 show[c] = pd.to_numeric(show[c], errors="coerce").round(2)
 
-            st.dataframe(show, width="stretch", height=520, hide_index=True)
+            st.dataframe(show, width="stretch", hide_index=True)
 
-        # Optional: raw JSON
-        with st.expander("Raw inching JSON"):
-            st.json(inch)
 
 if __name__ == "__main__":
     main()
