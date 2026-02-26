@@ -3,11 +3,13 @@ from datetime import date, timedelta
 from models.task import Task
 from models.phase import Phase
 from models.session import SessionModel
+from models.plan_state import PlanState
+
 import time
 from datetime import datetime
 
 @st.dialog(f"Add a new phase to your project.")
-def render_add_phase(session: SessionModel, position: int | None = None):
+def render_add_phase(session: SessionModel, plan_state: PlanState, position: int | None = None):
     
     phase_name = st.text_input(
         label="Enter the name of a project phase",
@@ -42,6 +44,7 @@ def render_add_phase(session: SessionModel, position: int | None = None):
             predecessor_ids=predecessor_ids
         )
 
+        plan_state.add_phase(phase_uuid=new_phase.uuid)
         session.project.add_phase(new_phase, position=position)
 
         st.info(f"Phase {phase_name} successfully added to {session.project.name}!")
