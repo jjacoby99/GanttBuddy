@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
+from models.project import ProjectType
 
 import streamlit as st
 
@@ -30,48 +31,6 @@ class ActivityItem:
     message: str
 
 
-
-def _placeholder_needs_attention() -> List[AttentionItem]:
-    return [
-        AttentionItem(
-            project_id="p1",
-            project_name="SWRP Cleanout - RevB",
-            severity="late",
-            title="2 tasks are late",
-            subtitle="Most recent slip: Dewater SWRP sump",
-            count=2,
-            due_hint="Overdue",
-        ),
-        AttentionItem(
-            project_id="p2",
-            project_name="B-Auto Mill Reline",
-            severity="due_soon",
-            title="4 tasks start in the next 48h",
-            subtitle="Crew + equipment confirmations pending",
-            count=4,
-            due_hint="Next 48h",
-        ),
-        AttentionItem(
-            project_id="p3",
-            project_name="24-Mile Sump Pumps",
-            severity="awaiting_actuals",
-            title="3 tasks awaiting actuals",
-            subtitle="Field entries missing for completed work",
-            count=3,
-            due_hint="This week",
-        ),
-        AttentionItem(
-            project_id="p4",
-            project_name="Pump Pre-Feas (Electrical)",
-            severity="info",
-            title="You were added to this project",
-            subtitle="Access granted by Org Admin",
-            count=1,
-            due_hint="New",
-        ),
-    ]
-
-
 def _placeholder_activity() -> List[ActivityItem]:
     return [
         ActivityItem(ts="09:06", project_name="SWRP Cleanout - RevB", message="Task marked complete: Pad in access road"),
@@ -79,16 +38,6 @@ def _placeholder_activity() -> List[ActivityItem]:
         ActivityItem(ts="Yesterday", project_name="24-Mile Sump Pumps", message="Actual entered: Pump #1 install start"),
         ActivityItem(ts="Yesterday", project_name="Pump Pre-Feas (Electrical)", message="New phase added: Site walkdown"),
     ]
-
-
-def _placeholder_kpis() -> Dict[str, Any]:
-    return {
-        "late_tasks": 2,
-        "due_soon_tasks": 4,
-        "awaiting_actuals": 3,
-        "updates_today": 2,
-        "last_sync": "09:12",
-    }
 
 
 from logic.backend.api_client import fetch_project_snapshot
@@ -108,8 +57,12 @@ def open_project(project_id: str) -> None:
     except Exception:
         st.error(f"Failed to load selected project.")
         st.stop()
+
+    project, metadata = snapshot_to_project(snap)
+    st.session_state.session.project = project
+    if project.project_type == ProjectType.MILL_RELINE and metadata is not None:
+        st.session_state["reline_metadata"] = metadata 
     
-    st.session_state.session.project = snapshot_to_project(snap)
     st.switch_page("pages/plan.py")
     st.toast("Loaded project successfully", icon="✅")
 
