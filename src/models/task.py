@@ -45,7 +45,8 @@ class Task:
                 "uuid": self.uuid,
                 "phase_id": self.phase_id,
                 "status": self.status,
-                "planned": self.planned
+                "planned": self.planned,
+                "task_type": self.task_type,
                 }
     
     def __str__(self) -> str:
