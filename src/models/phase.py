@@ -206,7 +206,10 @@ class Phase:
                 if new_task.uuid in predecessor_ids:
                     # shift each task after current back by (old_task.end_date - new_task.end_date)
                     pass
-
+    
+    @property
+    def tasks_completed(self) -> int:
+        return sum(1 for t in self.tasks.values() if t.completed)
 
     def delete_task(self, task: Task) -> int:
         """
@@ -265,3 +268,7 @@ class Phase:
     
     def get_task_list(self) -> list[Task]:
         return [self.tasks[tid] for tid in self.task_order]
+
+    @staticmethod 
+    def to_df(phase: Phase) -> pd.DataFrame:
+        return pd.DataFrame([t.to_dict() for t in phase.get_task_list()])
