@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 import pandas as pd
 from typing import Optional
-from models.task import Task
+from models.task import Task, TaskType
 from models.phase import Phase
 from models.project_settings import ProjectSettings
 from datetime import datetime, timedelta
@@ -57,6 +57,66 @@ class Project:
         
         return max(phase.actual_end for phase in self.phases.values() if phase.actual_end is not None)
 
+    @property
+    def first_ttfi_cutoff(self) -> Optional[datetime]:
+        """ 
+            Looks at shift_definition and determines when the cutoff should be for ttfi metrics.
+            This is determined by looking at when the first inch was planned to start.
+
+            If the inch was planned to start in [day_start_time, dat_start_time + shift_length_hours]
+            then the cutoff time will be the date of the first inch @ day_start_time
+            else, the cutoff time will be the date of the first inch @ night_start_time
+
+            The intent of this property is to determine what shift within a project Inching should 
+            commence.
+
+        """
+        if not self.shift_definition or not self.project_type == ProjectType.MILL_RELINE:
+            return None
+        first_planned_inch = self.first_task_of_type(TaskType.INCH, planned=True)
+        print(f"First planned inch start: {first_planned_inch}")
+
+        if not first_planned_inch: # no inch tasks found
+            return None
+        
+        shift_dur_hours = self.shift_definition.shift_length_hours
+
+        day_start = datetime.combine(first_planned_inch.date(), self.shift_definition.day_start_time).astimezone()
+        day_end = day_start + timedelta(hours=shift_dur_hours)
+        print(f"Day shift: {day_start.strftime("%d/%m/%Y, %H:%M")} -> {day_end.strftime("%d/%m/%Y, %H:%M")}")
+        
+        if first_planned_inch >= day_start and first_planned_inch <= day_end:
+            return day_start
+        
+        night_start = datetime.combine(first_planned_inch.date(), self.shift_definition.night_start_time).astimezone()
+        night_end = night_start + timedelta(hours=shift_dur_hours)
+        print(f"Night shift: {night_start.strftime("%d/%m/%Y, %H:%M")} -> {night_end.strftime("%d/%m/%Y, %H:%M")}")
+
+        if first_planned_inch >= night_start and first_planned_inch <= night_end:
+            return night_start
+        
+        return None
+
+    def first_task_of_type(self, task_type: TaskType, planned: bool = True) -> Optional[datetime]:
+        """ 
+            Searches all tasks in the project looking for the first task with task.task_type == task_type.
+
+            if planned, this returns the PLANNED START datetime of the first task with the given type
+            else, this returns the ACTUAL START datetime of the first task with the given type
+
+            if no task of the given type is present in the project, None is returned.
+        """
+        for task in self.get_task_list():
+            if task.task_type == task_type:
+                if planned:
+                    return task.start_date
+                
+                if not planned and task.actual_start is not None:
+                    return task.actual_start
+                
+                return None
+        return None
+
     def completed_hours(self) -> tuple[float, float]:
         """
             Returns the total actual hours and planned hours across all tasks in the project up to as_of datetime.
@@ -78,7 +138,16 @@ class Project:
             if task.completed and not task.planned:
                 total += task.actual_duration.total_seconds() / 3600
         return total
+    
+    def average_planned_duration(self, task_type: TaskType) -> float:
+        total = timedelta(seconds=0)
+        count = 0
+        for task in self.get_task_list():
+            if task.task_type == task_type and task.planned:
+                total += task.planned_duration
+                count += 1
         
+        return float(total.total_seconds() / 3600 / count) if count > 0 else 0.0
     
     @property
     def has_task(self) -> bool:
