@@ -57,20 +57,35 @@ class PostMortemAnalyzer:
             
             data["Task No."].append(i+1)
             data["Task"].append(task.name)
-            data["Planned Start"].append(task.start_date.replace(tzinfo=None))
-            data["Planned End"].append(task.end_date.replace(tzinfo=None))
+
+            pstart = task.start_date.replace(tzinfo=None)
+            pend = task.end_date.replace(tzinfo=None)
+
+            data["Planned Start"].append(pstart)
+            data["Planned End"].append(pend)
 
             pdur = task.planned_duration.total_seconds() / 3600
             data["Planned Duration"].append(pdur)
 
-            data["Actual Start"].append(task.actual_start.replace(tzinfo=None) if task.actual_start else None)
-            data["Actual End"].append(task.actual_end.replace(tzinfo=None) if task.actual_end else None)
+            astart = task.actual_start.replace(tzinfo=None) if task.actual_start else None
+            aend = task.actual_end.replace(tzinfo=None) if task.actual_end else None
+
+            data["Actual Start"].append(astart)
+            data["Actual End"].append(aend)
 
 
             adur = task.actual_duration.total_seconds() / 3600
             data["Actual Duration"].append(adur)
             data["Delay"].append(adur - pdur) # positive indicates a delay - negative indicates ahead of schedule
-            data["Notes"].append(task.note if task.note else "")
+
+            notes = task.note
+            if not notes or notes == "":
+                if astart and aend:
+                    notes = f"{astart} -> {aend}"
+                else:
+                    notes = f"{pstart} -> {pend}"
+            
+            data["Notes"].append(notes)
         
         df = pd.DataFrame(data)
         
