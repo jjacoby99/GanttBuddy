@@ -4,96 +4,87 @@ from ui.edit_task import render_task_edit
 from ui.add_task import render_task_add
 from ui.edit_phase import render_phase_edit
 from ui.add_phase import render_add_phase
-from ui.utils.project_info import render_project_info
 from ui.utils.status_badges import STATUS_BADGES
+
+from models.phase import Phase
+from models.task import Task
+from models.plan_state import PlanState, TaskColumns
 
 from dataclasses import dataclass
 from datetime import datetime
 import pandas as pd
 import datetime
 
-class TaskColumns:
-    name: int = 0
-    planned_start: int = 1
-    planned_finish: int = 2
-    status: int = 3
-    actual_start: int | None = None
-    actual_finish: int | None = None
-    edit: int = 4
+def map_completion_to_badge(completion: float) -> tuple[str, str, str]:
+    if completion >= 1.0:
+        return ("Complete", ":material/check_circle:", "green")
+    elif completion > 0.0:
+        return (f"{completion*100:.1f}% Complete", ":material/timer:", "yellow")
+    else:
+        return ("Not Started", ":material/info:", "blue")
 
-    show_actuals: bool = False
+def write_header_row(columns: TaskColumns, col_widths: list[int], plan_ui_state: PlanState):
+    header_cols = st.columns(col_widths)
+    header_cols[columns.name].markdown(f"### ACTIVITY")
+    header_cols[columns.planned_start].markdown(f"### PLANNED START")
+    header_cols[columns.planned_finish].markdown(f"### PLANNED FINISH")
 
-    def __init__(self, show_actuals: bool=False):
-        self.show_actuals = show_actuals
+    header_cols[columns.status].markdown(f"### STATUS")
+    if plan_ui_state.show_actuals:
+            header_cols[columns.actual_start].markdown("### ACTUAL START")
+            header_cols[columns.actual_finish].markdown("### ACTUAL FINISH")
+    header_cols[columns.edit].markdown("### EDIT")
 
-        self.name = 0
-        self.planned_start = 1
-        self.planned_finish = 2
-        self.status = 3
-        self.edit = 4
-        if show_actuals:
-            self.actual_start = 4
-            self.actual_finish = 5
-            self.edit = 6
+    st.divider()
 
-    def get_col_widths(self) -> list[int]:
-        if self.show_actuals:
-            return [5, 2, 2, 2, 2, 2, 1]
+def write_phase_header(phase: Phase, phase_idx: int, columns: TaskColumns, col_widths: list[int], plan_ui_state: PlanState):
+    phase_columns = st.columns(col_widths)
 
-        return [5,2,2,2,1]
+    phase_start = phase.start_date.strftime("%Y-%m-%d %H:%M") if phase.start_date else '-'
+    phase_end = phase.end_date.strftime("%Y-%m-%d %H:%M") if phase.end_date else '-'
+
+    phase_columns[columns.name].markdown(f"**{phase_idx+1}. {phase.name}**")
+    phase_columns[columns.planned_start].markdown(f"**{phase_start}**")
+    phase_columns[columns.planned_finish].markdown(f"**{phase_end}**")
+
+    label, icon, color = map_completion_to_badge(phase.tasks_completed / len(phase.tasks) if phase.tasks else 0.0)
+    phase_columns[columns.status].badge(label, icon=icon, color=color)
+    if plan_ui_state.show_actuals:
+            phase_columns[columns.actual_start].markdown(f"**{phase.actual_start.strftime('%Y-%m-%d %H:%M') if phase.actual_start else '-'}**")
+            phase_columns[columns.actual_finish].markdown(f"**{phase.actual_end.strftime('%Y-%m-%d %H:%M') if phase.actual_end else '-'}**")
     
+    button_label = ":material/keyboard_arrow_down:" if plan_ui_state.expanded_phases[phase.uuid] else ":material/keyboard_arrow_up:"
+    button_clicked = phase_columns[columns.edit].button(button_label, key=f"edit_{phase.name}_{phase_idx}")
+    
+    if button_clicked:
+        plan_ui_state.toggle_phase_expansion(phase.uuid)
 
-def render_tasks_table(session):
+
+def render_tasks_table(session, plan_ui_state: PlanState):
     phases = session.project.phases
 
     if not phases:
         st.info(f"Add a phase to {session.project.name} to view project planner")
         return
     
-    with st.popover("Project at a glance"):
-        render_project_info(session.project)
-
-    c1, _ = st.columns([1,2])
-    c1.caption("Display Preferences")
-    with st.container(horizontal=True, border=True, vertical_alignment="top", horizontal_alignment="center", width=500):
-        
-        show_actual = st.toggle(
-            label="Show actual start / end",
-            value=False
-        )
-
-        st.space("stretch")
-
-        expand_all = st.toggle(
-            label=f"Expand **{len(phases)}** Phases",
-            value=False
-        )
-
     st.subheader("Project Phases")
     
-    columns = TaskColumns(show_actuals=show_actual)
+    columns = TaskColumns(show_actuals=plan_ui_state.show_actuals)
     col_widths = columns.get_col_widths()
 
-    phase_idx = 0
-    for pid in session.project.phase_order:
+    write_header_row(columns, col_widths,plan_ui_state)
+
+    
+    for phase_idx, pid in enumerate(session.project.phase_order):
+        
         phase = session.project.phases[pid]
-
-        phase_start = phase.start_date.strftime("%Y-%m-%d %H:%M") if phase.start_date else '-'
-        phase_end = phase.end_date.strftime("%Y-%m-%d %H:%M") if phase.end_date else '-'
-        with st.expander(f"**{phase.name}**\t ({len(phase.tasks)} tasks)\t - {phase_start} → {phase_end}",
-                         expanded=expand_all):
-            # Header row
+        with st.container(border=True):
+            write_phase_header(phase, phase_idx, columns, col_widths, plan_ui_state)
+            
+            if not plan_ui_state.expanded_phases[phase.uuid]:
+                continue
+            
             cols = st.columns(col_widths)
-            cols[columns.name].markdown("**Task**")
-            cols[columns.planned_start].markdown("**Start**")
-            cols[columns.planned_finish].markdown("**Finish**")
-            cols[columns.status].markdown("**Status**")
-
-            if show_actual:
-                cols[columns.actual_start].markdown("**Actual Start**")
-                cols[columns.actual_finish].markdown("**Actual Finish**")
-
-            cols[columns.edit].markdown("**Edit**")
 
             for i, tid in enumerate(phase.task_order):
                 t = phase.tasks[tid]
@@ -110,7 +101,7 @@ def render_tasks_table(session):
 
                     cols[columns.status].badge(label, icon=icon, color=color)
 
-                    if show_actual:
+                    if plan_ui_state.show_actuals:
                         cols[columns.actual_start].write(t.actual_start.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_start) else "")
                         cols[columns.actual_finish].write(t.actual_end.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_end) else "")
 
@@ -131,8 +122,8 @@ def render_tasks_table(session):
         with st.container(horizontal=True):
             st.space("stretch")
             if st.button(":material/add_circle: Phase", key=f"add_phase_{phase_idx}", type='primary'):
-                render_add_phase(session, position=phase_idx+1)
+                render_add_phase(session, position=phase_idx+1, plan_ui_state=plan_ui_state)
         
         phase_idx += 1
 
-     
+        
