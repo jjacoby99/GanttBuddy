@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from datetime import datetime, time
-from typing import Any
+from typing import Any, Optional
 
-from models.project import Project
+from models.project import Project, ProjectType
 from models.phase import Phase
+from models.project_metadata import RelineMetadata
 from models.task import Task, TaskType
 from models.project_settings import ProjectSettings
 from models.shift_schedule import ShiftAssignment, ShiftDefinition
@@ -61,10 +62,31 @@ def get_shift_definition(shift_definition: dict) -> ShiftDefinition:
     except Exception as e:
         raise e
 
-def snapshot_to_project(snapshot: dict[str, Any]) -> Project:
+def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[RelineMetadata]]:
     p = snapshot["project"]
     s = snapshot["settings"]
     shift_def = snapshot["shift_definition"]
+
+    if p.get("project_type") == "MILL_RELINE":
+        metadata = snapshot.get("metadata", None)
+        if not metadata:
+            raise ValueError("Mill Reline project snapshot must include metadata.")
+        
+        reline_metadata = RelineMetadata(
+            schema_version=metadata.get("schema_version", 1),
+            site_id=metadata["site_id"],
+            site_name=metadata["site_name"], 
+            mill_id=metadata["mill_id"],
+            mill_name=metadata["mill_name"], 
+            vendor=metadata["vendor"],
+            liner_system=metadata["liner_system"],
+            campaign_id=metadata["campaign_id"],
+            scope=metadata["scope"],
+            liner_type=metadata["liner_type"],
+            supervisor=metadata["supervisor"],
+            notes=metadata["notes"],
+        )
+        
     shift_assignments = snapshot["shift_assignments"]
     phases = snapshot.get("phases", [])
     tasks = snapshot.get("tasks", [])
@@ -87,11 +109,18 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> Project:
         duration_resolution=s.get("duration_resolution", "hours"),
     )
 
+    project_type_str = p.get("project_type", "GENERIC")
+    try:
+        project_type = ProjectType[project_type_str]
+    except KeyError:
+        project_type = ProjectType.GENERIC
+
     project = Project(
         name=p.get("name", ""),
         uuid=p.get("id"),  # backend id becomes frontend uuid
         description=p.get("description"),
         settings=settings,
+        project_type=project_type
     )
 
     sd = get_shift_definition(shift_definition=shift_def)
@@ -136,5 +165,5 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> Project:
             )
             project.add_task_to_phase(project.phases[phase_id], task)
 
-    return project
+    return project, reline_metadata
  
