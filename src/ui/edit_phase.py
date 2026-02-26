@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 from models.phase import Phase
 from models.session import SessionModel
+from models.plan_state import PlanState
 
 @st.dialog(f"Edit Phase")
-def render_phase_edit(session: SessionModel, phase: Phase):
+def render_phase_edit(session: SessionModel, phase: Phase, plan_state: PlanState):
     proj = session.project
 
     if not phase:
@@ -35,6 +36,7 @@ def render_phase_edit(session: SessionModel, phase: Phase):
 
         if st.button("Delete"):
             session.project.delete_phase(phase)
+            plan_state.remove_phase(phase.uuid)
             st.rerun()
 
     
