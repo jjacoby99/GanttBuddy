@@ -6,7 +6,7 @@ from logic.backend.api_client import fetch_project_snapshot
 from logic.backend.import_project import snapshot_to_project
 
 from models.session import SessionModel
-from models.project import Project
+from models.project import Project, ProjectType
 
 
 
@@ -53,7 +53,11 @@ def render_select_project(projects: dict):
         st.error(f"Error loading project *{projects[selected_project_id]}*")
         st.stop()
     
-    st.session_state.session.project = snapshot_to_project(proj_snapshot)
+    project, metadata = snapshot_to_project(proj_snapshot)
+    st.session_state.session.project = project
+    if project.project_type == ProjectType.MILL_RELINE and metadata is not None:
+        st.session_state["reline_metadata"] = metadata 
+        
     st.session_state["selected_project_id"] = selected_project_id
     st.success(f"*{projects[selected_project_id]}* Loaded Successfully!")
     return
