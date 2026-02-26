@@ -12,10 +12,6 @@ def render_phases_view(session: SessionModel):
         st.info("Add phases to your project to see the phases view.")
         return
     
-    
-    with st.popover("Project at a glance", width="content"):
-        render_project_info(session.project, resolution="Phase")
-    
     st.divider()
 
     st.subheader("Project Phases Overview")
