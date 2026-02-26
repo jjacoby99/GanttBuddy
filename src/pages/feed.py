@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, date, UTC
 from typing import Any, Optional
 
+from models.project_type import ProjectType
 import streamlit as st
 
 from logic.backend.guards import require_login
@@ -76,7 +77,10 @@ def load_project_into_session(project_id: str):
         project_id=project_id,
         headers=st.session_state.auth_headers,
     )
-    st.session_state.session.project = snapshot_to_project(proj_snapshot)
+    project, metadata = snapshot_to_project(proj_snapshot)
+    st.session_state.session.project = project
+    if project.project_type == ProjectType.MILL_RELINE and metadata is not None:
+        st.session_state["reline_metadata"] = metadata 
     st.switch_page("pages/plan.py")
 
 from datetime import datetime, timezone, timedelta
