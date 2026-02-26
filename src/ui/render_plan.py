@@ -4,27 +4,49 @@ from models.session import SessionModel
 
 from ui.phases_view import render_phases_view
 from ui.tasks_view import render_tasks_table
+from ui.utils.project_info import render_project_info
 
-# @st.cache_data: throws Unhashable Error for SessionModel
-def render_plan(session: SessionModel):
-    options = {
-        "Simple": ":material/layers: Simple",
-        "Detailed": ":material/format_list_bulleted: Detailed"
-    }
+from models.plan_state import PlanState
+from models.project import Project
 
-    with st.container(horizontal=True):
-        view_option = st.segmented_control(
+def project_glance_popover(project: Project):
+    with st.popover("Project at a glance", icon=":material/dashboard:"):
+        render_project_info(project)
+
+def render_display_preferences(plan_ui_state: PlanState):
+    with st.popover("Display Preferences", icon=":material/display_settings:"):
+        options = {
+            "Simple": ":material/layers: Simple",
+            "Detailed": ":material/format_list_bulleted: Detailed"
+        }
+        plan_ui_state.view_mode = st.segmented_control(
             label="Project View",
             options=options.keys(),
             format_func=lambda t: options[t],
             default="Simple",
             width=300
         )
+
+        plan_ui_state.show_actuals = st.toggle(
+            label="Show actual start / end",
+            value=False
+        )
+
+# @st.cache_data: throws Unhashable Error for SessionModel
+def render_plan(session: SessionModel):
     
-    match view_option:
+    plan_ui_state = st.session_state.plan_state
+    plan_ui_state.initialize_expanded_phases(list(session.project.phase_order))
+    
+    with st.container(horizontal=True):
+        render_display_preferences(plan_ui_state)
+        st.space("stretch")
+        project_glance_popover(session.project)
+    
+    match plan_ui_state.view_mode:
         case "Simple":
             render_phases_view(session)
         case "Detailed":
-            render_tasks_table(session)
+            render_tasks_table(session, plan_ui_state)
         case _:
             st.info("Select a project view option")
