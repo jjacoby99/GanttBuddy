@@ -74,56 +74,57 @@ def render_tasks_table(session, plan_ui_state: PlanState):
 
     write_header_row(columns, col_widths,plan_ui_state)
 
+    with st.container(height=700, border=False): # gives the effect of keeping the header row at the top of the page.
     
-    for phase_idx, pid in enumerate(session.project.phase_order):
-        
-        phase = session.project.phases[pid]
-        with st.container(border=True):
-            write_phase_header(phase, phase_idx, columns, col_widths, plan_ui_state)
+        for phase_idx, pid in enumerate(session.project.phase_order):
             
-            if not plan_ui_state.expanded_phases[phase.uuid]:
-                continue
-            
-            cols = st.columns(col_widths)
+            phase = session.project.phases[pid]
+            with st.container(border=True):
+                write_phase_header(phase, phase_idx, columns, col_widths, plan_ui_state)
+                
+                if not plan_ui_state.expanded_phases[phase.uuid]:
+                    continue
+                
+                cols = st.columns(col_widths)
 
-            for i, tid in enumerate(phase.task_order):
-                t = phase.tasks[tid]
+                for i, tid in enumerate(phase.task_order):
+                    t = phase.tasks[tid]
 
-                with st.container():
-                    cols[columns.name].write(t.name)
-                    cols[columns.planned_start].write(t.start_date.strftime("%Y-%m-%d %H:%M"))
-                    cols[columns.planned_finish].write(t.end_date.strftime("%Y-%m-%d %H:%M"))
+                    with st.container():
+                        cols[columns.name].write(t.name)
+                        cols[columns.planned_start].write(t.start_date.strftime("%Y-%m-%d %H:%M"))
+                        cols[columns.planned_finish].write(t.end_date.strftime("%Y-%m-%d %H:%M"))
 
-                    label, icon, color = STATUS_BADGES.get(
-                        t.status.upper(),
-                        (t.status, ":material/help:", "gray"),
-                    )
+                        label, icon, color = STATUS_BADGES.get(
+                            t.status.upper(),
+                            (t.status, ":material/help:", "gray"),
+                        )
 
-                    cols[columns.status].badge(label, icon=icon, color=color)
+                        cols[columns.status].badge(label, icon=icon, color=color)
 
-                    if plan_ui_state.show_actuals:
-                        cols[columns.actual_start].write(t.actual_start.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_start) else "")
-                        cols[columns.actual_finish].write(t.actual_end.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_end) else "")
+                        if plan_ui_state.show_actuals:
+                            cols[columns.actual_start].write(t.actual_start.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_start) else "")
+                            cols[columns.actual_finish].write(t.actual_end.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_end) else "")
 
 
-                    if cols[columns.edit].button("✏️", key=f"edit_{phase.name}_{t.name}_{i}"):
-                        render_task_edit(session, phase=phase, task=t)     
+                        if cols[columns.edit].button("✏️", key=f"edit_{phase.name}_{t.name}_{i}"):
+                            render_task_edit(session, phase=phase, task=t)     
 
-            st.divider()
+                st.divider()
+                with st.container(horizontal=True):
+                    if st.button(":material/add_circle: Task", key=f"add_task_{phase.name}", type='secondary'):
+                        render_task_add(session,phase=phase)
+                        
+                    st.space("stretch")
+
+                    if st.button("✏️ Edit Phase", key=f"edit_{phase.name}", type="secondary"):
+                        render_phase_edit(session,phase=phase)
+
             with st.container(horizontal=True):
-                if st.button(":material/add_circle: Task", key=f"add_task_{phase.name}", type='secondary'):
-                    render_task_add(session,phase=phase)
-                    
                 st.space("stretch")
-
-                if st.button("✏️ Edit Phase", key=f"edit_{phase.name}", type="secondary"):
-                    render_phase_edit(session,phase=phase)
-
-        with st.container(horizontal=True):
-            st.space("stretch")
-            if st.button(":material/add_circle: Phase", key=f"add_phase_{phase_idx}", type='primary'):
-                render_add_phase(session, position=phase_idx+1, plan_ui_state=plan_ui_state)
-        
-        phase_idx += 1
+                if st.button(":material/add_circle: Phase", key=f"add_phase_{phase_idx}", type='primary'):
+                    render_add_phase(session, position=phase_idx+1, plan_ui_state=plan_ui_state)
+            
+            phase_idx += 1
 
         
