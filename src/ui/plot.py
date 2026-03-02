@@ -2,24 +2,15 @@ import pandas as pd
 import datetime as dt
 import plotly.express as px
 import streamlit as st
-from typing import Optional
 from plotly.colors import qualitative as q
 import plotly.graph_objects as go
-import numpy as np
-import re
-from colorsys import rgb_to_hls, hls_to_rgb
 
 from ui.utils.phase_controls import prev_phase, next_phase
 from ui.utils.project_info import render_project_info
 from ui.utils.status_badges import STATUS_BADGES
 from ui.gantt_state_options import render_gantt_options
 
-from logic.post_mortem import PostMortemAnalyzer
-
-from models.gantt_models import GanttInputs
 from models.project import Project
-from models.session import SessionModel
-from models.phase import Phase 
 from logic.gantt_builder import build_timeline
 
 from streamlit_plotly_events2 import plotly_events 
