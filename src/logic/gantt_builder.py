@@ -304,8 +304,11 @@ def build_timeline(project: Project, inputs: GanttState, selected_uuid: str | No
     df_ms = df[is_milestone].copy()
     df_bar = df[~is_milestone].copy()
 
-    x_range = [min(project.start_date, project.actual_start if project.actual_start else project.start_date), 
-               max(project.end_date, project.actual_end if project.actual_end else project.end_date)]
+    x_range = [project.start_date, project.end_date]
+    if inputs.show_actual:
+        x_range = [min(project.start_date, project.actual_start if project.actual_start else project.start_date), 
+                max(project.end_date, project.actual_end if project.actual_end else project.end_date)]
+    
     if inputs.x_axis_start and inputs.x_axis_end:
         x_range = [inputs.x_axis_start, inputs.x_axis_end]
 
