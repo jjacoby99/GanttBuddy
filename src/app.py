@@ -34,9 +34,12 @@ manage = st.Page("pages/manage.py", title="Manage", icon=":material/manage_accou
 pages = {
     "Home": [home, account], 
     "Projects": [projects, feed, build],
-    "Workspace": [plan, execute, delays, analytics],
-    "Manage": [manage]
 }
+
+if st.session_state.session.project:
+    pages["Workspace"] = [plan, execute, delays, analytics]
+
+pages["Manage"] = [manage]
 
 # Admin-only
 if is_admin():
