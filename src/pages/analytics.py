@@ -372,7 +372,7 @@ def df_inching_series(payload: dict, start_dt: Optional[datetime] = None) -> pd.
     return df.sort_values(["x", "series"])
 
 
-def chart_inching_series(df: pd.DataFrame, units: Literal["mins", "hours"] = "mins"):
+def chart_inching_series(df: pd.DataFrame, stat_name: str = "Avg Inch time", units: Literal["mins", "hours"] = "mins"):
     if df.empty:
         st.info("No inching timeseries data yet.")
         return
@@ -382,12 +382,12 @@ def chart_inching_series(df: pd.DataFrame, units: Literal["mins", "hours"] = "mi
         .mark_line(point=True)
         .encode(
             x=alt.X("x:T", title="Date"),
-            y=alt.Y("y:Q", title=f"Avg inch time ({units})"),
+            y=alt.Y("y:Q", title=f"{stat_name} ({units})"),
             color=alt.Color("series:N", title=None),
             tooltip=[
                 alt.Tooltip("x:T", title="Date"),
                 alt.Tooltip("series:N", title="Series"),
-                alt.Tooltip("y:Q", title=f"Avg ({units})", format=",.2f"),
+                alt.Tooltip("y:Q", title=f"{stat_name} ({units})", format=",.2f"),
             ],
         )
     )
@@ -541,7 +541,6 @@ def main():
 
     meta = dash.get("metadata") or {}
     as_of = dash.get("as_of")
-
     # Header: project context
     left, right = st.columns([2, 1])
     with left:
@@ -864,7 +863,7 @@ def main():
         
         
         with plot_col_2:
-            chart_inching_series(df_ttfi_filtered, units="mins")
+            chart_inching_series(df_ttfi_filtered, stat_name="Time to First Inch", units="mins")
 
         st.divider()
 
