@@ -1,6 +1,6 @@
 import streamlit as st
 
-from models.project import Project
+from models.project import Project, ProjectType
 
 from logic.backend.project_list import get_projects
 from logic.backend.api_client import fetch_project_snapshot
@@ -53,7 +53,11 @@ def render_load_project() -> Project:
         st.error(f"Error loading project *{projects[selected_project_id]}*")
         st.stop()
     
-    st.session_state.session.project = snapshot_to_project(proj_snapshot)
+    proj, metadata = snapshot_to_project(proj_snapshot)
+    st.session_state.session.project = proj
+
+    if metadata and proj.project_type == ProjectType.MILL_RELINE: 
+        st.session_state["reline_metadata"] = metadata
     st.session_state["selected_project_id"] = selected_project_id
     st.success(f"*{projects[selected_project_id]}* Loaded Successfully!")
     st.rerun()
