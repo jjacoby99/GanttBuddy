@@ -74,7 +74,6 @@ class Project:
         if not self.shift_definition or not self.project_type == ProjectType.MILL_RELINE:
             return None
         first_planned_inch = self.first_task_of_type(TaskType.INCH, planned=True)
-        print(f"First planned inch start: {first_planned_inch}")
 
         if not first_planned_inch: # no inch tasks found
             return None
@@ -83,14 +82,12 @@ class Project:
 
         day_start = datetime.combine(first_planned_inch.date(), self.shift_definition.day_start_time).astimezone()
         day_end = day_start + timedelta(hours=shift_dur_hours)
-        print(f"Day shift: {day_start.strftime("%d/%m/%Y, %H:%M")} -> {day_end.strftime("%d/%m/%Y, %H:%M")}")
         
         if first_planned_inch >= day_start and first_planned_inch <= day_end:
             return day_start
         
         night_start = datetime.combine(first_planned_inch.date(), self.shift_definition.night_start_time).astimezone()
         night_end = night_start + timedelta(hours=shift_dur_hours)
-        print(f"Night shift: {night_start.strftime("%d/%m/%Y, %H:%M")} -> {night_end.strftime("%d/%m/%Y, %H:%M")}")
 
         if first_planned_inch >= night_start and first_planned_inch <= night_end:
             return night_start
