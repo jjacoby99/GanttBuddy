@@ -63,6 +63,7 @@ def open_project(project_id: str) -> None:
     if project.project_type == ProjectType.MILL_RELINE and metadata is not None:
         st.session_state["reline_metadata"] = metadata 
     
+    st.cache_data.clear() # clear cache on new project load
     st.rerun()
 
 
