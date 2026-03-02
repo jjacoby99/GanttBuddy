@@ -478,7 +478,7 @@ def chart_inching_shift_bars(df: pd.DataFrame):
 # -------------------------
 # Page
 # -------------------------
-@st.cache_data(ttl=30, show_spinner=False)
+#@st.cache_data(ttl=30, show_spinner=False)
 def fetch_inching(project_id: str, date_from: Optional[date], date_to: Optional[date]) -> dict:
     headers = st.session_state.get("auth_headers", {})
     pid = st.session_state.get("project_id") or st.session_state.session.project.uuid
@@ -802,16 +802,16 @@ def main():
                 nv = float(n_avg) if n_avg is not None else None
                 if dv is not None and nv is not None:
                     if dv < nv - 0.01:
-                        pill = (f"Day {_fmt_num(nv - dv)} min faster", "pill-good")
+                        pill = (f"Day {_fmt_num(nv - dv)} min faster", "pill-neutral")
                     elif dv > nv + 0.01:
-                        pill = (f"Night {_fmt_num(dv - nv)} min faster", "pill-good")
+                        pill = (f"Night {_fmt_num(dv - nv)} min faster", "pill-neutral")
                     else:
                         pill = ("Similar", "pill-neutral")
             except Exception:
                 pill = None
 
             with c2.container():
-                _kpi_card("Count", _fmt_num(p_cnt, decimals=0), "Inch tasks with actuals")
+                _kpi_card("Count", _fmt_num(p_cnt, decimals=0), "Inches completed")
                 st.space("stretch")
                 _kpi_card("Day vs Night Avg", f"{_fmt_num(d_avg)} / {_fmt_num(n_avg)} min", "Avg inch time", pill=pill)
         
