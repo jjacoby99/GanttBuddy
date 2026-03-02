@@ -67,6 +67,7 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
     s = snapshot["settings"]
     shift_def = snapshot["shift_definition"]
 
+    reline_metadata = None
     if p.get("project_type") == "MILL_RELINE":
         metadata = snapshot.get("metadata", None)
         if not metadata:
@@ -122,12 +123,13 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
         settings=settings,
         project_type=project_type
     )
-
-    sd = get_shift_definition(shift_definition=shift_def)
-    project.shift_definition = sd
-
-    sas = get_shift_assignments(shift_assignments=shift_assignments)
-    project.shift_assignments = sas
+    if shift_def:
+        sd = get_shift_definition(shift_definition=shift_def)
+        project.shift_definition = sd
+    
+    if shift_assignments:
+        sas = get_shift_assignments(shift_assignments=shift_assignments)
+        project.shift_assignments = sas
     # Create phases ordered by backend "position"
     phases_sorted = sorted(phases, key=lambda x: x.get("position", 0))
     for ph in phases_sorted:
