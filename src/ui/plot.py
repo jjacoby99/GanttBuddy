@@ -1,5 +1,6 @@
 import pandas as pd
 import datetime as dt
+import copy
 import plotly.express as px
 import streamlit as st
 from plotly.colors import qualitative as q
@@ -11,12 +12,27 @@ from ui.utils.status_badges import STATUS_BADGES
 from ui.gantt_state_options import render_gantt_options
 
 from models.project import Project
-from logic.gantt_builder import build_timeline
+from logic.gantt_builder import build_timeline, _normalize_delay_type, _prep_delay_windows
 
 from streamlit_plotly_events2 import plotly_events 
-
+from zoneinfo import ZoneInfo
 
 import streamlit as st
+
+from models.delay import DelayEditorRow
+
+def is_timezone_aware(dt):
+    return dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
+
+def delay_rows_tz(delay_rows: list[DelayEditorRow]) -> list[DelayEditorRow]:
+    out = []
+    for delay in delay_rows:
+        new_delay = delay
+        new_delay.start_dt = new_delay.start_dt.replace(tzinfo=ZoneInfo("America/Vancouver"))
+        new_delay.end_dt = new_delay.end_dt.replace(tzinfo=ZoneInfo("America/Vancouver"))
+
+        out.append(new_delay)
+    return out
 
 def _get_customdata_from_event(fig, pt: dict):
     """
@@ -145,19 +161,36 @@ def render_gantt(session):
 
         phase_view.add_phase(phase)
 
-    
+    # Try to source delay rows
+    delay_rows_naive = st.session_state.get("delays_rows_last_saved", [])
+
+    delay_rows = delay_rows_tz(delay_rows_naive)
 
     with st.popover(label="Gantt Chart Options"):
-        render_gantt_options(st.session_state.gantt_state) # modifies the gantt_state in-place
+        render_gantt_options(st.session_state.gantt_state, delay_rows=delay_rows)
+
+    delay_windows = None
+    if delay_rows and st.session_state.gantt_state.show_delay_windows:
+        allowed = set(st.session_state.gantt_state.selected_delay_types) if st.session_state.gantt_state.selected_delay_types else None
+        delay_windows = _prep_delay_windows(delay_rows, allowed_types=allowed)
+
 
     selected_proj = session.project if not phase_view else phase_view
 
     selected_uuid = st.session_state.get("gantt_selected_uuid", None)
+
+    inputs_for_plot = copy.copy(st.session_state.gantt_state)
+
+    if delay_windows:
+        inputs_for_plot.show_planned=False
+        inputs_for_plot.show_actual=True
+    
     try:
         fig = build_timeline(
             project=selected_proj,
-            inputs=st.session_state.gantt_state,
-            selected_uuid=selected_uuid # phase or task uuid to highlight.
+            inputs=inputs_for_plot,
+            selected_uuid=selected_uuid, # phase or task uuid to highlight.
+            delay_windows=delay_windows,
         )
     except ValueError as e:
         st.info(f"Add some tasks to your project to view the Gantt chart.")
