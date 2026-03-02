@@ -2,13 +2,20 @@ import requests
 import streamlit as st
 import pydantic
 import datetime as dt
+from typing import List
+from uuid import UUID
+from zoneinfo import ZoneInfo
+import pandas as pd
 
+from models.delay import Delay, DelayEditorRow  
 from typing import Optional
 
 from logic.backend.export_project import project_to_import_payload
 
 from models.project import Project
 from models.crew import CrewOut
+from models.delay import DelayType
+
 
 API_BASE = "http://127.0.0.1:8000"  # change for deployed
 
@@ -188,7 +195,6 @@ def fetch_inching_performance(
     if date_to:
         params["date_to"] = date_to.isoformat()
 
-    # Adjust base_url / request helper to match how fetch_analytics is implemented in your codebase.
     url = f"{API_BASE}/projects/{project_id}/analytics/inching-performance"
 
     try:
@@ -202,3 +208,94 @@ def fetch_inching_performance(
         except Exception:
             pass
         raise ValueError(f"Failed to fetch analytics for {project_id}: {e} {body}")
+    
+
+def fetch_delays(
+        headers: dict,
+        project_id: str,
+        delay_type: Optional[DelayType] = None,
+        shift_assignment_id: Optional[str] = None,
+        time_min: Optional[dt.datetime] = None,
+        time_max: Optional[dt.datetime] = None,
+        limit: Optional[int] = 200,
+):
+    params = {"project_id": project_id}
+    if time_min:
+        params["time_min"] = time_min.isoformat()
+    if time_max:
+        params["time_max"] = time_max.isoformat()
+    if delay_type:
+        params["delay_type"] = delay_type.value
+    if shift_assignment_id:
+        params["shift_assignment_id"] = shift_assignment_id
+    if limit:
+        params["limit"] = limit
+
+
+    url = f"{API_BASE}/delays"
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to fetch delays for {project_id}: {e} {body}")
+    
+
+LOCAL_TZ = ZoneInfo("America/Vancouver")
+
+
+def _to_utc_iso(x):
+    """Convert pandas/py datetimes to UTC ISO8601 string with Z; keep None as None."""
+    if x is None:
+        return None
+
+    # pandas Timestamp -> python datetime
+    if isinstance(x, pd.Timestamp):
+        x = x.to_pydatetime()
+
+    if not isinstance(x, dt.datetime):
+        return x  # leave non-datetime types alone
+
+    # If Streamlit returns naive local time, interpret as LOCAL_TZ
+    if x.tzinfo is None:
+        x = x.replace(tzinfo=LOCAL_TZ)
+
+    x_utc = x.astimezone(dt.UTC)
+    # Use Z suffix
+    return x_utc.isoformat().replace("+00:00", "Z")
+
+
+def save_delays(
+    *,
+    headers: dict,
+    project_id: str | UUID,
+    edited_rows: List[DelayEditorRow],
+    replace: bool = False,
+) -> list[Delay]:
+    pid = str(project_id)
+
+    payload = []
+    for r in edited_rows:
+        d = r.model_dump()  # python objects
+        
+        # normalize id
+        if not d.get("id"):
+            d["id"] = None
+
+        # normalize datetimes -> UTC ISO strings
+        d["start_dt"] = _to_utc_iso(d.get("start_dt"))
+        d["end_dt"] = _to_utc_iso(d.get("end_dt"))
+
+        payload.append(d)
+
+    url = f"{API_BASE}/delays/{pid}/delays"
+    params = {"replace": "true"} if replace else None
+    resp = requests.put(url, headers=headers, json=payload, params=params, timeout=30)
+    resp.raise_for_status()
+
+    return [Delay.model_validate(x) for x in resp.json()]
