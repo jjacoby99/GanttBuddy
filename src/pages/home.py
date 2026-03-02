@@ -63,8 +63,7 @@ def open_project(project_id: str) -> None:
     if project.project_type == ProjectType.MILL_RELINE and metadata is not None:
         st.session_state["reline_metadata"] = metadata 
     
-    st.switch_page("pages/plan.py")
-    st.toast("Loaded project successfully", icon="✅")
+    st.rerun()
 
 
 def go_to_projects_feed() -> None:
