@@ -1,8 +1,10 @@
 import streamlit as st
 
+from models.delay import DelayEditorRow, DelayType
 from models.gantt_state import GanttState
+from logic.gantt_builder import _normalize_delay_type
 
-def render_gantt_options(state: GanttState):
+def render_gantt_options(state: GanttState, delay_rows: list[DelayEditorRow]):
     st.subheader("Gantt Chart Options")
     c1, c2 = st.columns(2,border=True)
     with c1:
@@ -33,6 +35,22 @@ def render_gantt_options(state: GanttState):
             value=state.actual_color,
             key="gantt_option_actual_color"
         )
+
+    state.show_delay_windows = st.checkbox(
+        label="Show registered delays",
+        value=state.show_delay_windows,
+        key="gantt_option_show_delay_windows",
+    )
+    all_types = sorted({_normalize_delay_type(r.delay_type) for r in delay_rows})
+    selected_delay_types = all_types
+    if state.show_delay_windows:
+        selected_delay_types = st.multiselect(
+            "Delay types",
+            options=all_types,
+            default=all_types,
+            key="gantt_overlay_delay_types",
+        )
+        
 
     state.shade_non_working_time = st.checkbox(
         label="Shade Non-Working Time",
