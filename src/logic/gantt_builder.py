@@ -1,3 +1,4 @@
+from __future__ import annotations
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -16,6 +17,212 @@ from models.gantt_state import GanttState
 # -----------------------------
 # Label formatting helpers
 # -----------------------------
+
+import datetime as dt
+from typing import Iterable, Optional
+
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+
+
+def _fmt_dt_local_naive(x: dt.datetime) -> str:
+    # Assumes x is already in the same "wall clock" basis as the Gantt.
+    return x.strftime("%Y-%m-%d %H:%M")
+
+
+def _fmt_minutes(mins: int) -> str:
+    mins = int(mins)
+    h, m = divmod(mins, 60)
+    if h <= 0:
+        return f"{m}m"
+    return f"{h}h {m}m"
+
+
+def _normalize_delay_type(x) -> str:
+    # DelayType enum or string
+    if x is None:
+        return "OTHER"
+    return getattr(x, "value", str(x))
+
+
+def _prep_delay_windows(
+    rows: list,
+    *,
+    allowed_types: Optional[set[str]] = None,
+) -> tuple[tuple[str, str, dt.datetime, dt.datetime, int, str], ...]:
+    """
+    Returns hashable delay windows for caching.
+    Tuple shape:
+      (key, delay_type, start_dt, end_dt, duration_minutes, description)
+    """
+    out: list[tuple[str, str, dt.datetime, dt.datetime, int, str]] = []
+
+    for r in rows or []:
+        delay_type = _normalize_delay_type(getattr(r, "delay_type", None))
+        if allowed_types is not None and delay_type not in allowed_types:
+            continue
+
+        desc = (getattr(r, "description", "") or "").strip()
+        dur = int(getattr(r, "duration_minutes", 0) or 0)
+
+        start = getattr(r, "start_dt", None)
+        end = getattr(r, "end_dt", None)
+
+        if start is None and end is None:
+            continue
+
+        if start is not None and end is None and dur > 0:
+            end = start + dt.timedelta(minutes=dur)
+        elif end is not None and start is None and dur > 0:
+            start = end - dt.timedelta(minutes=dur)
+
+        if start is None or end is None:
+            continue
+
+        # Ensure ordering
+        if end < start:
+            start, end = end, start
+
+        key = str(getattr(r, "id", None) or getattr(r, "client_id", None) or f"{delay_type}:{start}:{end}")
+        out.append((key, delay_type, start, end, dur, desc))
+
+    # Stable ordering helps cache + deterministic rendering
+    out.sort(key=lambda t: (t[2], t[3], t[1], t[0]))
+    return tuple(out)
+
+
+def _pick_overlap_df(df: pd.DataFrame, show_actual: bool) -> pd.DataFrame:
+    tasks = df[df["Level"] == "Task"].copy()
+    if tasks.empty:
+        return tasks
+
+    if show_actual and (tasks["Type"] == "Actual").any():
+        tasks = tasks[tasks["Type"] == "Actual"]
+        if not tasks.empty:
+            return tasks
+
+    return tasks[tasks["Type"] == "Planned"]
+
+
+def _overlap_summary(tasks_df: pd.DataFrame, start: dt.datetime, end: dt.datetime) -> str:
+    if tasks_df is None or tasks_df.empty:
+        return "No tasks in current view"
+
+    overlaps = tasks_df[(tasks_df["Start"] < end) & (tasks_df["Finish"] > start)]
+    if overlaps.empty:
+        return "No overlapping tasks in current view"
+
+    labels = (
+        overlaps["Label"]
+        .dropna()
+        .astype(str)
+        .map(lambda s: s.strip())
+        .tolist()
+    )
+    # de-dupe preserving order
+    labels = list(dict.fromkeys([x for x in labels if x]))
+
+    n = len(labels)
+    head = labels[:6]
+    tail = "" if n <= 6 else f" (+{n - 6} more)"
+    return f"{n} tasks: {', '.join(head)}{tail}"
+
+
+def _add_delay_overlays(
+    *,
+    fig: go.Figure,
+    df: pd.DataFrame,
+    delay_windows: tuple[tuple[str, str, dt.datetime, dt.datetime, int, str], ...],
+    x_range: list,
+    show_actual: bool,
+) -> None:
+    if not delay_windows:
+        return
+
+    # Hidden y-axis for "pins" at top of chart (avoids messing with categorical y)
+    fig.update_layout(
+        yaxis2=dict(
+            overlaying="y",
+            anchor="x",
+            range=[0.0, 1.0],
+            visible=False,
+        )
+    )
+
+    # Color per delay type (light, translucent bands)
+    types = sorted({t[1] for t in delay_windows})
+    palette = px.colors.qualitative.G10
+    type_color = {typ: palette[i % len(palette)] for i, typ in enumerate(types)}
+
+    x0, x1 = x_range[0], x_range[1]
+
+    tasks_df = _pick_overlap_df(df, show_actual=show_actual)
+
+    # Add background bands (shapes)
+    for _, typ, start, end, _, _ in delay_windows:
+        # Skip windows completely outside current view
+        if end <= x0 or start >= x1:
+            continue
+
+        fig.add_vrect(
+            x0=max(start, x0),
+            x1=min(end, x1),
+            fillcolor=type_color.get(typ, "rgba(0,0,0,0.12)"),
+            opacity=0.18,
+            layer="below",
+            line_width=1,
+            line_dash="dot",
+        )
+
+    # Add hover "pins" grouped by type (one trace per type)
+    by_type: dict[str, list[tuple[dt.datetime, list[str]]]] = {}
+    for _, typ, start, end, dur, desc in delay_windows:
+        if end <= x0 or start >= x1:
+            continue
+
+        mid = start + (end - start) / 2
+        impacted = _overlap_summary(tasks_df, start, end)
+
+        cd = [
+            typ,
+            desc if desc else "(no description)",
+            _fmt_dt_local_naive(start),
+            _fmt_dt_local_naive(end),
+            _fmt_minutes(int((end - start).total_seconds() // 60) if (end and start) else dur),
+            impacted,
+        ]
+        by_type.setdefault(typ, []).append((mid, cd))
+
+    for typ, points in by_type.items():
+        xs = [p[0] for p in points]
+        customdata = [p[1] for p in points]
+
+        fig.add_trace(
+            go.Scatter(
+                x=xs,
+                y=[0.985] * len(xs),
+                yaxis="y2",
+                mode="markers",
+                name=f"Delay: {typ}",
+                legendgroup=f"delay_{typ}",
+                showlegend=True,
+                marker=dict(
+                    size=10,
+                    symbol="triangle-down",
+                ),
+                customdata=np.array(customdata, dtype=object),
+                hovertemplate = "<br>".join([
+                    "<b>Delay</b>: %{customdata[0]}",
+                    "<b>Description</b>: %{customdata[1]}",
+                    "<b>Start</b>: %{customdata[2]}",
+                    "<b>End</b>: %{customdata[3]}",
+                    "<b>Duration</b>: %{customdata[4]}",
+                    "<b>Overlaps</b>: %{customdata[5]}",
+                ]) + "<extra></extra>"
+            )
+        )
 
 def compute_left_margin(tick_labels: list[str]) -> int:
     if not tick_labels:
@@ -83,9 +290,7 @@ def build_color_map(df: pd.DataFrame, planned_color: str, actual_color: str) -> 
 
     return color_map
 
-# -----------------------------
-# Build DF with the extra info you need
-# -----------------------------
+
 @cache_data
 def build_gantt_df(project: Project, inputs: GanttState) -> pd.DataFrame | None:
     rows: list[dict] = []
@@ -279,40 +484,70 @@ def _apply_selection_styling(fig: go.Figure, selected_uuid: str | None) -> None:
 
 
 @cache_data
-def build_timeline(project: Project, inputs: GanttState, selected_uuid: str | None = None) -> go.Figure:
+def build_timeline(
+    project: Project,
+    inputs: GanttState,
+    selected_uuid: str | None = None,
+    delay_windows: tuple[tuple[str, str, dt.datetime, dt.datetime, int, str], ...] | None = None,
+) -> go.Figure:
     df = build_gantt_df(project, inputs)
     if df is None or df.empty:
         raise ValueError(f"No data available to build Gantt timeline for project '{project.name}'.")
 
+    allowed_types = []
+    if inputs.show_planned:
+        allowed_types.append("Planned")
+    if inputs.show_actual:
+        allowed_types.append("Actual")
+
+    if not allowed_types:
+        raise ValueError("Nothing to show: both planned and actual are turned off")
+
+
+    df = df[df["Type"].isin(allowed_types)].copy()
+    if df.empty:
+        raise ValueError("No timeline rows match the current planned/actual filters.")
+    
     color_map = build_color_map(
         df=df,
         planned_color=inputs.planned_color,
         actual_color=inputs.actual_color,
     )
 
-    # preserve your insertion order for y
     order = list(dict.fromkeys(df["RowID"].tolist()))
-    labels = list(dict.fromkeys(df["DisplayLabel"].tolist()))
-    label_map = {}
+    label_map: dict[str, str] = {}
     for _, r in df.iterrows():
         rid = r["RowID"]
         if rid not in label_map:
             label_map[rid] = r["DisplayLabel"]
 
-    # Split milestones out (bars with zero duration are basically invisible)
     is_milestone = (df["Level"] == "Task") & (df["Type"] == "Planned") & (df["IsMilestone"] == True)
     df_ms = df[is_milestone].copy()
     df_bar = df[~is_milestone].copy()
 
     x_range = [project.start_date, project.end_date]
+    start_candidates = []
+    end_candidates = []
+
+    if inputs.show_planned:
+        start_candidates.append(project.start_date)
+        end_candidates.append(project.end_date)
+
     if inputs.show_actual:
-        x_range = [min(project.start_date, project.actual_start if project.actual_start else project.start_date), 
-                max(project.end_date, project.actual_end if project.actual_end else project.end_date)]
-    
+        if project.actual_start:
+            start_candidates.append(project.actual_start)
+
+        if project.actual_end:
+            end_candidates.append(project.actual_end)
+
+    x_range = [
+        min(start_candidates),
+        max(end_candidates)
+    ]
+
     if inputs.x_axis_start and inputs.x_axis_end:
         x_range = [inputs.x_axis_start, inputs.x_axis_end]
 
-    # Base timeline bars
     fig = px.timeline(
         df_bar,
         x_start="Start",
@@ -323,22 +558,21 @@ def build_timeline(project: Project, inputs: GanttState, selected_uuid: str | No
         color_discrete_map=color_map,
         category_orders={"RowID": order},
         custom_data=[
-            "Label",                #0
-            "Start_str",            #1
-            "Finish_str",           #2
-            "Type",                 #3
-            "UUID",                 #4
-            "Level",                #5
-            "PhaseID",              #6
-            "Status",               #7
-            "PlannedDur_str",       #8
-            "ActualDur_str",        #9
-            "IsMilestone",          #10
+            "Label",          #0
+            "Start_str",      #1
+            "Finish_str",     #2
+            "Type",           #3
+            "UUID",           #4
+            "Level",          #5
+            "PhaseID",        #6
+            "Status",         #7
+            "PlannedDur_str", #8
+            "ActualDur_str",  #9
+            "IsMilestone",    #10
         ],
     )
 
     ticktext = [label_map[v] for v in order]
-    # Y-axis formatting: show phases + indented tasks
     fig.update_yaxes(
         categoryorder="array",
         categoryarray=order,
@@ -347,12 +581,9 @@ def build_timeline(project: Project, inputs: GanttState, selected_uuid: str | No
         ticktext=ticktext,
         autorange="reversed",
         title=None,
-        automargin=True
+        automargin=True,
     )
 
-    # fig.update_layout(
-    #     margin=dict(l=compute_left_margin(ticktext),right=10,t=20,b=10)
-    # )
     fig.update_xaxes(
         title="Project Time",
         automargin=True,
@@ -360,20 +591,24 @@ def build_timeline(project: Project, inputs: GanttState, selected_uuid: str | No
         gridwidth=1,
     )
 
-    # Legend grouping by phase (your approach, but keep the trace name readable)
     for tr in fig.data:
         if isinstance(tr.name, str) and tr.name.count("|") >= 2:
             ph_name, level, typ = tr.name.split("|", 2)
             tr.legendgroup = ph_name
             tr.name = ph_name
-            tr.showlegend = (level == "Phase" and typ == "Planned")
 
-        # base outline (selection styling will override per-point)
+            if level == "Phase":
+                if inputs.show_planned:
+                    tr.showlegend = (typ == "Planned")
+                else:
+                    tr.showlegend = (typ == "Actual")
+            else:
+                tr.showlegend = False
+
         if hasattr(tr, "marker") and tr.marker is not None:
             tr.marker.line.width = 1
             tr.marker.line.color = "rgba(0,0,0,0.25)"
 
-    # Milestone diamonds (planned tasks only)
     if not df_ms.empty:
         fig.add_trace(
             go.Scatter(
@@ -382,80 +617,84 @@ def build_timeline(project: Project, inputs: GanttState, selected_uuid: str | No
                 mode="markers",
                 name="Milestone",
                 marker=dict(symbol="diamond", size=10, line=dict(width=1.5, color="black")),
-                # mirror the same customdata layout so clicks/hover are consistent
-                customdata=np.stack([
-                    df_ms["Label"],
-                    df_ms["Start_str"],
-                    df_ms["Finish_str"],
-                    df_ms["Type"],
-                    df_ms["UUID"],
-                    df_ms["Level"],
-                    df_ms["PhaseID"],
-                    df_ms["Status"],
-                    df_ms["PlannedDur_str"],
-                    df_ms["ActualDur_str"],
-                    df_ms["IsMilestone"],
-                ], axis=1),
-                hovertemplate=(
-                    "<b>%{customdata[0]}\n</b><br>"
-                    "Start: %{customdata[1]}<br>"
-                    "Type: %{customdata[3]}<br>"
-                    "Planned: %{customdata[8]}<br>"
-                    "Status: %{customdata[7]}<br>"
-                    "<span style='opacity:0.7'>\"Click to select\"</span>"
-                    "<extra></extra>"
+                customdata=np.stack(
+                    [
+                        df_ms["Label"],
+                        df_ms["Start_str"],
+                        df_ms["Finish_str"],
+                        df_ms["Type"],
+                        df_ms["UUID"],
+                        df_ms["Level"],
+                        df_ms["PhaseID"],
+                        df_ms["Status"],
+                        df_ms["PlannedDur_str"],
+                        df_ms["ActualDur_str"],
+                        df_ms["IsMilestone"],
+                    ],
+                    axis=1,
                 ),
+                hovertemplate = "<br>".join([
+                    "<b>%{customdata[0]}</b>",
+                    "<b>Start</b>: %{customdata[1]}",
+                    "<b>Finish</b>: %{customdata[2]}",
+                    "<b>Type</b>: %{customdata[3]}",
+                    "<b>Planned</b>: %{customdata[8]}",
+                    "<b>Actual</b>: %{customdata[9]}",
+                    "<b>Status</b>: %{customdata[7]}",
+                    "<span style='opacity:0.7'>Click to select</span>",
+                ]) + "<extra></extra>",
                 showlegend=True,
                 legendgroup="milestones",
             )
         )
 
-    # Hover template for bar traces
     for tr in fig.data:
         if getattr(tr, "customdata", None) is None:
-            
             continue
-        tr.hovertemplate = (
-            "<b>%{customdata[0]}</b><br>"
-            "<b>Start</b>: %{customdata[1]}<br>"
-            "<b>Finish</b>: %{customdata[2]}<br>"
-            "<b>Type</b>: %{customdata[3]}<br>"
-            "<b>Planned</b>: %{customdata[8]}<br>"
-            # Actual only if exists (string will be "" otherwise)
-            "<b>Actual</b>: %{customdata[9]}<br>"
-            "<b>Status</b>: %{customdata[7]}<br>"
-            "<span style='opacity:0.7'>Click to select</span>"
-            "<extra></extra>"
-        )
+        tr.hovertemplate = "<br>".join([
+            "<b>%{customdata[0]}</b>",
+            "<b>Start</b>: %{customdata[1]}",
+            "<b>Finish</b>: %{customdata[2]}",
+            "<b>Type</b>: %{customdata[3]}",
+            "<b>Planned</b>: %{customdata[8]}",
+            "<b>Actual</b>: %{customdata[9]}",
+            "<b>Status</b>: %{customdata[7]}",
+            "<span style='opacity:0.7'>Click to select</span>",
+        ]) + "<extra></extra>"
 
-    # Layout polish
     row_height = 28
+    title_left = project.name.split("\n")[0]
     fig.update_layout(
-        title={
-            'text': f"<b>{project.name.split("\n")[0]} Gantt<b>",
-            'y': 1,
-            'x': 0.5,
-            'xanchor': 'center',
-            'yanchor': 'top',
-            'font': dict(size=20)
-        },
+        title=dict(
+            text=f"<b>{title_left} Gantt</b>",
+            y=1,
+            x=0.5,
+            xanchor="center",
+            yanchor="top",
+            font=dict(size=20),
+        ),
         height=max(260, int(row_height * len(order))),
         margin=dict(l=10, r=10, t=20, b=10),
         legend_title_text="Phase",
         legend_tracegroupgap=6,
         showlegend=True,
         hovermode="closest",
-        hoverlabel=dict(
-            align="left",
-            namelength=-1
-        ),
+        hoverlabel=dict(align="left", namelength=-1),
         legend=dict(groupclick="togglegroup", itemclick="toggleothers"),
         clickmode="event+select",
     )
 
-    # Apply selection styling after the figure is built
-    _apply_selection_styling(fig, selected_uuid)
+    # Add delay overlays (bands + hover pins)
+    if delay_windows:
+        _add_delay_overlays(
+            fig=fig,
+            df=df,
+            delay_windows=delay_windows,
+            x_range=x_range,
+            show_actual=inputs.show_actual,
+        )
 
+    _apply_selection_styling(fig, selected_uuid)
     return fig
 
 
