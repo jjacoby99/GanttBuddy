@@ -8,7 +8,7 @@ class PlanState:
     show_actuals: bool = False
     highlight_delayed_tasks: bool = False
     initialized: bool = False
-    view_mode: Literal["Simple", "Detailed"] = "Simple"
+    view_mode: Literal["Simple", "Detailed"] = "Detailed"
 
     def initialize_expanded_phases(self, phase_ids: list[str]):
         if self.initialized:
