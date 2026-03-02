@@ -60,4 +60,5 @@ def render_load_project() -> Project:
         st.session_state["reline_metadata"] = metadata
     st.session_state["selected_project_id"] = selected_project_id
     st.success(f"*{projects[selected_project_id]}* Loaded Successfully!")
+    st.cache_data.clear()
     st.rerun()

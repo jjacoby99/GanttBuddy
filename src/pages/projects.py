@@ -60,6 +60,7 @@ def render_select_project(projects: dict):
         
     st.session_state["selected_project_id"] = selected_project_id
     st.success(f"*{projects[selected_project_id]}* Loaded Successfully!")
+    st.cache_data.clear()
     return
 
 
