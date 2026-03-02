@@ -92,7 +92,7 @@ def render_delay_register():
             hide_index=True,
             width="content",
             disabled=pending,
-            column_order=["description", "delay_type", "duration_minutes", "start_dt", "end_dt"],
+            column_order=["description", "delay_type", "duration_minutes", "start_dt", "end_dt", "_select"],
             column_config={
                 "description": st.column_config.TextColumn(
                     label="Delay Description",
@@ -120,6 +120,10 @@ def render_delay_register():
                     label="Duration (mins)",
                     help="The duration of the delay: total lost time.",
                 ),
+                "_select": st.column_config.SelectboxColumn(
+                    label="View Details",
+                    help="Select to view tasks affected by a given delay"
+                )
             },
             num_rows="dynamic",
         )
