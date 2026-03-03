@@ -21,6 +21,17 @@ class DelayType(str, Enum):
     MANPOWER_SHORTAGE = "MANPOWER_SHORTAGE"
     OTHER = "OTHER"
 
+DELAY_BADGE: dict[DelayType, tuple[str, str, str]] = {
+    DelayType.PERFORMANCE:        ("blue",   ":material/speed:",             "Performance"),
+    DelayType.EQUIPMENT:          ("violet", ":material/construction:",      "Equipment"),
+    DelayType.SAFETY:             ("red",    ":material/health_and_safety:", "Safety"),
+    DelayType.FOUND_WORK:         ("green",  ":material/search:",            "Found work"),
+    DelayType.PREPARATION:        ("yellow", ":material/checklist:",         "Preparation"),
+    DelayType.MANPOWER_SHORTAGE:  ("orange", ":material/group_remove:",      "Manpower shortage"),
+    DelayType.OTHER:              ("gray",   ":material/more_horiz:",        "Other"),
+}
+ 
+
 class Delay(BaseModel):
     id: str
     project_id: str
