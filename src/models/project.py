@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 import pandas as pd
-from typing import Optional
+from typing import Optional, Literal
 from models.task import Task, TaskType
 from models.phase import Phase
 from models.project_settings import ProjectSettings
@@ -113,6 +113,48 @@ class Project:
                 
                 return None
         return None
+
+    def tasks_in_range(self, start_dt: datetime, end_dt: datetime, 
+                       planned: bool = True, mode: Literal["strict", "overlap"] = "strict"):
+        """ 
+            Returns all tasks that fall within a given time window from start_dt -> end_dt.
+
+            Parameter options:
+
+            1. planned:
+            - if planned is True, the function will return tasks with planned start / end in the range
+            - if planned is False, the function will return tasks with actual start / end in the range
+
+            2. mode:
+            - if mode is "strict", only tasks with actual start and end in the datetime range will be returned
+            - if mode is "overlap", tasks with start OR end in (start_dt, end_dt) will be returned.
+
+            Exceptions:
+            - ValueError thrown if end_dt < start_dt 
+        """
+        if start_dt > end_dt:
+            raise ValueError("Window start must be less than the window end.")
+        
+        tasks_in_range = []
+        for task in self.get_task_list():
+            
+            start, end = (task.start_date, task.end_date) if planned else (task.actual_start, task.actual_end)
+
+            start_in_range = (start > start_dt and start < end_dt)
+            end_in_range = (end > start_dt and end < end_dt)
+
+            if mode == "overlap" and (start_in_range or end_in_range):
+                tasks_in_range.append(task)
+                continue
+
+            if mode == "strict" and (start_in_range and end_in_range):
+                tasks_in_range.append(task)
+                continue
+
+            if end > end_dt:
+                break # tasks in ascending order
+        
+        return tasks_in_range
 
     def completed_hours(self) -> tuple[float, float]:
         """
