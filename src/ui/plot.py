@@ -13,6 +13,7 @@ from ui.gantt_state_options import render_gantt_options
 
 from models.project import Project
 from logic.gantt_builder import build_timeline, _normalize_delay_type, _prep_delay_windows
+from logic.backend.delays import get_delays
 
 from streamlit_plotly_events2 import plotly_events 
 from zoneinfo import ZoneInfo
@@ -164,6 +165,16 @@ def render_gantt(session):
     # Try to source delay rows
     delay_rows_naive = st.session_state.get("delays_rows_last_saved", [])
 
+    # if not in session state, fetch
+    if not delay_rows_naive:
+        headers = st.session_state.get("auth_headers", {})
+        delays = get_delays(
+            headers=headers,
+            project_id=session.project.uuid
+        )
+
+        delay_rows_naive = DelayEditorRow.from_delay(delays)
+
     delay_rows = delay_rows_tz(delay_rows_naive)
 
     with st.popover(label="Gantt Chart Options"):
@@ -196,43 +207,8 @@ def render_gantt(session):
         st.info(f"Add some tasks to your project to view the Gantt chart.")
         return
 
-    
-    c1, c2 = st.columns([7,1])
+    st.plotly_chart(fig)
 
-    with c1:
-        st.plotly_chart(fig)
-        # render_gantt_with_click_selection(
-        #     fig=fig,
-        #     project_id=selected_proj.uuid,
-        #     key="project_gantt"
-        # )
-    
-    with c2:
-        payload = st.session_state.get("gantt_selected_payload", {})
-        if not payload:
-            st.info("Select a task")
-        else:
-            label, icon, color = STATUS_BADGES.get(
-                payload.get("status", "NOT_COMPLETED"),
-                ("NOT_COMPLETED", ":material/help:", "gray"),
-            )
-
-            
-            with st.popover(
-                label=f"**Info**"
-            ):
-                st.caption(f"**{payload.get("name", "name")}**")
-                st.metric(
-                    f"Planned Start",
-                    value=payload.get("planned_start_str")
-                )
-                st.metric(
-                    f"Planned Start",
-                    value=payload.get("planned_finish_str")
-                )
-                st.badge(label, icon=icon, color=color)
-
-        
     st.divider()
     render_project_info(selected_proj)
 
