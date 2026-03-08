@@ -36,8 +36,8 @@ pages = {
     "Projects": [projects, feed, build],
 }
 
-if st.session_state.session.project:
-    pages["Workspace"] = [plan, execute, delays, analytics]
+#if st.session_state.session.project:
+pages["Workspace"] = [plan, execute, delays, analytics]
 
 pages["Manage"] = [manage]
 
