@@ -142,8 +142,12 @@ class Project:
         tasks_in_range = []
         for task in self.get_task_list():
             
-            start, end = (task.start_date, task.end_date) if planned else (task.actual_start, task.actual_end)
+            # skip tasks that don't have actuals if we care about actuals (planned == False)
+            if not planned and not task.completed:
+                continue
 
+            start, end = (task.start_date, task.end_date) if planned else (task.actual_start, task.actual_end)
+        
             start_in_range = (start > start_dt and start < end_dt)
             end_in_range = (end > start_dt and end < end_dt)
 
