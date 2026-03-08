@@ -170,7 +170,8 @@ def render_gantt(session):
         headers = st.session_state.get("auth_headers", {})
         delays = get_delays(
             headers=headers,
-            project_id=session.project.uuid
+            project_id=session.project.uuid,
+            timezone=session.project.timezone,
         )
 
         delay_rows_naive = DelayEditorRow.from_delay(delays)
