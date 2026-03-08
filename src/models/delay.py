@@ -90,31 +90,6 @@ class DelayEditorRow(BaseModel):
         # Prefer DB id when present; otherwise client_id
         return ("db", self.id) if self.id is not None else ("client", self.client_id)
     
-    @staticmethod
-    def _from_api_dt_to_ui_local_naive(x):
-        """
-        Convert API datetime (string or datetime) to naive local wall-clock datetime for Streamlit widgets.
-        """
-        if x is None:
-            return None
-
-        if isinstance(x, str):
-            s = x.strip().replace("Z", "+00:00")
-            x = dt.datetime.fromisoformat(s)
-
-        if isinstance(x, pd.Timestamp):
-            x = x.to_pydatetime()
-
-        if not isinstance(x, dt.datetime):
-            return x
-
-        # If API ever returns naive (it shouldn't), assume UTC to avoid silent drift.
-        if x.tzinfo is None:
-            x = x.replace(tzinfo=dt.UTC)
-
-        local = x.astimezone(LOCAL_TZ)
-        return local.replace(tzinfo=None)
-
     @staticmethod   
     def from_delay(delays: list[Delay]) -> list[DelayEditorRow]:
         return [
@@ -124,8 +99,8 @@ class DelayEditorRow(BaseModel):
                 delay_type=d.delay_type,
                 duration_minutes=d.duration_minutes,
                 description=d.description,
-                start_dt=DelayEditorRow._from_api_dt_to_ui_local_naive(d.start_dt),
-                end_dt=DelayEditorRow._from_api_dt_to_ui_local_naive(d.end_dt),
+                start_dt=d.start_dt,
+                end_dt=d.end_dt,
                 shift_assignment_id=d.shift_assignment_id,
             )
             for d in delays
