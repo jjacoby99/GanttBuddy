@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import is_dataclass, asdict
-from datetime import datetime, time, date
+import datetime as dt
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -10,18 +10,28 @@ from models.project import Project
 
 
 def _iso(v: Any) -> Any:
-    """Convert datetime/time/UUID into JSON-friendly values."""
+    """Convert values into JSON-friendly representations.
+
+    Datetimes must be timezone-aware and are serialized as UTC ISO strings.
+    """
     if v is None:
         return None
-    if isinstance(v, datetime):
-        # If you use aware datetimes, this preserves offset. If naive, it stays naive.
+
+    if isinstance(v, dt.datetime):
+        if v.tzinfo is None or v.utcoffset() is None:
+            raise ValueError(f"Naive datetime cannot be serialized: {v!r}")
+
+        return v.astimezone(dt.UTC).isoformat().replace("+00:00", "Z")
+
+    if isinstance(v, dt.time):
         return v.isoformat()
-    if isinstance(v, time):
+
+    if isinstance(v, dt.date):
         return v.isoformat()
-    if isinstance(v, date):
-        return v.isoformat()
+
     if isinstance(v, UUID):
         return str(v)
+
     return v
 
 
@@ -87,8 +97,8 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
         "task_predecessors": [],
         "phase_predecessors": [],
         "metadata": metadata.model_dump(mode="json") if metadata is not None else None, #new 
-        "shift_definition": {},
-        "shift_assignments": []
+        "shift_definition": None,
+        "shift_assignments": None
     }
 
     #project type
@@ -135,8 +145,8 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
 
         payload["settings"] = {
             "work_all_day": bool(getattr(settings, "work_all_day", False)),
-            "work_start_time": _iso(getattr(settings, "work_start_time", time(hour=7, minute=0))),
-            "work_end_time": _iso(getattr(settings, "work_end_time", time(hour=17, minute=0))),
+            "work_start_time": _iso(getattr(settings, "work_start_time", dt.time(hour=7, minute=0))),
+            "work_end_time": _iso(getattr(settings, "work_end_time", dt.time(hour=17, minute=0))),
             "working_days_mask": int(working_days_mask),
             "observe_state_holidays": bool(getattr(settings, "observe_state_holidays", False)),
             "province": getattr(settings, "province", None),
@@ -187,8 +197,12 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
 
         for task_pos, task_id in enumerate(task_order):
             t = tasks_dict[_key(task_id)] if _key(task_id) in tasks_dict else tasks_dict.get(task_id)
+
             if t is None:
                 raise ValueError(f"task_order references missing task: {task_id}")
+
+            if not t.timezone_aware:
+                raise ValueError(f"Task {t.name} is not timezone aware.")
 
             task_uuid = getattr(t, "uuid", None)
             if task_uuid is None:
@@ -222,7 +236,7 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
                     "status": status,
                     "position": int(task_pos),
                     "planned": getattr(t,"planned", True),
-                    "task_type": t.task_type
+                    "task_type": t.task_type.name
                 }
             )
 
