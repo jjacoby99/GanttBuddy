@@ -6,6 +6,8 @@ from models.session import SessionModel
 import time
 from datetime import datetime, timedelta, UTC, timezone
 
+from logic.gantt_builder import build_timeline, build_gantt_df # need to clear cache when task updated.
+
 def is_timezone_aware(dt):
     """Check if a datetime object is timezone aware."""
     return dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
@@ -111,17 +113,15 @@ def render_task_edit(session, phase: Phase, task: Task):
 
 
     with end_col:
-        min_end_day = task.end_date
-        if min_end_day < planned_start_dt:
-            min_end_day = planned_start_dt + timedelta(min_end_day=1)
-        
+        min_end_day = planned_start_dt + timedelta(seconds=1)
+    
         planned_end_dt = st.datetime_input(
             label=f"Planned Finish",
             value=task.end_date if task.end_date else min_end_day,
-            min_value=min_end_day if planned_start_dt else datetime.today(),
+            min_value=min_end_day if planned_start_dt else None,
             disabled=not task_planned,
             key="task_start_date",
-            help="**Planned end** timestamp for *{edited_task_name}*"
+            help=f"**Planned end** timestamp for *{edited_task_name}*"
         )
         planned_end_dt = planned_end_dt.astimezone()
 
@@ -175,8 +175,8 @@ def render_task_edit(session, phase: Phase, task: Task):
         new_task = Task(
             name=edited_task_name, 
             phase_id=phase.uuid,
-            start_date=planned_start_dt if task_planned else actual_start_dt, 
-            end_date=planned_end_dt if task_planned else actual_start_dt, 
+            start_date=planned_start_dt, # if task_planned else actual_start_dt, 
+            end_date=planned_end_dt, # if task_planned else actual_start_dt, 
             actual_start=actual_start_dt if enter_actuals or not task_planned else None,
             actual_end=actual_end_dt if enter_actuals or not task_planned else None,
             note=task_note if task_note else "",
@@ -189,6 +189,12 @@ def render_task_edit(session, phase: Phase, task: Task):
         st.info(f"'{edited_task_name}' updated successfully.")
 
         st.session_state.show_edit_dialog = False
+        
+        # clear timeline cache on edit to force regeneration of gantt.
+        # previously, changes weren't reflected.
+        build_timeline.clear()
+        build_gantt_df.clear()
+
         time.sleep(1)
         st.rerun()
 
