@@ -1,14 +1,17 @@
 
 from typing import Optional
 import datetime as dt
-from logic.backend.api_client import fetch_delays
+from zoneinfo import ZoneInfo
 
+from logic.backend.api_client import fetch_delays
+from logic.backend.utils.parse_datetime import _parse_dt_from_UTC, _from_utc_to_project_tz
 
 from models.delay import DelayType, Delay
 
 def get_delays(
         headers: dict,
         project_id: str,
+        timezone: ZoneInfo,
         delay_type: Optional[DelayType] = None,
         shift_assignment_id: Optional[str] = None,
         time_min: Optional[dt.datetime] = None,
@@ -34,7 +37,11 @@ def get_delays(
 
     delays: list[Delay] = []
     for delay_dict in data:
-        delays.append(
-            Delay.model_validate(delay_dict)
-        )
+        delay = Delay.model_validate(delay_dict)
+
+        delay.start_dt = _from_utc_to_project_tz(delay.start_dt, timezone)
+        delay.end_dt = _from_utc_to_project_tz(delay.end_dt, timezone)
+
+        delays.append(delay)
+
     return delays
