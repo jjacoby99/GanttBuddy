@@ -1,8 +1,10 @@
 # snapshot_adapter.py
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time, UTC
 from typing import Any, Optional
+
+from zoneinfo import ZoneInfo
 
 from models.project import Project, ProjectType
 from models.phase import Phase
@@ -11,7 +13,10 @@ from models.task import Task, TaskType
 from models.project_settings import ProjectSettings
 from models.shift_schedule import ShiftAssignment, ShiftDefinition
 
+from logic.backend.utils.parse_datetime import _parse_dt_from_UTC
+
 import pytz
+
 
 def _parse_dt(x: str | None) -> datetime | None:
     if not x:
@@ -121,7 +126,9 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
         uuid=p.get("id"),  # backend id becomes frontend uuid
         description=p.get("description"),
         settings=settings,
-        project_type=project_type
+        project_type=project_type,
+        site_id=p.get("site_id", None),
+        timezone=ZoneInfo(p.get("timezone_name")), # brittle potentially
     )
     if shift_def:
         sd = get_shift_definition(shift_definition=shift_def)
@@ -145,6 +152,8 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
     for t in tasks:
         tasks_by_phase.setdefault(t["phase_id"], []).append(t)
 
+    timezone = project.timezone
+
     for phase_id, phase_tasks in tasks_by_phase.items():
         if phase_id not in project.phases:
             # Snapshot is inconsistent; skip or raise depending on how strict you want to be.
@@ -153,10 +162,10 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
         for t in sorted(phase_tasks, key=lambda x: x.get("position", 0)):
             task = Task(
                 name=t.get("name", ""),
-                start_date=_parse_dt(t.get("planned_start")),
-                end_date=_parse_dt(t.get("planned_end")),
-                actual_start=_parse_dt(t.get("actual_start")),
-                actual_end=_parse_dt(t.get("actual_end")),
+                start_date=_parse_dt_from_UTC(t.get("planned_start"),timezone=timezone),
+                end_date=_parse_dt_from_UTC(t.get("planned_end"), timezone=timezone),
+                actual_start=_parse_dt_from_UTC(t.get("actual_start"), timezone=timezone),
+                actual_end=_parse_dt_from_UTC(t.get("actual_end"), timezone=timezone),
                 note=t.get("note", "") or "",
                 uuid=t.get("id"),
                 predecessor_ids=pred_map.get(t.get("id"), []),
@@ -165,6 +174,10 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
                 planned=t.get("planned", True),
                 task_type=coerce_task_type(t.get("task_type", TaskType.GENERIC)),
             )
+            print(f"Task: {task.name}")
+            print(f"PS: {task.start_date}. PF: {task.end_date}")
+            print(f"AS: {task.actual_start}. PF: {task.actual_end}")
+
             project.add_task_to_phase(project.phases[phase_id], task)
 
     return project, reline_metadata
