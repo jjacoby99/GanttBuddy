@@ -38,7 +38,7 @@ def render_task_add(session: SessionModel, phase: Phase = None):
     if task_list:
         def format_task_ids(tid: str, end_str: str | None = None) -> str:
             if tid != end_str:
-                return task_list[tid].name
+                return phase_selected.tasks[tid].name
             return tid
         
         end_str = "-- Move to End --"
