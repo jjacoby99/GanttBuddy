@@ -25,14 +25,6 @@ def _iso(v: Any) -> Any:
     return v
 
 
-def _derive_status(actual_start: Optional[datetime], actual_end: Optional[datetime]) -> str:
-    if actual_end is not None:
-        return "FINISHED"
-    if actual_start is not None:
-        return "IN_PROGRESS"
-    return "NOT_STARTED"
-
-
 def _working_days_to_mask(working_days: List[bool]) -> int:
     """
     Expecting [Mon..Sun] booleans.
@@ -213,12 +205,12 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
             if t.status:
                 status = t.status
             else:
-                status = _derive_status(actual_start, actual_end)
+                status = t.derive_status()
 
             payload["tasks"].append(
                 {
                     "id": _iso(task_uuid),
-                    # Your import schema currently reuses TaskOut which includes project_id. Fill it.
+                    # import schema currently reuses TaskOut which includes project_id. Fill it.
                     "project_id": _iso(project_uuid),
                     "phase_id": _iso(getattr(t, "phase_id", phase_uuid)),
                     "name": getattr(t, "name", ""),
