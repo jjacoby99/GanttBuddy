@@ -201,12 +201,14 @@ def render_delay_register():
                     help="Date and time the delay started (optional)",
                     required=False,
                     step=5,
+                    format="D MMM YYYY, h:mm a",
                 ),
                 "end_dt": st.column_config.DatetimeColumn(
                     label="End",
                     help="Date and time the delay ended (optional)",
                     required=False,
                     step=5,
+                    format="D MMM YYYY, h:mm a",
                 ),
                 "duration_minutes": st.column_config.NumberColumn(
                     label="Duration (mins)",
