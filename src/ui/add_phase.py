@@ -44,7 +44,7 @@ def render_add_phase(session: SessionModel, plan_state: PlanState, position: int
             predecessor_ids=predecessor_ids
         )
 
-        plan_state.add_phase(phase_uuid=new_phase.uuid)
+        plan_state.add_phase(phase_id=new_phase.uuid)
         session.project.add_phase(new_phase, position=position)
 
         st.info(f"Phase {phase_name} successfully added to {session.project.name}!")
