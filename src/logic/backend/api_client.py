@@ -42,7 +42,7 @@ def save_project(project: Project, headers) -> str:
     try:
         response = requests.post(f"{API_BASE}/projects/import", json=payload, headers=headers)
         response.raise_for_status()
-        return response.json().get("project_id")
+        return response.json()
     except requests.RequestException as e:
 
         body = ""
