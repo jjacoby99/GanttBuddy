@@ -5,12 +5,16 @@ import datetime as dt
 
 from models.project import Project
 from models.project_type import ProjectType
+from models.plan_state import PlanState
+
 
 from ui.add_phase import render_add_phase
 from ui.edit_phase import render_phase_edit
 from ui.add_task import render_task_add
 from ui.edit_task import render_task_edit
 from ui.project_metadata import render_reline_metadata_form
+
+
 
 def render_project_buttons(session):
     if session.project is None:
@@ -19,11 +23,13 @@ def render_project_buttons(session):
     st.divider()
     st.subheader("Build")
     st.caption(f"Plan")
+    plan_state = st.session_state.get("plan_state", None)
+
     with st.container(horizontal=True):
         if st.button(":material/add_circle: Phase", 
                      key="add_phase", 
                      help=f"Add a phase to {session.project.name}"):
-            render_add_phase(session)
+            render_add_phase(session, plan_state=plan_state)
             st.session_state.ui.show_add_phase = False
                 
         if st.button(":material/add_circle: Task", 
