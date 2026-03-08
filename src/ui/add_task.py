@@ -8,37 +8,55 @@ import time
 
 @st.dialog("Add a new task")
 def render_task_add(session: SessionModel, phase: Phase = None):
-    if phase:
-        phase_selected = st.selectbox(
-            label="Select project phase to add task to.",
-            placeholder=phase.name,
-            options=[phase],
-            format_func=lambda t: t.name,
-            disabled=True
-        )
-    else: 
-        phase_selected = st.selectbox(
-            label="Select project phase to add task to.",
-            placeholder="Admin",
-            options=[p for p in session.project.phases.values()],
-            format_func=lambda p: p.name
-        )
+    proj = session.project if session.project else None
+    if not proj:
+        return
     
-    task_list = [phase_selected.tasks[tid] for tid in phase.task_order]
+    
+    phase_ids = [pid for pid in proj.phase_order]
+    phase_index = None
+    if phase:
+        phase_index = phase_ids.index(phase.uuid)
+
+    pid_selected = st.selectbox(
+        label="Select project phase to add task to.",
+        placeholder="Admin",
+        options=phase_ids,
+        format_func=lambda pid: proj.phases[pid].name
+    )
+    
+    phase_selected = proj.phases[pid_selected]
+
+    task_list = phase_selected.get_task_list()
     
     task_name = st.text_input(
         label="Enter the name of a task",
         key=f"{phase_selected.name}_task_name"
     )
 
-    before_task = st.selectbox(
-        label="Add task before",
-        key=f"add_before_task",
-        options=task_list,
-        format_func=lambda t: t.name
-    )
+    insert_idx = 0
+    if task_list:
+        def format_task_ids(tid: str, end_str: str | None = None) -> str:
+            if tid != end_str:
+                return task_list[tid].name
+            return tid
+        
+        end_str = "-- Move to End --"
 
-    insert_idx = task_list.index(before_task)
+        task_uuids = [t.uuid for t in task_list]
+        task_uuids.append(end_str)
+        before_task_id = st.selectbox(
+            label="Add task before",
+            key=f"add_before_task",
+            options=task_uuids,
+            format_func=lambda t: format_task_ids(tid=t, end_str=end_str) 
+        )
+
+        # insert at the end by default
+        insert_idx = len(phase_selected)
+
+        if before_task_id != end_str:
+            insert_idx = task_uuids.index(before_task_id)
     
     st.write(f"Insert Index: {insert_idx}")
     type_col, preds_col = st.columns(2)
@@ -98,7 +116,7 @@ def render_task_add(session: SessionModel, phase: Phase = None):
                 planned_start_dt = planned_start_dt.astimezone()
 
         with end_col:        
-            min_end_day = planned_start_dt + timedelta(minutes=1) if planned_start_dt else datetime.today()
+            min_end_day = planned_start_dt + timedelta(seconds=1) if planned_start_dt else None
             
             planned_end_dt = st.datetime_input(
                 label=f"Planned Finish",
