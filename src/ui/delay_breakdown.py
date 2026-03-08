@@ -50,6 +50,72 @@ def _build_delay_breakdown_df(items_dump: list[dict]) -> pd.DataFrame:
     return df
 
 
+def build_delay_count_bar_chart(group_count, color_map: dict):
+    fig_count = px.bar(
+            group_count,
+            x="count",
+            y="delay_type_label",
+            orientation="h",
+            text="count",
+            color="delay_type_label",
+            color_discrete_map=color_map,
+            title="Count by delay type",
+        )
+    fig_count.update_traces(textposition="outside")
+    fig_count.update_layout(
+        template="plotly_white",
+        yaxis_title="",
+        xaxis_title="Count",
+        showlegend=False,  # labels already on the axis
+        margin=dict(l=10, r=10, t=50, b=10),
+    )
+
+    return fig_count
+
+def build_delay_hours_bar_chart(group_hours, color_map: dict):
+    fig_hours = px.bar(
+        group_hours,
+        x="hours",
+        y="delay_type_label",
+        orientation="h",
+        text="hours",
+        color="delay_type_label",
+        color_discrete_map=color_map,
+        title="Total hours by delay type",
+    )
+    fig_hours.update_traces(texttemplate="%{text:.2f}", textposition="outside")
+    fig_hours.update_layout(
+        template="plotly_white",
+        yaxis_title="",
+        xaxis_title="Hours",
+        showlegend=False,
+        margin=dict(l=10, r=10, t=50, b=10),
+    )
+
+    return fig_hours
+
+def build_delay_count_pie_chart(group_count):
+    fig_count = px.pie(
+        group_count,
+        names="delay_type_label",
+        values="count",
+        hole=0.55,
+        title="Count share by type",
+    )
+    fig_count.update_layout(template="plotly_white", margin=dict(l=10, r=10, t=50, b=10))
+    return fig_count
+
+def build_delay_hours_pie_chart(group_hours):
+    fig_hours = px.pie(
+        group_hours,
+        names="delay_type_label",
+        values="hours",
+        hole=0.55,
+        title="Hours share by type",
+    )
+    fig_hours.update_layout(template="plotly_white", margin=dict(l=10, r=10, t=50, b=10))
+    return fig_hours
+
 def render_delay_breakdown_charts(
     delays: Iterable[Any],
     *,
@@ -134,45 +200,11 @@ def render_delay_breakdown_charts(
 
         # Count chart
         g_count = g.sort_values("count", ascending=True)
-        fig_count = px.bar(
-            g_count,
-            x="count",
-            y="delay_type_label",
-            orientation="h",
-            text="count",
-            color="delay_type_label",
-            color_discrete_map=color_map,
-            title="Count by delay type",
-        )
-        fig_count.update_traces(textposition="outside")
-        fig_count.update_layout(
-            template="plotly_white",
-            yaxis_title="",
-            xaxis_title="Count",
-            showlegend=False,  # labels already on the axis
-            margin=dict(l=10, r=10, t=50, b=10),
-        )
+        fig_count = build_delay_count_bar_chart(group_count=g_count, color_map=color_map)
 
         # Hours chart
         g_hours = g.sort_values("hours", ascending=True)
-        fig_hours = px.bar(
-            g_hours,
-            x="hours",
-            y="delay_type_label",
-            orientation="h",
-            text="hours",
-            color="delay_type_label",
-            color_discrete_map=color_map,
-            title="Total hours by delay type",
-        )
-        fig_hours.update_traces(texttemplate="%{text:.2f}", textposition="outside")
-        fig_hours.update_layout(
-            template="plotly_white",
-            yaxis_title="",
-            xaxis_title="Hours",
-            showlegend=False,
-            margin=dict(l=10, r=10, t=50, b=10),
-        )
+        fig_hours = build_delay_hours_bar_chart(group_hours=g_hours, color_map=color_map)
 
         with left:
             st.plotly_chart(fig_count, width="stretch")
@@ -182,24 +214,10 @@ def render_delay_breakdown_charts(
     else:
         # Donut charts (still useful as an optional view)
         g_count = g.sort_values("count", ascending=False)
-        fig_count = px.pie(
-            g_count,
-            names="delay_type_label",
-            values="count",
-            hole=0.55,
-            title="Count share by type",
-        )
-        fig_count.update_layout(template="plotly_white", margin=dict(l=10, r=10, t=50, b=10))
+        fig_count = build_delay_count_pie_chart(group_count=g_count)
 
         g_hours = g.sort_values("hours", ascending=False)
-        fig_hours = px.pie(
-            g_hours,
-            names="delay_type_label",
-            values="hours",
-            hole=0.55,
-            title="Hours share by type",
-        )
-        fig_hours.update_layout(template="plotly_white", margin=dict(l=10, r=10, t=50, b=10))
+        fig_hours = build_delay_hours_pie_chart(group_hours=g_hours)
 
         with left:
             st.plotly_chart(fig_count, width="stretch")
