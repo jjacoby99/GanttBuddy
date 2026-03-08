@@ -174,9 +174,6 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
                 planned=t.get("planned", True),
                 task_type=coerce_task_type(t.get("task_type", TaskType.GENERIC)),
             )
-            print(f"Task: {task.name}")
-            print(f"PS: {task.start_date}. PF: {task.end_date}")
-            print(f"AS: {task.actual_start}. PF: {task.actual_end}")
 
             project.add_task_to_phase(project.phases[phase_id], task)
 
