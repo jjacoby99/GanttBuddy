@@ -7,6 +7,8 @@ from models.task import Task, TaskType
 from models.phase import Phase
 from models.project_settings import ProjectSettings
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 from logic.generate_id import new_id
 from logic.utils import _none_min
 from models.sort_mode import SortMode
@@ -28,6 +30,8 @@ class Project:
     project_type: ProjectType = field(default=ProjectType.GENERIC)
     shift_assignments: Optional[list[ShiftAssignment]] = None
     shift_definition: Optional[ShiftDefinition] = None
+    site_id: Optional[str] = None
+    timezone: ZoneInfo = field(default=ZoneInfo("America/Vancouver"))
 
     @property
     def start_date(self) -> Optional[datetime]:
