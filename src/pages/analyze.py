@@ -5,6 +5,8 @@ from ui.delay_register import render_delay_register
 from ui.delay_breakdown import render_delay_breakdown_charts
 from ui.utils.workspace import render_workspace_buttons
 
+import ui.utils.custom_tabs as ct
+
 # if this tab is available, we know project has been loaded. No need to check.
 st.header(f"{st.session_state.session.project.name} - Delays")
 
@@ -17,8 +19,6 @@ delay_register, breakdown, delay_plot = st.tabs(
 )
 
 with delay_register:    
-    st.subheader("Delay Register")
-
     render_delay_register()
 
 with breakdown:
