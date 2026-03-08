@@ -1,5 +1,6 @@
 from __future__ import annotations
-from datetime import datetime, date, timedelta
+import datetime as dt
+
 from typing import Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
@@ -22,10 +23,10 @@ class TaskType(str, Enum):
 @dataclass
 class Task:
     name: str
-    start_date: datetime
-    end_date: datetime
-    actual_start: Optional[datetime] = None
-    actual_end: Optional[datetime] = None
+    start_date: dt.datetime
+    end_date: dt.datetime
+    actual_start: Optional[dt.datetime] = None
+    actual_end: Optional[dt.datetime] = None
     note: str = ""
     uuid: str = field(default_factory=new_id)
     predecessor_ids: list[str] = field(default_factory=list)
@@ -53,7 +54,7 @@ class Task:
         return f"Task(name = {self.name}, start_date={self.start_date}, end_date={self.end_date}, actual_start={self.actual_start}, actual_end={self.actual_end}, note={self.note})"
     
     @property
-    def planned_duration(self) -> timedelta:
+    def planned_duration(self) -> dt.timedelta:
         """Returns the planned duration of the task as a timedelta."""
         return self.end_date - self.start_date
     
@@ -66,7 +67,7 @@ class Task:
         return True
     
     @property
-    def actual_duration(self) -> Optional[timedelta]:
+    def actual_duration(self) -> Optional[dt.timedelta]:
         """Returns the actual duration of the task as a timedelta, or None if actual start/end are not set."""
         if not self.completed:
             return None
@@ -87,7 +88,7 @@ class Task:
             zero planned_duration, but a non-zero actual_duration. Therefore, we want
             these tasks to not be counted as milestones. 
         """
-        eps = timedelta(seconds=1)
+        eps = dt.timedelta(seconds=1)
         pdur = self.planned_duration
         if not self.completed:
             return pdur <= eps
@@ -96,11 +97,28 @@ class Task:
         return adur <= eps and pdur <= eps
         
     @property
-    def variance(self) -> Optional[timedelta]:
+    def variance(self) -> Optional[dt.timedelta]:
         """Returns the variance of the task (actual duration - planned duration) as a timedelta, or None if actual start/end are not set."""
         if not self.completed:
             return None
         return self.actual_duration - self.planned_duration
+
+    @property
+    def timezone_aware(self) -> bool:
+        """
+            Checks start_date, end_date, actual_start, and actual_end to see if all non null timestamps are timezone aware.
+        """
+
+        fields = (
+            self.start_date,
+            self.end_date,
+            self.actual_start,
+            self.actual_end,
+        )
+        return all(
+            dt is None or (dt.tzinfo is not None and dt.utcoffset() is not None)
+            for dt in fields
+        )
 
     def infer_status(self) -> None:
         """
@@ -160,7 +178,7 @@ class Task:
         task.planned = data.get("planned", True)
         return task
 
-    def calculate_end_date(self, duration: int, settings: ProjectSettings) -> datetime:
+    def calculate_end_date(self, duration: int, settings: ProjectSettings) -> dt.datetime:
         """
             Calculate the end date of a task given a start date, duration (in days), and project settings.
             This function takes into account working hours, working days, and holidays based on the provided settings.
@@ -192,7 +210,7 @@ class Task:
         #return current_date
 
 
-    def shift(self, delta=timedelta, shift_actuals=False):
+    def shift(self, delta=dt.timedelta, shift_actuals=False):
         """
         Shifts a given task back by the provided delta.
         Only affects actual start and end_dates if shift_actuals is True
