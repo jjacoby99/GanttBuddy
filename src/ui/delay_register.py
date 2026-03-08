@@ -21,10 +21,11 @@ def _editor_key() -> str:
     ver = st.session_state.get(EDITOR_VER_KEY, 0)
     return f"delays_editor_df_{ver}"
 
-def _load_last_saved_from_server(*, project_id: str | UUID) -> None:
+def _load_last_saved_from_server(*, project_id: str | UUID, timezone: ZoneInfo) -> None:
     delays = get_delays(
         headers=st.session_state.get("auth_headers", {}),
         project_id=project_id,
+        timezone=timezone
     )
     rows = DelayEditorRow.from_delay(delays)
     df = DelayEditorRow.to_df(rows)
@@ -48,8 +49,8 @@ def write_delay_info(delay: DelayEditorRow, project: Project):
 
 
     tasks_affected = project.tasks_in_range(
-        start_dt=start.astimezone(tz=ZoneInfo("America/Vancouver")),
-        end_dt=end.astimezone(tz=ZoneInfo("America/Vancouver")),
+        start_dt=start,
+        end_dt=end,
         planned=False,
         mode="overlap"
     )
@@ -100,7 +101,7 @@ def write_delay_info(delay: DelayEditorRow, project: Project):
     st.caption(":material/info: **Affected tasks** are tasks that *overlap* with a tracked delay's time window. They may not have started *and* ended during the delay window.")
 
 
-def render_pending_confirmations(*, project_id: str | UUID) -> None:
+def render_pending_confirmations(*, project_id: str | UUID, timezone: ZoneInfo) -> None:
     pending = st.session_state.get(PENDING_KEY)
     if not pending:
         return
@@ -123,7 +124,7 @@ def render_pending_confirmations(*, project_id: str | UUID) -> None:
         del st.session_state[PENDING_KEY]
 
         # refresh UI to server truth after save
-        _load_last_saved_from_server(project_id=project_id)
+        _load_last_saved_from_server(project_id=project_id,timezone=timezone)
         st.success(f"Saved {len(saved)} delays.")
         st.rerun()
 
@@ -131,22 +132,38 @@ def render_pending_confirmations(*, project_id: str | UUID) -> None:
         del st.session_state[PENDING_KEY]
 
         # revert editor to last-saved (server truth)
-        _load_last_saved_from_server(project_id=project_id)
+        _load_last_saved_from_server(project_id=project_id, timezone=timezone)
         st.info("Cancelled.")
         st.rerun()
 
 def render_delay_register():
-    project_id = st.session_state.session.project.uuid
+    
+    with st.container(horizontal=True):
+        st.subheader("Delay Register")
+        
+        st.space("stretch")
+
+        to_visualizer = st.button(
+            label="Visualize delays",
+            help="Click to go to Gantt view to visualize project delays."
+        )
+
+        if to_visualizer:
+            st.switch_page("pages/plan.py")
+
+    proj = st.session_state.session.project
+    project_id = proj.uuid
+    timezone = proj.timezone
 
     # initial load
     if SOURCE_DF_KEY not in st.session_state or BASE_ROWS_KEY not in st.session_state:
-        _load_last_saved_from_server(project_id=project_id)
+        _load_last_saved_from_server(project_id=project_id, timezone=timezone)
         st.rerun()
 
     pending = st.session_state.get(PENDING_KEY) is not None
 
     # You can put this above or below the form. If you hate it at the top, move it below.
-    render_pending_confirmations(project_id=project_id)
+    render_pending_confirmations(project_id=project_id, timezone=timezone)
 
     rows_last_saved: list[DelayEditorRow] = st.session_state[BASE_ROWS_KEY]
     df_source = st.session_state[SOURCE_DF_KEY]
@@ -255,6 +272,6 @@ def render_delay_register():
         )
 
         # refresh baseline + reset editor after save
-        _load_last_saved_from_server(project_id=project_id)
+        _load_last_saved_from_server(project_id=project_id, timezone=timezone)
         st.success(f"Saved {len(saved)} delays.")
         st.rerun()
