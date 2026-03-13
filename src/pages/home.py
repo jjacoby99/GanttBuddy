@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from zoneinfo import ZoneInfo
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 from models.project import ProjectType
@@ -19,9 +20,6 @@ class ProjectSummary:
     date_range: str
     last_opened_at: str
     role: str
-
-
-
 
 
 @dataclass
@@ -69,10 +67,6 @@ def open_project(project_id: str) -> None:
 
 def go_to_projects_feed() -> None:
     st.switch_page("pages/feed.py")
-
-def go_to_projects_load() -> None:
-    render_load_project()
-
 
 def start_create_project() -> None:
     """
@@ -146,7 +140,7 @@ def main() -> None:
     user = get_current_user(headers)
     last_proj = get_projects(headers, n_proj=1)
     pid = next(iter(last_proj))
-    needs = get_attention_items(headers)
+    needs = get_attention_items(headers, timezone=ZoneInfo(st.context.timezone))
     activity = _placeholder_activity()
     kpis = count_activities(needs)
 
@@ -169,18 +163,18 @@ def main() -> None:
         with right:
             st.markdown("#### Pick Up Where You Left Off")
             if last_proj:
-                ps = last_proj[pid].get("planned_start", dt.datetime.today()).strftime("%d/%m/%Y, %H:%M")
-                pe = last_proj[pid].get("planned_end", dt.datetime.today()).strftime("%d/%m/%Y, %H:%M")
+                ps = last_proj[pid].get("planned_start", None).strftime("%d/%m/%Y, %H:%M")
+                pe = last_proj[pid].get("planned_finish", None).strftime("%d/%m/%Y, %H:%M")
 
                 st.caption(f"**{last_proj[pid].get('name', '')}**")
-                st.caption(f"**Duration**: {ps} -> {pe}")
+                st.caption(f"**Planned Duration**: {ps} -> {pe}")
                 st.caption(f"**Last updated**: {last_proj[pid].get("updated").strftime("%d/%m/%Y, %H:%M")}")
                 if st.button("Open last project", width="stretch", type="primary"):
                     open_project(pid)
             else:
                 st.caption("No recent project found.")
                 if st.button("Browse projects", width="stretch"):
-                    go_to_projects_load()
+                    render_load_project()
 
     st.write("")
 
