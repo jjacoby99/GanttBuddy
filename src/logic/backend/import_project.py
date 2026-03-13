@@ -13,7 +13,7 @@ from models.task import Task, TaskType
 from models.project_settings import ProjectSettings
 from models.shift_schedule import ShiftAssignment, ShiftDefinition
 
-from logic.backend.utils.parse_datetime import _parse_dt_from_UTC
+from logic.backend.utils.parse_datetime import parse_backend_utc
 
 import pytz
 
@@ -162,10 +162,10 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
         for t in sorted(phase_tasks, key=lambda x: x.get("position", 0)):
             task = Task(
                 name=t.get("name", ""),
-                start_date=_parse_dt_from_UTC(t.get("planned_start"),timezone=timezone),
-                end_date=_parse_dt_from_UTC(t.get("planned_end"), timezone=timezone),
-                actual_start=_parse_dt_from_UTC(t.get("actual_start"), timezone=timezone),
-                actual_end=_parse_dt_from_UTC(t.get("actual_end"), timezone=timezone),
+                start_date=parse_backend_utc(t.get("planned_start"),timezone=timezone),
+                end_date=parse_backend_utc(t.get("planned_end"), timezone=timezone),
+                actual_start=parse_backend_utc(t.get("actual_start"), timezone=timezone),
+                actual_end=parse_backend_utc(t.get("actual_end"), timezone=timezone),
                 note=t.get("note", "") or "",
                 uuid=t.get("id"),
                 predecessor_ids=pred_map.get(t.get("id"), []),
