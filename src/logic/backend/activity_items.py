@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 import datetime as dt
+from zoneinfo import ZoneInfo
+from typing import Literal
 
 from logic.backend.api_client import fetch_attention_tasks
 
@@ -13,7 +15,48 @@ class AttentionItem:
     due_hint: str  # e.g. "Next 48h", "Overdue", "This week"
 
 
-def get_attention_items(headers) -> list[AttentionItem]:
+def infer_due_hint(variance: dt.timedelta) -> str:
+    if variance < dt.timedelta(0):
+        return "Overdue" 
+
+    if variance < dt.timedelta(hours=2):
+        return "Due soon (< 2h)"
+    
+    if variance < dt.timedelta(days=1):
+        return "Next 24h"
+
+    if variance < dt.timedelta(days=2):
+        return "Next 48h"
+    
+    if variance < dt.timedelta(days=7):
+        return "This Week"
+
+    return "Weeks Out"
+
+def get_attention_list(task_list: list, severity: Literal["late", "due_soon", "awaiting_actuals", "info"], timezone: ZoneInfo):
+    out = []
+    for el in task_list:
+        pid = el.get("project_id", "")
+        p_name = el.get("project_name")
+        t_name = el.get("name", "")
+
+        pe = el.get("planned_end")
+        pe = dt.datetime.fromisoformat(pe.replace("Z", "+00:00")).astimezone(timezone)
+        
+        variance = pe - dt.datetime.now(timezone)
+        out.append(
+            AttentionItem(
+                project_id=pid,
+                project_name=p_name,
+                severity=severity,
+                title=t_name,
+                count=1,
+                due_hint=infer_due_hint(variance=variance)
+            )
+        )
+    return out
+
+def get_attention_items(headers, timezone: ZoneInfo) -> list[AttentionItem]:
     try:
         resp = fetch_attention_tasks(headers)
     except Exception:
@@ -24,69 +67,23 @@ def get_attention_items(headers) -> list[AttentionItem]:
     awaiting = resp.get("awaiting_actuals", [])
 
     attention_items = []
-    for el in late:
-        pid = el.get("project_id", "")
-        p_name = el.get("project_name")
-        t_name = el.get("name", "")
-        ps = el.get("planned_start")
-        ps = dt.datetime.fromisoformat(ps.replace("Z", "+00:00")).astimezone(dt.timezone.utc)
+    attention_items += get_attention_list(
+        task_list=late,
+        severity="late",
+        timezone=timezone
+    )
 
-        pe = el.get("planned_end")
-        pe = dt.datetime.fromisoformat(pe.replace("Z", "+00:00")).astimezone(dt.timezone.utc)
+    attention_items += get_attention_list(
+        task_list=upcoming,
+        severity="due_soon",
+        timezone=timezone
+    )
         
-        attention_items.append(
-            AttentionItem(
-                project_id=pid,
-                project_name=p_name,
-                severity="late",
-                title=t_name,
-                count=1,
-                due_hint=pe
-            )
-        )
-
-    for el in upcoming:
-        pid = el.get("project_id", "")
-        p_name = el.get("project_name")
-        t_name = el.get("name", "")
-        ps = el.get("planned_start")
-        ps = dt.datetime.fromisoformat(ps.replace("Z", "+00:00")).astimezone(dt.timezone.utc)
-
-        pe = el.get("planned_end")
-        pe = dt.datetime.fromisoformat(pe.replace("Z", "+00:00")).astimezone(dt.timezone.utc)
-        
-        attention_items.append(
-            AttentionItem(
-                project_id=pid,
-                project_name=p_name,
-                severity="due_soon",
-                title=t_name,
-                count=1,
-                due_hint=pe
-            )
-        )
-
-    for el in awaiting:
-        pid = el.get("project_id", "")
-        p_name = el.get("project_name")
-        t_name = el.get("name", "")
-
-        ps = el.get("planned_start")
-        ps = dt.datetime.fromisoformat(ps.replace("Z", "+00:00")).astimezone(dt.timezone.utc)
-
-        pe = el.get("planned_end")
-        pe = dt.datetime.fromisoformat(pe.replace("Z", "+00:00")).astimezone(dt.timezone.utc)
-        
-        attention_items.append(
-            AttentionItem(
-                project_id=pid,
-                project_name=p_name,
-                severity="awaiting_actuals",
-                title=t_name,
-                count=1,
-                due_hint=pe
-            )
-        )
+    attention_items += get_attention_list(
+        task_list=awaiting,
+        severity="awaiting_actuals",
+        timezone=timezone
+    )
 
     return attention_items
 
