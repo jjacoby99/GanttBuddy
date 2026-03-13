@@ -4,7 +4,7 @@ import datetime as dt
 from zoneinfo import ZoneInfo
 
 from logic.backend.api_client import fetch_delays
-from logic.backend.utils.parse_datetime import _parse_dt_from_UTC, _from_utc_to_project_tz
+from logic.backend.utils.parse_datetime import parse_backend_utc, _from_utc_to_project_tz
 
 from models.delay import DelayType, Delay
 
@@ -39,8 +39,8 @@ def get_delays(
     for delay_dict in data:
         delay = Delay.model_validate(delay_dict)
 
-        delay.start_dt = _from_utc_to_project_tz(delay.start_dt, timezone)
-        delay.end_dt = _from_utc_to_project_tz(delay.end_dt, timezone)
+        delay.start_dt = delay.start_dt.astimezone(timezone)
+        delay.end_dt = delay.end_dt.astimezone(timezone)
 
         delays.append(delay)
 
