@@ -272,3 +272,40 @@ class PostMortemAnalyzer:
             if project.phases[pid].actual_end and project.phases[pid].actual_start
         }
         return delays
+
+    @staticmethod
+    def phase_delay_summary(project: Project) -> pd.DataFrame:
+        """
+        Returns a phase-level summary table suitable for reporting decks.
+
+        Columns:
+            "No."
+            "PHASE"
+            "PHASE DELAY (HRS)"
+            "CUMULATIVE DELAY (HRS)"
+            "RATIONALE"
+        """
+        rows = {
+            "No.": [],
+            "PHASE": [],
+            "PHASE DELAY (HRS)": [],
+            "CUMULATIVE DELAY (HRS)": [],
+            "RATIONALE": [],
+        }
+
+        for i, pid in enumerate(project.phase_order, start=1):
+            phase = project.phases[pid]
+            phase_delay = PostMortemAnalyzer.phase_delay(phase)
+
+            if phase.actual_end and phase.end_date:
+                cumulative_delay = (phase.actual_end - phase.end_date).total_seconds() / 3600
+            else:
+                cumulative_delay = None
+
+            rows["No."].append(i)
+            rows["PHASE"].append(phase.name)
+            rows["PHASE DELAY (HRS)"].append(phase_delay)
+            rows["CUMULATIVE DELAY (HRS)"].append(cumulative_delay)
+            rows["RATIONALE"].append("")
+
+        return pd.DataFrame(rows)
