@@ -13,6 +13,7 @@ from models.task import TaskType
 
 from logic.backend.api_client import fetch_analytics, fetch_inching_performance
 from ui.utils.phase_delay_plot import generate_phase_delay_plot
+from logic.backend.utils.parse_datetime import parse_backend_utc
 
 # -------------------------
 # Config
@@ -540,7 +541,10 @@ def main():
         return
 
     meta = dash.get("metadata") or {}
-    as_of = dash.get("as_of")
+    as_of_str = dash.get("as_of")
+    tz = st.session_state.session.project.timezone
+    as_of = parse_backend_utc(as_of_str, tz)
+
     # Header: project context
     left, right = st.columns([2, 1])
     with left:
@@ -555,7 +559,7 @@ def main():
                 Vendor: <b>{meta.get("vendor","—")}</b> · System: <b>{meta.get("liner_system","—")}</b>
                 · Scope: <b>{meta.get("scope","—")}</b> · Campaign: <b>{meta.get("campaign_id","—")}</b>
               </div>
-              <div class="gb-sub">Supervisor: <b>{meta.get("supervisor","—")}</b> · As of: {as_of or "—"}</div>
+              <div class="gb-sub">Supervisor: <b>{meta.get("supervisor","—")}</b> · As of: {as_of.strftime("%Y-%m-%d %H:%M") or "—"}</div>
             </div>
             """,
             unsafe_allow_html=True,
