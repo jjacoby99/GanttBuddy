@@ -19,6 +19,7 @@ from io import BytesIO
 from models.project import Project
 
 from ui.utils.phase_delay_plot import generate_phase_delay_plot
+from ui.report_export import render_report_export_dialog
 
 UNIT_FACTORS = {
     "hours": 3600,
@@ -130,31 +131,15 @@ def render_analysis(session: SessionModel):
         hide_index=True,
     )
 
-    prepare_post_mortem = st.checkbox(
-        label="Prepare post mortem report",
-        value=False,
-        help="Select to begin the preparation of a post mortem report for download."
-    )
-
-    if prepare_post_mortem:
-        with st.spinner(f"Preparing report..."):
-            wb = PostMortemAnalyzer.write_post_mortem(project=session.project, n=-1)
-            buffer = BytesIO()
-            wb.save(buffer)
-            buffer.seek(0)
-
     with st.container(horizontal=True, horizontal_alignment='left'):
         st.info("Use the arrows to navigate between phases. Positive delay indicates the task took longer than planned.",
             width=730)
         st.space("stretch")
 
-        if prepare_post_mortem:
-            st.download_button(
-                label="Performance Report",
-                icon=":material/insights:",
-                data=buffer,
-                file_name=f"{session.project.name}_phase_delay.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                disabled=not prepare_post_mortem
-            )
+        if st.button(
+            label="Export Report",
+            icon=":material/insights:",
+            help="Open export options for the Excel post-mortem workbook or the PowerPoint deck.",
+        ):
+            render_report_export_dialog(session)
 
