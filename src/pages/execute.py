@@ -2,7 +2,6 @@ import streamlit as st
 
 from ui.forecast_view import render_forecast
 from ui.execution_view import render_execution_view
-from ui.delay_register import render_delay_register
 from ui.utils.workspace import render_workspace_buttons
 
 

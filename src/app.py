@@ -27,6 +27,7 @@ feed = st.Page("pages/feed.py", title="Feed", icon=":material/view_list:")
 build = st.Page("pages/build.py", title="Build", icon=":material/build:")
 plan = st.Page("pages/plan.py", title="Plan", icon=":material/view_timeline:")
 execute = st.Page("pages/execute.py", title="Execute", icon=":material/construction:")
+signals = st.Page("pages/signals.py", title="Signals", icon=":material/sensors:")
 delays = st.Page("pages/analyze.py", title="Delays", icon=":material/timer:")
 analytics = st.Page("pages/analytics.py", title="Analytics", icon=":material/query_stats:")
 manage = st.Page("pages/manage.py", title="Manage", icon=":material/manage_accounts:")
@@ -37,7 +38,7 @@ pages = {
 }
 
 #if st.session_state.session.project:
-pages["Workspace"] = [plan, execute, delays, analytics]
+pages["Workspace"] = [plan, execute, signals, delays, analytics]
 
 pages["Manage"] = [manage]
 
