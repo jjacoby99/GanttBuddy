@@ -12,19 +12,19 @@ def render_task_add(session: SessionModel, phase: Phase = None):
     if not proj:
         return
     
-    
     phase_ids = [pid for pid in proj.phase_order]
     phase_index = None
-    if phase:
+    if phase is not None:
         phase_index = phase_ids.index(phase.uuid)
 
     pid_selected = st.selectbox(
         label="Select project phase to add task to.",
         placeholder="Admin",
         options=phase_ids,
+        index=phase_index,
         format_func=lambda pid: proj.phases[pid].name
     )
-    
+
     phase_selected = proj.phases[pid_selected]
 
     task_list = phase_selected.get_task_list()
@@ -58,7 +58,6 @@ def render_task_add(session: SessionModel, phase: Phase = None):
         if before_task_id != end_str:
             insert_idx = task_uuids.index(before_task_id)
     
-    st.write(f"Insert Index: {insert_idx}")
     type_col, preds_col = st.columns(2)
     
     # convert answer to task's boolean planned field
