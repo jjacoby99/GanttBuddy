@@ -98,7 +98,9 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
         "phase_predecessors": [],
         "metadata": metadata.model_dump(mode="json") if metadata is not None else None, #new 
         "shift_definition": None,
-        "shift_assignments": None
+        "shift_assignments": None,
+        "site_id": project.site_id if project.site_id else None,
+        "timezone_name": project.timezone.tzname()
     }
 
     #project type
