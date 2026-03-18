@@ -299,3 +299,33 @@ def save_delays(
     resp.raise_for_status()
 
     return [Delay.model_validate(x) for x in resp.json()]
+
+
+def fetch_events(
+        *,
+        headers: dict,
+        project_id: Optional[str | UUID] = None,
+        from_dt: Optional[dt.datetime] = None,
+        n_events: Optional[int] = 10
+):
+    params = {}
+    if project_id:
+        params["project_id"] = str(project_id)
+    if from_dt:
+        params["from_dt"] = from_dt.astimezone(dt.UTC).isoformat().replace("+00:00", "Z")
+    if n_events:
+        params["n_events"] = n_events
+
+    url = f"{API_BASE}/events"
+
+    try:
+        resp = requests.get(url=url, params=params, headers=headers, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        body = ""
+        try:
+            body = resp.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to fetch events for: {e} {body}")
