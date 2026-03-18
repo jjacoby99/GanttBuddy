@@ -8,6 +8,7 @@ from ui.edit_project import render_edit_project
 from logic.backend.login import get_current_user, reset_auth
 from logic.backend.api_client import save_project
 
+import time
 
 from PIL import Image
 from pathlib import Path
@@ -21,17 +22,6 @@ def render_workspace_buttons():
     use_compact_buttons()
 
     ui = st.session_state.ui
-
-    with st.sidebar:
-        st.subheader("User")
-        user_data = get_current_user(st.session_state.get("auth_headers"))
-        with st.container(horizontal=True):
-            
-            st.caption(f":material/person: {user_data['email']}")
-            st.space("stretch")
-            if st.button(":material/logout: Logout", type="tertiary"):
-                reset_auth()
-                st.rerun()
             
     if st.session_state.session.project is None:
 
@@ -43,8 +33,8 @@ def render_workspace_buttons():
             st.stop()
 
 
-    with st.sidebar:
-        render_project_buttons(st.session_state.session)
+    # with st.sidebar:
+    #     render_project_buttons(st.session_state.session)
 
     with st.container(horizontal=True):
         st.title(st.session_state.session.project.name)
@@ -61,7 +51,9 @@ def render_workspace_buttons():
         if st.button("💾", help="Save project to file"):
             try:
                 save_project(st.session_state.session.project, headers=st.session_state.get("auth_headers"))
-                st.success("Project saved to server.")
+                success = st.success(":material/check: Project saved to server.", width=210)
+                time.sleep(3)
+                success.empty()
             except Exception as e:
                 st.error(f"Failed to save project to server: {e}")
             
@@ -72,11 +64,3 @@ def render_workspace_buttons():
     if st.session_state.ui.show_settings:
         render_settings_view(st.session_state.session)
         st.session_state.ui.show_settings = False
-
-    if not st.session_state.session.project.phases:
-        st.info(f"Add a phase to your project to begin.")
-        st.stop()
-
-    if not st.session_state.session.project.has_task:
-        st.info(f"Add a task to your project to begin.")
-        st.stop()

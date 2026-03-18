@@ -19,6 +19,17 @@ if not is_logged_in():
     page.run()
     st.stop()
 
+with st.sidebar:
+    st.subheader("User")
+    user_data = get_current_user(st.session_state.get("auth_headers"))
+    with st.container(horizontal=True):
+        
+        st.caption(f":material/person: {user_data['email']}")
+        st.space("stretch")
+        if st.button(":material/logout: Logout", type="tertiary"):
+            reset_auth()
+            st.rerun()
+
 # Logged in:
 home = st.Page("pages/home.py", title="Home", icon=":material/home:")
 account = st.Page("pages/account.py", title="Account", icon=":material/person:")
@@ -42,11 +53,13 @@ pages["Workspace"] = [plan, execute, signals, delays, analytics]
 
 pages["Manage"] = [manage]
 
+
+
 # Admin-only
 if is_admin():
     admin = st.Page("pages/admin.py", title="Admin", icon="🛠️")
     pages["Admin"] = []
     pages["Admin"].append(admin)
 
-page = st.navigation(pages, position="top")
+page = st.navigation(pages)
 page.run()
