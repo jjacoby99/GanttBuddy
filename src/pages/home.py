@@ -22,28 +22,9 @@ class ProjectSummary:
     role: str
 
 
-@dataclass
-class ActivityItem:
-    ts: str
-    project_name: str
-    message: str
-
-
-def _placeholder_activity() -> List[ActivityItem]:
-    return [
-        ActivityItem(ts="09:06", project_name="SWRP Cleanout - RevB", message="Task marked complete: Pad in access road"),
-        ActivityItem(ts="08:49", project_name="B-Auto Mill Reline", message="Imported schedule from Excel (RevC)"),
-        ActivityItem(ts="Yesterday", project_name="24-Mile Sump Pumps", message="Actual entered: Pump #1 install start"),
-        ActivityItem(ts="Yesterday", project_name="Pump Pre-Feas (Electrical)", message="New phase added: Site walkdown"),
-    ]
-
-
 from logic.backend.api_client import fetch_project_snapshot
 from logic.backend.import_project import snapshot_to_project
 
-# -----------------------------
-# Wiring stubs (replace later)
-# -----------------------------
 def open_project(project_id: str) -> None:
 
     st.session_state["selected_project_id"] = project_id
@@ -68,18 +49,6 @@ def open_project(project_id: str) -> None:
 def go_to_projects_feed() -> None:
     st.switch_page("pages/feed.py")
 
-def start_create_project() -> None:
-    """
-    Replace with your create flow (dialog/page).
-    """
-    st.toast("Create Project (wire me)", icon="✨")
-
-
-def start_import_excel() -> None:
-    """
-    Replace with your import flow (dialog/page).
-    """
-    st.toast("Import from Excel (wire me)", icon="📄")
 
 
 # -----------------------------
@@ -123,7 +92,7 @@ def _severity_emoji(sev: str) -> str:
 from logic.backend.login import get_current_user
 from logic.backend.project_list import get_projects
 from logic.backend.activity_items import get_attention_items, count_activities
-
+from logic.backend.events import get_events
 from ui.create_project import create_project
 from ui.load_project import render_load_project
 from ui.load_from_excel import load_from_excel
@@ -141,7 +110,7 @@ def main() -> None:
     last_proj = get_projects(headers, n_proj=1)
     pid = next(iter(last_proj))
     needs = get_attention_items(headers, timezone=ZoneInfo(st.context.timezone))
-    activity = _placeholder_activity()
+    activity = get_events(headers, n_events=5)
     kpis = count_activities(needs)
 
     # ---------- Header strip ----------
@@ -262,8 +231,8 @@ def main() -> None:
             if not activity:
                 st.info("No recent activity yet.")
             else:
-                for a in activity[:6]:
-                    st.markdown(f"**{a.ts}** • {a.project_name}")
+                for a in activity:
+                    st.markdown(f"**{a.ts.strftime("%Y-%m-%d %H:%M")}** • {a.project_name}")
                     st.caption(a.message)
                     st.divider()
 
