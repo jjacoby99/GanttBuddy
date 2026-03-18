@@ -3,6 +3,10 @@ from models.project import Project
 from typing import Literal
 
 def render_project_info(project: Project, resolution: Literal["Phase", "Task"] = "Task"):
+    if not project.has_task:
+        st.info(":material/info: Add some tasks to your project for more information.")
+        return
+    
     with st.container():
         c1, c2 = st.columns(2)
         if resolution == "Task":
@@ -16,7 +20,7 @@ def render_project_info(project: Project, resolution: Literal["Phase", "Task"] =
             label=label,
             value=n_tasks
         )
-            
+        
         total_minutes = int(project.planned_duration.total_seconds() // 60)
         h, m = divmod(total_minutes, 60)
         s = f"{h}h {m}m"
