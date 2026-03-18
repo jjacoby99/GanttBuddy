@@ -2,7 +2,7 @@ import streamlit as st
 
 from ui.plot import render_gantt, render_task_details
 from ui.settings_view import render_settings_view
-from ui.sidebar import render_project_buttons
+from ui.utils.project_buttons import render_project_buttons
 from ui.forecast_view import render_forecast
 from ui.compact_buttons import use_compact_buttons
 from ui.analyze_view import render_analysis
@@ -10,13 +10,8 @@ from ui.edit_project import render_edit_project
 from ui.render_plan import render_plan
 from ui.execution_view import render_execution_view
 
-from ui.login import render_login
-
-from logic.backend.login import is_logged_in, get_current_user, reset_auth
+from logic.backend.login import  get_current_user, reset_auth
 from logic.backend.api_client import save_project
-
-from logic.state import initialize_session_state
-
 
 from PIL import Image
 from pathlib import Path
@@ -82,13 +77,13 @@ if st.session_state.ui.show_settings:
     render_settings_view(st.session_state.session)
     st.session_state.ui.show_settings = False
 
-if not st.session_state.session.project.phases:
-    st.info(f"Add a phase to your project to begin.")
-    st.stop()
+# if not st.session_state.session.project.phases:
+#     st.info(f"Add a phase to your project to begin.")
+#     st.stop()
 
-if not st.session_state.session.project.has_task:
-    st.info(f"Add a task to your project to begin.")
-    st.stop()
+# if not st.session_state.session.project.has_task:
+#     st.info(f"Add a task to your project to begin.")
+#     st.stop()
 
 
 task_tab, execute_tab, plot_tab, forecast_tab, analyze_tab = st.tabs(
