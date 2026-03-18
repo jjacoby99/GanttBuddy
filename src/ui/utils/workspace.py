@@ -1,7 +1,6 @@
 import streamlit as st
 
 from ui.settings_view import render_settings_view
-from ui.sidebar import render_project_buttons
 from ui.compact_buttons import use_compact_buttons
 from ui.edit_project import render_edit_project
 
@@ -31,10 +30,6 @@ def render_workspace_buttons():
             st.space("large")
             st.image(load_image(path))
             st.stop()
-
-
-    # with st.sidebar:
-    #     render_project_buttons(st.session_state.session)
 
     with st.container(horizontal=True):
         st.title(st.session_state.session.project.name)
