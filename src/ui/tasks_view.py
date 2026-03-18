@@ -5,6 +5,7 @@ from ui.add_task import render_task_add
 from ui.edit_phase import render_phase_edit
 from ui.add_phase import render_add_phase
 from ui.utils.status_badges import STATUS_BADGES
+from ui.utils.project_buttons import render_add_buttons
 
 from models.phase import Phase
 from models.task import Task
@@ -24,6 +25,8 @@ def map_completion_to_badge(completion: float) -> tuple[str, str, str]:
         return ("Not Started", ":material/info:", "blue")
 
 def write_header_row(columns: TaskColumns, col_widths: list[int], plan_ui_state: PlanState):
+    st.divider()
+
     header_cols = st.columns(col_widths)
     header_cols[columns.name].markdown(f"### ACTIVITY")
     header_cols[columns.planned_start].markdown(f"### PLANNED START")
@@ -63,17 +66,14 @@ def write_phase_header(phase: Phase, phase_idx: int, columns: TaskColumns, col_w
 def render_tasks_table(session, plan_ui_state: PlanState):
     phases = session.project.phases
 
-    if not phases:
-        st.info(f"Add a phase to {session.project.name} to view project planner")
-        return
-    
-    st.subheader("Project Phases")
-    
     columns = TaskColumns(show_actuals=plan_ui_state.show_actuals)
     col_widths = columns.get_col_widths()
 
     write_header_row(columns, col_widths,plan_ui_state)
 
+    if not session.project.phases:
+        render_add_buttons(session)
+    
     with st.container(height=700, border=False): # gives the effect of keeping the header row at the top of the page.
     
         for phase_idx, pid in enumerate(session.project.phase_order):
@@ -118,12 +118,12 @@ def render_tasks_table(session, plan_ui_state: PlanState):
                     st.space("stretch")
 
                     if st.button("✏️ Edit Phase", key=f"edit_{phase.name}", type="secondary"):
-                        render_phase_edit(session,phase=phase)
+                        render_phase_edit(session,phase=phase, plan_state=plan_ui_state)
 
             with st.container(horizontal=True):
                 st.space("stretch")
                 if st.button(":material/add_circle: Phase", key=f"add_phase_{phase_idx}", type='primary'):
-                    render_add_phase(session, position=phase_idx+1, plan_ui_state=plan_ui_state)
+                    render_add_phase(session, position=phase_idx+1, plan_state=plan_ui_state)
             
             phase_idx += 1
 
