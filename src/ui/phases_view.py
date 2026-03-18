@@ -2,8 +2,6 @@ import streamlit as st
 
 from models.session import SessionModel
 
-from ui.utils.project_info import render_project_info
-
 # @st.cache_data: throws Unhashable Error for SessionModel
 def render_phases_view(session: SessionModel):
     
