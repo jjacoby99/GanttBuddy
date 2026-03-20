@@ -148,9 +148,9 @@ export function ExecutePage() {
                 <span>Status</span>
                 <div className="inline-form">
                   <select value={statusValue} onChange={(event) => setStatusValue(event.target.value)}>
-                    <option value="PLANNED">PLANNED</option>
+                    <option value="NOT_STARTED">NOT_STARTED</option>
                     <option value="IN_PROGRESS">IN_PROGRESS</option>
-                    <option value="DONE">DONE</option>
+                    <option value="COMPLETE">COMPLETE</option>
                     <option value="BLOCKED">BLOCKED</option>
                   </select>
                   <button className="button button--ghost" onClick={() => taskMutation.mutate("status")} type="button" disabled={taskMutation.isPending}>

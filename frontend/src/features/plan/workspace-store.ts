@@ -137,7 +137,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
               actual_start: null,
               actual_end: null,
               note: "",
-              status: "PLANNED",
+              status: "NOT_STARTED",
               position: taskPosition,
               planned: true,
               task_type: "GENERIC",
