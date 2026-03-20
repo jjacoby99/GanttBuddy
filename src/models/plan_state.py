@@ -4,6 +4,7 @@ from typing import Literal
 
 @dataclass
 class PlanState:
+    project_id: str = ""
     expanded_phases: dict[str, bool] = field(default_factory=dict)
     show_actuals: bool = False
     highlight_delayed_tasks: bool = False

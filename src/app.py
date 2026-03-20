@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-initialize_session_state()  # initializes st.session_state keys you expect
+initialize_session_state()
 
 # If not logged in, show ONLY the login page (or a login callable)
 if not is_logged_in():
