@@ -2,14 +2,14 @@ from logic.backend.api_client import fetch_projects
 import datetime as dt
 from zoneinfo import ZoneInfo
 
-def get_projects(headers: dict, n_proj: int=-1) -> dict:
+def get_projects(headers: dict, n_proj: int=-1, include_closed: bool = False) -> dict:
     """
         Returns a dict of project_id: project_name
     """
     if n_proj < -1:
         raise ValueError(f"n_proj must be positive (or -1 for all projects)")
     try:
-        resp = fetch_projects(headers)
+        resp = fetch_projects(headers, include_closed=include_closed)
     except Exception as e:
         raise e
     
@@ -52,6 +52,7 @@ def get_projects(headers: dict, n_proj: int=-1) -> dict:
             "updated": dt_updated,
             "planned_start": start_dt,
             "planned_finish": end_dt,
+            "timezone_name": tz_str,
         }
     
     return to_return
