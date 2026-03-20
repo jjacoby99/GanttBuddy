@@ -126,6 +126,7 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
         uuid=p.get("id"),  # backend id becomes frontend uuid
         description=p.get("description"),
         settings=settings,
+        closed=p.get("closed"),
         project_type=project_type,
         site_id=p.get("site_id", None),
         timezone=ZoneInfo(p.get("timezone_name")), # brittle potentially

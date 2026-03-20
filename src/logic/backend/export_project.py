@@ -89,7 +89,8 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
             "name": getattr(project, "name", ""),
             "description": getattr(project, "description", None),
             "sort_mode": getattr(project, "_sort_mode", "manual"),
-            "project_type": ""
+            "project_type": "",
+            "closed": project.closed
         },
         "settings": None,
         "phases": [],
