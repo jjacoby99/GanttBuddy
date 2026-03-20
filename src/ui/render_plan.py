@@ -35,7 +35,7 @@ def render_display_preferences(plan_ui_state: PlanState):
 # @st.cache_data: throws Unhashable Error for SessionModel
 def render_plan(session: SessionModel):
     
-    plan_ui_state = st.session_state.plan_state
+    plan_ui_state: PlanState = st.session_state.plan_state
     plan_ui_state.initialize_expanded_phases(list(session.project.phase_order))
     
     with st.container(horizontal=True):
