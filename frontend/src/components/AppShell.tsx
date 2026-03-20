@@ -7,6 +7,7 @@ const navItems = [
   { to: "/projects", label: "Projects" },
   { to: "/workspace/plan", label: "Plan" },
   { to: "/workspace/execute", label: "Execute" },
+  { to: "/workspace/delays", label: "Delays" },
   { to: "/workspace/analytics", label: "Analytics" },
 ];
 

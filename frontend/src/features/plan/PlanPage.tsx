@@ -329,10 +329,14 @@ function GanttPreview({
   tasksByPhase,
   showActuals,
   scaleMode,
+  expandedPhaseIds,
+  onTogglePhase,
 }: {
   tasksByPhase: Array<{ phase: Phase; tasks: Task[] }>;
   showActuals: boolean;
   scaleMode: ScaleMode;
+  expandedPhaseIds: string[];
+  onTogglePhase: (phaseId: string) => void;
 }) {
   const tasks = tasksByPhase.flatMap((entry) => entry.tasks);
   const [hoveredBar, setHoveredBar] = useState<HoveredBar | null>(null);
@@ -456,17 +460,73 @@ function GanttPreview({
 
         {tasksByPhase.map(({ phase, tasks: phaseTasks }, phaseIndex) => {
           const phaseClass = palette[phaseIndex % palette.length];
+          const expanded = expandedPhaseIds.includes(phase.id);
+          const phasePlannedStart = Math.min(...phaseTasks.map((task) => new Date(task.planned_start).getTime()));
+          const phasePlannedEnd = Math.max(...phaseTasks.map((task) => new Date(task.planned_end).getTime()));
+          const phaseActualStarts = phaseTasks
+            .map((task) => (task.actual_start ? new Date(task.actual_start).getTime() : null))
+            .filter((value): value is number => value !== null);
+          const phaseActualEnds = phaseTasks
+            .map((task) => {
+              if (task.actual_end) {
+                return new Date(task.actual_end).getTime();
+              }
+              if (task.actual_start) {
+                return new Date(task.actual_start).getTime();
+              }
+              return null;
+            })
+            .filter((value): value is number => value !== null);
+          const phaseLeft = ((phasePlannedStart - timelineStart.getTime()) / span) * 100;
+          const phaseWidth = ((phasePlannedEnd - phasePlannedStart) / span) * 100;
+          const phaseHasActual = showActuals && phaseActualStarts.length > 0 && phaseActualEnds.length > 0;
+          const phaseActualLeft = phaseHasActual
+            ? ((Math.min(...phaseActualStarts) - timelineStart.getTime()) / span) * 100
+            : null;
+          const phaseActualWidth = phaseHasActual
+            ? ((Math.max(...phaseActualEnds) - Math.min(...phaseActualStarts)) / span) * 100
+            : null;
+
           return (
             <div className="gantt-phase-group" key={phase.id}>
               <div className="gantt-phase-group__header">
-                <div className="gantt-phase-group__title">
+                <div className="gantt-phase-group__label">
+                  <button
+                    aria-label={expanded ? `Collapse ${phase.name}` : `Expand ${phase.name}`}
+                    className="gantt-phase-group__toggle"
+                    onClick={() => onTogglePhase(phase.id)}
+                    type="button"
+                  >
+                    {expanded ? "^" : "v"}
+                  </button>
                   <span className={`phase-dot ${phaseClass}`} />
-                  <strong>{phase.name}</strong>
-                  <span>{phaseTasks.length} tasks</span>
+                  <div className="gantt-phase-group__title">
+                    <strong>{phase.name}</strong>
+                    <span>{phaseTasks.length} tasks</span>
+                  </div>
+                </div>
+                <div className="gantt-phase-group__track" style={timelineStyle(timelineWidth, pxPerSegment)}>
+                  <div className="gantt-track-grid" />
+                  {todayVisible ? <div className="gantt-today" style={{ left: `${todayOffset}%` }} /> : null}
+                  <div
+                    className={`gantt-phase-bar gantt-phase-bar--planned ${phaseClass} ${
+                      phaseWidth <= 0 ? "gantt-phase-bar--milestone" : ""
+                    }`}
+                    style={{ left: `${phaseLeft}%`, width: phaseWidth <= 0 ? "12px" : `${phaseWidth}%` }}
+                  />
+                  {phaseHasActual && phaseActualLeft !== null && phaseActualWidth !== null ? (
+                    <div
+                      className={`gantt-phase-bar gantt-phase-bar--actual ${phaseClass} ${
+                        phaseActualWidth <= 0 ? "gantt-phase-bar--milestone" : ""
+                      }`}
+                      style={{ left: `${phaseActualLeft}%`, width: phaseActualWidth <= 0 ? "12px" : `${phaseActualWidth}%` }}
+                    />
+                  ) : null}
                 </div>
               </div>
 
-              {phaseTasks.map((task) => {
+              {expanded
+                ? phaseTasks.map((task) => {
                 const plannedStart = new Date(task.planned_start).getTime();
                 const plannedEnd = new Date(task.planned_end).getTime();
                 const plannedLeft = ((plannedStart - timelineStart.getTime()) / span) * 100;
@@ -480,6 +540,9 @@ function GanttPreview({
                 const isActive = hoveredBar?.task.id === task.id;
                 const scope = scopeMeta(task);
                 const progress = progressMeta(task);
+                const isPlannedMilestone = plannedWidth <= 0;
+                const isActualMilestone =
+                  actualLeft !== null && (actualWidth === null || actualWidth <= 0);
                 const handleHover = (event: React.MouseEvent<HTMLDivElement>) => {
                   const rect = event.currentTarget.getBoundingClientRect();
                   const parent = event.currentTarget.offsetParent as HTMLElement | null;
@@ -511,23 +574,23 @@ function GanttPreview({
                       <div className="gantt-track-grid" />
                       {todayVisible ? <div className="gantt-today" style={{ left: `${todayOffset}%` }} /> : null}
                       <div
-                        className={`gantt-bar gantt-bar--planned ${phaseClass} ${task.planned ? "" : "gantt-bar--unplanned"} ${progress.tone === "success" ? "gantt-bar--complete" : ""} ${isActive ? "gantt-bar--active" : ""}`}
-                        style={{ left: `${plannedLeft}%`, width: `${Math.max(plannedWidth, 1.5)}%` }}
+                        className={`gantt-bar gantt-bar--planned ${phaseClass} ${task.planned ? "" : "gantt-bar--unplanned"} ${progress.tone === "success" ? "gantt-bar--complete" : ""} ${isActive ? "gantt-bar--active" : ""} ${isPlannedMilestone ? "gantt-bar--milestone" : ""}`}
+                        style={{ left: `${plannedLeft}%`, width: isPlannedMilestone ? "10px" : `${plannedWidth}%` }}
                         onMouseEnter={handleHover}
                         onMouseMove={handleHover}
                         onMouseLeave={() => setHoveredBar(null)}
                       />
                       {showActuals && actualLeft !== null && actualWidth !== null ? (
                         <div
-                          className={`gantt-bar gantt-bar--actual ${phaseClass} ${isActive ? "gantt-bar--active" : ""}`}
-                          style={{ left: `${actualLeft}%`, width: `${Math.max(actualWidth, 1.5)}%` }}
+                          className={`gantt-bar gantt-bar--actual ${phaseClass} ${isActive ? "gantt-bar--active" : ""} ${isActualMilestone ? "gantt-bar--milestone" : ""}`}
+                          style={{ left: `${actualLeft}%`, width: isActualMilestone ? "10px" : `${actualWidth}%` }}
                           onMouseEnter={handleHover}
                           onMouseMove={handleHover}
                           onMouseLeave={() => setHoveredBar(null)}
                         />
                       ) : showActuals && actualLeft !== null ? (
                         <div
-                          className={`gantt-bar gantt-bar--actual gantt-bar--actual-point ${phaseClass} ${isActive ? "gantt-bar--active" : ""}`}
+                          className={`gantt-bar gantt-bar--actual gantt-bar--actual-point gantt-bar--milestone ${phaseClass} ${isActive ? "gantt-bar--active" : ""}`}
                           style={{ left: `${actualLeft}%`, width: "10px" }}
                           onMouseEnter={handleHover}
                           onMouseMove={handleHover}
@@ -537,7 +600,8 @@ function GanttPreview({
                     </div>
                   </div>
                 );
-              })}
+              })
+                : null}
             </div>
           );
         })}
@@ -599,6 +663,8 @@ export function PlanPage() {
   const markSaved = useWorkspaceStore((state) => state.markSaved);
   const setPlanViewMode = useWorkspaceStore((state) => state.setPlanViewMode);
   const planViewMode = useWorkspaceStore((state) => state.planViewMode);
+  const expandedPhaseIds = useWorkspaceStore((state) => state.expandedPhaseIds);
+  const togglePhase = useWorkspaceStore((state) => state.togglePhase);
   const isDirty = useWorkspaceStore((state) => state.isDirty);
   const toImportPayload = useWorkspaceStore((state) => state.toImportPayload);
   const [showActuals, setShowActuals] = useState(false);
@@ -730,7 +796,13 @@ export function PlanPage() {
             ))}
           </div>
         ) : (
-          <GanttPreview tasksByPhase={tasksByPhase} showActuals={showActuals} scaleMode={scaleMode} />
+          <GanttPreview
+            tasksByPhase={tasksByPhase}
+            showActuals={showActuals}
+            scaleMode={scaleMode}
+            expandedPhaseIds={expandedPhaseIds}
+            onTogglePhase={togglePhase}
+          />
         )}
       </section>
     </div>

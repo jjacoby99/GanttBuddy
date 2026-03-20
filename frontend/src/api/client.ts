@@ -2,6 +2,8 @@ import { env } from "../lib/env";
 import type {
   AttentionResponse,
   CreateProjectInput,
+  Delay,
+  DelayInput,
   DashboardAnalytics,
   InchingAnalytics,
   ProjectImportPayload,
@@ -147,6 +149,33 @@ export const api = {
       { token },
       params,
     );
+  },
+
+  getDelays(
+    token: string,
+    projectId: string,
+    params?: {
+      delay_type?: string;
+      shift_assignment_id?: string;
+      time_min?: string;
+      time_max?: string;
+      limit?: number;
+    },
+  ) {
+    return request<Delay[]>("/delays", { token }, { project_id: projectId, ...params });
+  },
+
+  saveDelays(
+    token: string,
+    projectId: string,
+    payload: DelayInput[],
+    options?: { replace?: boolean },
+  ) {
+    return request<Delay[]>(`/delays/${projectId}/delays`, {
+      method: "PUT",
+      token,
+      body: JSON.stringify(payload),
+    }, { replace: options?.replace ? "true" : undefined });
   },
 
   startTask(token: string, taskId: string, body: TaskActionInput) {

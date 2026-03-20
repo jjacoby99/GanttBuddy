@@ -100,6 +100,40 @@ export interface ShiftAssignment {
   end_date: string;
 }
 
+export type DelayType =
+  | "PERFORMANCE"
+  | "EQUIPMENT"
+  | "SAFETY"
+  | "FOUND_WORK"
+  | "PREPARATION"
+  | "MANPOWER_SHORTAGE"
+  | "OTHER";
+
+export interface Delay {
+  id: Id;
+  project_id: Id;
+  delay_type: DelayType;
+  duration_minutes: number;
+  description: string;
+  start_dt: string | null;
+  end_dt: string | null;
+  shift_assignment_id: Id | null;
+  created_by: Id;
+  created_at: string;
+  updated_at: string | null;
+  updated_by: Id | null;
+}
+
+export interface DelayInput {
+  id?: Id | null;
+  delay_type: DelayType;
+  duration_minutes: number;
+  description: string;
+  start_dt: string | null;
+  end_dt: string | null;
+  shift_assignment_id?: Id | null;
+}
+
 export interface ProjectSnapshot {
   project: ProjectSummary;
   settings: ProjectSettings | null;
