@@ -28,10 +28,12 @@ def fetch_project_snapshot(project_id: str, headers) -> dict:
     return r.json()
 
 @st.cache_data
-def fetch_projects(headers) -> dict:
+def fetch_projects(headers, include_closed: bool = False) -> dict:
     url = f"{API_BASE}/projects"
-
-    r = requests.get(url, headers=headers, timeout=30)
+    
+    params = {"include_closed": include_closed}
+    
+    r = requests.get(url, params=params, headers=headers, timeout=30)
     r.raise_for_status()
     return r.json()
 
@@ -329,3 +331,24 @@ def fetch_events(
         except Exception:
             pass
         raise ValueError(f"Failed to fetch events for: {e} {body}")
+
+def closeout_project(
+        *,
+        headers: dict,
+        project_id: str | UUID,
+):
+    project_id = str(project_id)
+    url = f"{API_BASE}/projects/closeout/{project_id}"
+
+    try:
+        response = requests.patch(url=url, headers=headers, timeout=30)
+        response.raise_for_status()
+        return response.json()    
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+
+        raise ValueError(f"Failed to closeout project {project_id}. This either means the project doesn't exist or its already closed.")
