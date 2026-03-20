@@ -1,27 +1,21 @@
+import streamlit as st
+
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, date, UTC
+from zoneinfo import ZoneInfo 
 from typing import Any, Optional
 
 from models.project_type import ProjectType
-import streamlit as st
+from models.event import EventIn
 
 from logic.backend.guards import require_login
 from logic.backend.api_client import fetch_project_snapshot
 from logic.backend.import_project import snapshot_to_project
 from logic.backend.project_list import get_projects
 
-
-@dataclass(frozen=True)
-class FeedEvent:
-    id: str
-    occurred_at: datetime
-    event_type: str
-    project_id: str
-    task_id: Optional[str]
-    actor_name: str
-    summary: str
-    details: dict[str, Any]
+from logic.backend.utils.parse_datetime import parse_backend_utc
+from logic.backend.events import get_events
 
 
 EVENT_TYPE_LABELS = {
@@ -89,44 +83,15 @@ def is_timezone_aware(dt_object):
     """Check if a datetime object is timezone-aware (aware) or naive."""
     return dt_object.tzinfo is not None and dt_object.tzinfo.utcoffset(dt_object) is not None
 
-def get_feed_events_placeholder(projects: dict) -> list[FeedEvent]:
-    """
-    Placeholder generator that fakes events from project updated timestamps.
-    Replace this later with an API call that returns task_events joined with user/project/task metadata.
-    """
-    now = datetime.now(UTC)
 
-    items: list[FeedEvent] = []
-    for i, (pid, p) in enumerate(projects.items()):
-        updated = p.get("updated") or now - timedelta(hours=6 + i)
-        updated = _safe_dt(updated)
-
-        items.append(
-            FeedEvent(
-                id=f"mock-{pid}-projupd",
-                occurred_at=updated,
-                event_type="project_updated",
-                project_id=pid,
-                task_id=None,
-                actor_name=p.get("updated_by", "System"),
-                summary="Project updated",
-                details={
-                    "project_name": p.get("name", "Unnamed project"),
-                    "raw": {k: str(v) for k, v in p.items()},
-                },
-            )
-        )
-
-    items.sort(key=lambda e: e.occurred_at, reverse=True)
-    return items[:50]
 
 
 def render_feed_header():
     st.markdown("## Feed")
-    st.caption("Changes and activity across your projects.")
+    st.caption("Changes and activity across your projects. All timestamps are in project local time.")
 
 
-def render_filters(projects: dict, events: list[FeedEvent]) -> dict[str, Any]:
+def render_filters(projects: dict, events: list[EventIn]) -> dict[str, Any]:
     with st.container(border=True):
         cols = st.columns([2, 1, 1, 1])
         with cols[0]:
@@ -155,7 +120,7 @@ def render_filters(projects: dict, events: list[FeedEvent]) -> dict[str, Any]:
                 "Event types",
                 options=all_types,
                 default=[],
-                format_func=lambda t: EVENT_TYPE_LABELS.get(t, t),
+                format_func=lambda t: EVENT_TYPE_LABELS.get(t.lower(), t),
             )
         with c2[2]:
             st.space("small")
@@ -174,7 +139,7 @@ def render_filters(projects: dict, events: list[FeedEvent]) -> dict[str, Any]:
     }
 
 
-def apply_filters(events: list[FeedEvent], filters: dict[str, Any]) -> list[FeedEvent]:
+def apply_filters(events: list[EventIn], filters: dict[str, Any]) -> list[EventIn]:
     q = filters["q"].lower()
     unread_only = filters["unread_only"]
     window = filters["window"]
@@ -192,25 +157,25 @@ def apply_filters(events: list[FeedEvent], filters: dict[str, Any]) -> list[Feed
     else:
         min_dt = datetime.min
 
-    out: list[FeedEvent] = []
+    out: list[EventIn] = []
     for e in events:
-        if e.occurred_at < min_dt:
+        if e.ts < min_dt:
             continue
         if project_filter and e.project_id not in project_filter:
             continue
-        if type_filter and e.event_type not in type_filter:
+        if type_filter and e.event_type.lower() not in type_filter:
             continue
         if unread_only and e.id in st.session_state.feed_read_event_ids:
             continue
         if q:
             hay = " ".join(
                 [
-                    e.actor_name,
-                    e.summary,
+                    e.user_name,
+                    e.message,
                     e.event_type,
                     e.project_id,
                     e.task_id or "",
-                    json.dumps(e.details, default=str),
+                    json.dumps(e.payload, default=str),
                 ]
             ).lower()
             if q not in hay:
@@ -218,32 +183,32 @@ def apply_filters(events: list[FeedEvent], filters: dict[str, Any]) -> list[Feed
         out.append(e)
 
     reverse = sort_dir == "Newest first"
-    out.sort(key=lambda x: x.occurred_at, reverse=reverse)
+    out.sort(key=lambda x: x.ts, reverse=reverse)
     return out
 
 
-def group_by_day(events: list[FeedEvent]) -> dict[date, list[FeedEvent]]:
-    groups: dict[date, list[FeedEvent]] = {}
+def group_by_day(events: list[EventIn]) -> dict[date, list[EventIn]]:
+    groups: dict[date, list[EventIn]] = {}
     for e in events:
-        d = e.occurred_at.date()
+        d = e.ts.date()
         groups.setdefault(d, []).append(e)
     return dict(sorted(groups.items(), key=lambda kv: kv[0], reverse=True))
 
 
-def render_event_card(e: FeedEvent, projects: dict, unread: bool = False):
+def render_event_card(e: EventIn, projects: dict, unread: bool = False):
     is_read = e.id in st.session_state.feed_read_event_ids
-    label = EVENT_TYPE_LABELS.get(e.event_type, e.event_type)
-    icon = EVENT_TYPE_ICONS.get(e.event_type, ":material/notifications:")
+    label = EVENT_TYPE_LABELS.get(e.event_type.lower(), e.event_type)
+    icon = EVENT_TYPE_ICONS.get(e.event_type.lower(), ":material/notifications:")
     project_name = (projects.get(e.project_id, {}).get("name") or "Unnamed project").split("\n")[0]
 
     with st.container(border=True):
         top = st.columns([3, 2, 1, 1])
         with top[0]:
             st.markdown(f"**{label}**")
-            st.caption(e.summary)
+            st.caption(e.message)
         with top[1]:
             st.markdown(project_name)
-            st.caption(f"{e.actor_name}  |  {_fmt_dt(e.occurred_at)}")
+            st.caption(f"{e.user_name}  |  {_fmt_dt(e.ts)}")
         with top[2]:
             if is_read:
                 st.caption("Read")
@@ -284,37 +249,37 @@ def render_event_card(e: FeedEvent, projects: dict, unread: bool = False):
                     width="stretch",
                     key=f"feed_copy_{e.id}_{"unread" if unread else "read"}",
                 ):
-                    st.session_state[f"feed_json_{e.id}"] = json.dumps(e.details, indent=2, default=str)
+                    st.session_state[f"feed_json_{e.id}"] = json.dumps(e.payload, indent=2, default=str)
                     st.toast("Event JSON stored in session state.")
             with cols[2]:
                 st.caption("Event payload (placeholder now; later this should reflect task_events.payload).")
 
-            st.code(json.dumps(e.details, indent=2, default=str), language="json")
+            st.code(json.dumps(e.payload, indent=2, default=str), language="json")
 
 
-def render_activity_stream(projects: dict, events: list[FeedEvent], unread: bool = False):
+def render_activity_stream(projects: dict, events: list[EventIn], unread: bool = False):
     if not events:
         st.info("No activity yet.")
         return
 
     groups = group_by_day(events)
     for d, day_events in groups.items():
-        st.markdown(f"### {d.isoformat()}")
-        for e in day_events:
-            render_event_card(e, projects, unread)
-        st.divider()
+        with st.expander(f"**{d.isoformat()}**"):
+            for e in day_events:
+                render_event_card(e, projects, unread)
+            st.divider()
 
 
-def render_project_pulse(projects: dict, events: list[FeedEvent]):
+def render_project_pulse(projects: dict, events: list[EventIn]):
     with st.container(border=True):
         st.markdown("### Project pulse")
-        st.caption("What’s moving lately.")
+        st.caption("What's moving lately.")
 
         now = datetime.now(UTC)
         scored = []
         for pid, p in projects.items():
-            updated = p.get("updated_at") or p.get("updated") or now - timedelta(days=9999)
-            updated = _safe_dt(updated)
+            updated = p.get("updated") or now - timedelta(days=9999)
+            # updated = parse_backend_utc(updated, ZoneInfo(p.get("timezone_name")))
 
             recent_events = [e for e in events if e.project_id == pid]
             score = len(recent_events) * 10 + max(0, int((now - updated).total_seconds() * -1 / 3600))
@@ -347,19 +312,20 @@ def render_project_pulse(projects: dict, events: list[FeedEvent]):
 def render_feed():
     _ensure_state()
 
-    projects = get_projects(st.session_state.get("auth_headers", {}))
+    headers = st.session_state.get("auth_headers", {})
+    projects = get_projects(headers=headers)
     render_feed_header()
 
     st.markdown("---")
 
-    events = get_feed_events_placeholder(projects)
+    events = get_events(headers=headers, n_events=50)
     filters = render_filters(projects, events)
     filtered = apply_filters(events, filters)
 
     left, right = st.columns([3, 1])
 
     with left:
-        tab = st.tabs(["Activity", "Unread", "Raw"])[0:3]
+        tab = st.tabs(["Activity", "Unread"])[0:2]
 
         with tab[0]:
             render_activity_stream(projects, filtered)
@@ -367,25 +333,6 @@ def render_feed():
         with tab[1]:
             unread = [e for e in filtered if e.id not in st.session_state.feed_read_event_ids]
             render_activity_stream(projects, unread, unread=True)
-
-        with tab[2]:
-            st.caption("Raw event list (debug view)")
-            st.dataframe(
-                [
-                    {
-                        "id": e.id,
-                        "occurred_at": _fmt_dt(e.occurred_at),
-                        "event_type": e.event_type,
-                        "project_id": e.project_id,
-                        "task_id": e.task_id,
-                        "actor": e.actor_name,
-                        "summary": e.summary,
-                    }
-                    for e in filtered
-                ],
-                width="stretch",
-                hide_index=True,
-            )
 
     with right:
         render_project_pulse(projects, events)
