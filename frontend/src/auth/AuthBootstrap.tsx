@@ -15,7 +15,7 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
       <div className="screen-center">
         <div className="panel panel--narrow">
           <h1>Loading GanttBuddy</h1>
-          <p>Connecting your React frontend to the existing backend session model.</p>
+          <p>Preparing your workspace.</p>
         </div>
       </div>
     );

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
@@ -7,6 +7,14 @@ import { useAuthStore } from "../../auth/auth-store";
 import { formatDateTime, fromInputDateTime, hoursBetween, toInputDateTime } from "../../lib/utils";
 import type { Phase, Task } from "../../types/api";
 import { useWorkspaceStore } from "./workspace-store";
+
+type ScaleMode = "auto" | "2h" | "6h" | "12h" | "1d";
+
+type HoveredBar = {
+  task: Task;
+  x: number;
+  y: number;
+};
 
 function statusMeta(status: string) {
   switch (status) {
@@ -21,6 +29,47 @@ function statusMeta(status: string) {
     default:
       return { label: "Not Started", tone: "neutral" };
   }
+}
+
+function progressMeta(task: Task) {
+  const isComplete = task.status === "COMPLETE" || task.status === "DONE";
+  if (isComplete) {
+    return { label: "Complete", tone: "success" };
+  }
+  if (task.actual_start) {
+    return { label: "In Flight", tone: "info" };
+  }
+  return { label: "Open", tone: "neutral" };
+}
+
+function scopeMeta(task: Task) {
+  return task.planned
+    ? { label: "Planned", tone: "planned", description: "Included in the original project scope" }
+    : { label: "Unplanned", tone: "unplanned", description: "Added after the original project plan" };
+}
+
+function formatScaleDate(value: Date, options: Intl.DateTimeFormatOptions) {
+  return new Intl.DateTimeFormat(undefined, options).format(value);
+}
+
+function alignToUnit(value: Date, unitMs: number) {
+  return new Date(Math.floor(value.getTime() / unitMs) * unitMs);
+}
+
+function ceilToUnit(value: Date, unitMs: number) {
+  return new Date(Math.ceil(value.getTime() / unitMs) * unitMs);
+}
+
+function addUnits(value: Date, amount: number, unitMs: number) {
+  return new Date(value.getTime() + amount * unitMs);
+}
+
+function timelineStyle(width: number, segmentWidth: number): CSSProperties {
+  const style = {
+    width: `${width}px`,
+    "--gantt-segment-width": `${segmentWidth}px`,
+  };
+  return style as CSSProperties;
 }
 
 function TaskEditor({ task }: { task: Task }) {
@@ -276,33 +325,267 @@ function PhaseSection({
   );
 }
 
-function GanttPreview({ tasks }: { tasks: Task[] }) {
+function GanttPreview({
+  tasksByPhase,
+  showActuals,
+  scaleMode,
+}: {
+  tasksByPhase: Array<{ phase: Phase; tasks: Task[] }>;
+  showActuals: boolean;
+  scaleMode: ScaleMode;
+}) {
+  const tasks = tasksByPhase.flatMap((entry) => entry.tasks);
+  const [hoveredBar, setHoveredBar] = useState<HoveredBar | null>(null);
+
   if (!tasks.length) {
     return <p className="muted">Add tasks to preview the planned sequence.</p>;
   }
 
   const starts = tasks.map((task) => new Date(task.planned_start).getTime());
-  const ends = tasks.map((task) => new Date(task.planned_end).getTime());
-  const min = Math.min(...starts);
-  const max = Math.max(...ends);
-  const span = Math.max(max - min, 1);
+  const ends = tasks.map((task) => {
+    const actualEnd = showActuals && task.actual_end ? new Date(task.actual_end).getTime() : null;
+    return actualEnd && actualEnd > new Date(task.planned_end).getTime()
+      ? actualEnd
+      : new Date(task.planned_end).getTime();
+  });
+
+  const totalSpanMs = Math.max(Math.max(...ends) - Math.min(...starts), 1);
+  const resolvedScale: Exclude<ScaleMode, "auto"> =
+    scaleMode === "auto"
+      ? totalSpanMs <= 4 * 24 * 60 * 60 * 1000
+        ? "2h"
+        : totalSpanMs <= 12 * 24 * 60 * 60 * 1000
+          ? "6h"
+          : totalSpanMs <= 28 * 24 * 60 * 60 * 1000
+            ? "12h"
+            : "1d"
+      : scaleMode;
+  const unitMs =
+    resolvedScale === "2h"
+      ? 2 * 60 * 60 * 1000
+      : resolvedScale === "6h"
+        ? 6 * 60 * 60 * 1000
+        : resolvedScale === "12h"
+          ? 12 * 60 * 60 * 1000
+          : 24 * 60 * 60 * 1000;
+  const pxPerSegment = resolvedScale === "2h" ? 88 : resolvedScale === "6h" ? 78 : resolvedScale === "12h" ? 70 : 76;
+
+  const timelineStart = alignToUnit(new Date(Math.min(...starts)), unitMs);
+  const timelineEnd = addUnits(ceilToUnit(new Date(Math.max(...ends)), unitMs), 1, unitMs);
+  const span = timelineEnd.getTime() - timelineStart.getTime();
+  const segmentCount = Math.max(1, Math.ceil(span / unitMs));
+  const timelineWidth = Math.max(segmentCount * pxPerSegment, 1280);
+  const today = new Date();
+  const todayOffset = ((today.getTime() - timelineStart.getTime()) / span) * 100;
+  const todayVisible = todayOffset >= 0 && todayOffset <= 100;
+
+  const scaleMarkers = Array.from({ length: segmentCount }, (_, index) => {
+    const date = addUnits(timelineStart, index, unitMs);
+    return {
+      key: date.toISOString(),
+      label:
+        resolvedScale === "1d"
+          ? formatScaleDate(date, { month: "short", day: "numeric" })
+          : formatScaleDate(date, { hour: "numeric" }),
+      sublabel:
+        resolvedScale === "1d"
+          ? formatScaleDate(date, { weekday: "short" })
+          : formatScaleDate(date, { month: "short", day: "numeric" }),
+      isMajor: resolvedScale === "1d" ? index === 0 || date.getDay() === 1 : date.getHours() === 0,
+    };
+  });
+
+  const palette = ["phase-a", "phase-b", "phase-c", "phase-d", "phase-e"];
 
   return (
-    <div className="gantt-preview">
-      {tasks.map((task) => {
-        const left = ((new Date(task.planned_start).getTime() - min) / span) * 100;
-        const width = ((new Date(task.planned_end).getTime() - new Date(task.planned_start).getTime()) / span) * 100;
-        return (
-          <div className="gantt-row" key={task.id}>
-            <span className="gantt-row__label">{task.name}</span>
-            <div className="gantt-row__track">
-              <div className="gantt-row__bar" style={{ left: `${left}%`, width: `${Math.max(width, 2)}%` }}>
-                <span>{task.status}</span>
+    <div className="gantt-board">
+      <div className="gantt-board__header">
+        <div>
+          <h3>Project timeline</h3>
+          <p>See the schedule across phases, planned work, and actual progress.</p>
+        </div>
+        <div className="gantt-legend">
+          <span className="legend-chip legend-chip--planned">
+            <span className="legend-bar legend-bar--planned" />
+            Planned window
+          </span>
+          {showActuals ? (
+            <span className="legend-chip legend-chip--actual">
+              <span className="legend-bar legend-bar--actual" />
+              Actual progress
+            </span>
+          ) : null}
+          <span className="legend-chip legend-chip--planned-task">
+            <span className="legend-symbol legend-symbol--planned-task" />
+            Planned task
+          </span>
+          <span className="legend-chip legend-chip--unplanned-task">
+            <span className="legend-symbol legend-symbol--unplanned-task" />
+            Unplanned task
+          </span>
+          <span className="legend-chip legend-chip--complete">
+            <span className="legend-symbol legend-symbol--complete" />
+            Complete
+          </span>
+          <span className="legend-chip legend-chip--open">
+            <span className="legend-symbol legend-symbol--open" />
+            Not complete
+          </span>
+          {todayVisible ? (
+            <span className="legend-chip legend-chip--today">
+              <span className="legend-bar legend-bar--today" />
+              Today
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="gantt-scroll">
+        <div className="gantt-scale" style={{ width: `${timelineWidth + 280}px` }}>
+          <div className="gantt-scale__labels">Activity</div>
+          <div className="gantt-scale__timeline" style={timelineStyle(timelineWidth, pxPerSegment)}>
+            {scaleMarkers.map((marker) => (
+              <div className={`gantt-scale__cell ${marker.isMajor ? "gantt-scale__cell--major" : ""}`} key={marker.key}>
+                <span>{marker.label}</span>
+                <small>{marker.sublabel}</small>
               </div>
+            ))}
+            {todayVisible ? <div className="gantt-today" style={{ left: `${todayOffset}%` }} /> : null}
+          </div>
+        </div>
+
+        {tasksByPhase.map(({ phase, tasks: phaseTasks }, phaseIndex) => {
+          const phaseClass = palette[phaseIndex % palette.length];
+          return (
+            <div className="gantt-phase-group" key={phase.id}>
+              <div className="gantt-phase-group__header">
+                <div className="gantt-phase-group__title">
+                  <span className={`phase-dot ${phaseClass}`} />
+                  <strong>{phase.name}</strong>
+                  <span>{phaseTasks.length} tasks</span>
+                </div>
+              </div>
+
+              {phaseTasks.map((task) => {
+                const plannedStart = new Date(task.planned_start).getTime();
+                const plannedEnd = new Date(task.planned_end).getTime();
+                const plannedLeft = ((plannedStart - timelineStart.getTime()) / span) * 100;
+                const plannedWidth = ((plannedEnd - plannedStart) / span) * 100;
+                const actualStart = task.actual_start ? new Date(task.actual_start).getTime() : null;
+                const actualEnd = task.actual_end ? new Date(task.actual_end).getTime() : null;
+                const actualLeft =
+                  actualStart !== null ? ((actualStart - timelineStart.getTime()) / span) * 100 : null;
+                const actualWidth =
+                  actualStart !== null && actualEnd !== null ? ((actualEnd - actualStart) / span) * 100 : null;
+                const isActive = hoveredBar?.task.id === task.id;
+                const scope = scopeMeta(task);
+                const progress = progressMeta(task);
+                const handleHover = (event: React.MouseEvent<HTMLDivElement>) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const parent = event.currentTarget.offsetParent as HTMLElement | null;
+                  const parentRect = parent?.getBoundingClientRect();
+                  setHoveredBar({
+                    task,
+                    x: rect.left - (parentRect?.left ?? 0) + rect.width / 2,
+                    y: rect.top - (parentRect?.top ?? 0),
+                  });
+                };
+
+                return (
+                  <div className={`gantt-timeline-row ${isActive ? "gantt-timeline-row--active" : ""}`} key={task.id}>
+                    <div className="gantt-timeline-row__label">
+                      <strong>{task.name}</strong>
+                      <div className="gantt-timeline-row__meta">
+                        <span
+                          className={`timeline-indicator timeline-indicator--${scope.tone}`}
+                          title={scope.description}
+                        />
+                        <span
+                          className={`timeline-indicator timeline-indicator--${progress.tone}`}
+                          title={progress.label}
+                        />
+                        <span className="muted">{hoursBetween(task.planned_start, task.planned_end).toFixed(1)} h planned</span>
+                      </div>
+                    </div>
+                    <div className="gantt-timeline-row__track" style={timelineStyle(timelineWidth, pxPerSegment)}>
+                      <div className="gantt-track-grid" />
+                      {todayVisible ? <div className="gantt-today" style={{ left: `${todayOffset}%` }} /> : null}
+                      <div
+                        className={`gantt-bar gantt-bar--planned ${phaseClass} ${task.planned ? "" : "gantt-bar--unplanned"} ${progress.tone === "success" ? "gantt-bar--complete" : ""} ${isActive ? "gantt-bar--active" : ""}`}
+                        style={{ left: `${plannedLeft}%`, width: `${Math.max(plannedWidth, 1.5)}%` }}
+                        onMouseEnter={handleHover}
+                        onMouseMove={handleHover}
+                        onMouseLeave={() => setHoveredBar(null)}
+                      />
+                      {showActuals && actualLeft !== null && actualWidth !== null ? (
+                        <div
+                          className={`gantt-bar gantt-bar--actual ${phaseClass} ${isActive ? "gantt-bar--active" : ""}`}
+                          style={{ left: `${actualLeft}%`, width: `${Math.max(actualWidth, 1.5)}%` }}
+                          onMouseEnter={handleHover}
+                          onMouseMove={handleHover}
+                          onMouseLeave={() => setHoveredBar(null)}
+                        />
+                      ) : showActuals && actualLeft !== null ? (
+                        <div
+                          className={`gantt-bar gantt-bar--actual gantt-bar--actual-point ${phaseClass} ${isActive ? "gantt-bar--active" : ""}`}
+                          style={{ left: `${actualLeft}%`, width: "10px" }}
+                          onMouseEnter={handleHover}
+                          onMouseMove={handleHover}
+                          onMouseLeave={() => setHoveredBar(null)}
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+
+        {hoveredBar ? (
+          <div
+            className="gantt-tooltip"
+            style={{
+              left: `${Math.max(320, hoveredBar.x + 320)}px`,
+              top: `${Math.max(120, hoveredBar.y + 115)}px`,
+            }}
+          >
+            <strong>{hoveredBar.task.name}</strong>
+            <div className="gantt-tooltip__badges">
+              <span className={`status-pill status-pill--${statusMeta(hoveredBar.task.status).tone}`}>
+                {statusMeta(hoveredBar.task.status).label}
+              </span>
+              <span
+                className={`scope-pill ${hoveredBar.task.planned ? "scope-pill--planned" : "scope-pill--unplanned"}`}
+              >
+                {scopeMeta(hoveredBar.task).label}
+              </span>
+            </div>
+            <div className="gantt-tooltip__grid">
+              <span>Planned window</span>
+              <strong>{`${formatDateTime(hoveredBar.task.planned_start)} to ${formatDateTime(hoveredBar.task.planned_end)}`}</strong>
+              <span>Planned duration</span>
+              <strong>{hoursBetween(hoveredBar.task.planned_start, hoveredBar.task.planned_end).toFixed(1)} h</strong>
+              <span>Actual window</span>
+              <strong>
+                {hoveredBar.task.actual_start && hoveredBar.task.actual_end
+                  ? `${formatDateTime(hoveredBar.task.actual_start)} to ${formatDateTime(hoveredBar.task.actual_end)}`
+                  : hoveredBar.task.actual_start
+                    ? `Started ${formatDateTime(hoveredBar.task.actual_start)}`
+                    : "Not started"}
+              </strong>
+              <span>Actual duration</span>
+              <strong>
+                {hoveredBar.task.actual_start && hoveredBar.task.actual_end
+                  ? `${hoursBetween(hoveredBar.task.actual_start, hoveredBar.task.actual_end).toFixed(1)} h`
+                  : hoveredBar.task.actual_start
+                    ? "Started"
+                    : "Not started"}
+              </strong>
             </div>
           </div>
-        );
-      })}
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -319,6 +602,20 @@ export function PlanPage() {
   const isDirty = useWorkspaceStore((state) => state.isDirty);
   const toImportPayload = useWorkspaceStore((state) => state.toImportPayload);
   const [showActuals, setShowActuals] = useState(false);
+  const [scaleMode, setScaleMode] = useState<ScaleMode>("auto");
+
+  const tasksByPhase = useMemo(
+    () =>
+      draft
+        ? draft.phases.map((phase) => ({
+            phase,
+            tasks: draft.tasks
+              .filter((task) => task.phase_id === phase.id)
+              .sort((left, right) => left.position - right.position),
+          }))
+        : [],
+    [draft],
+  );
 
   useEffect(() => {
     if (!draft) {
@@ -343,22 +640,13 @@ export function PlanPage() {
     return null;
   }
 
-  const tasksByPhase = draft.phases.map((phase) => ({
-    phase,
-    tasks: draft.tasks.filter((task) => task.phase_id === phase.id).sort((left, right) => left.position - right.position),
-  }));
-
-  const allTasks = draft.tasks
-    .slice()
-    .sort((left, right) => new Date(left.planned_start).getTime() - new Date(right.planned_start).getTime());
-
   return (
     <div className="page">
       <section className="hero">
         <div>
-          <span className="eyebrow">Plan workspace</span>
+          <span className="eyebrow">Planning</span>
           <h1>{draft.project.name}</h1>
-          <p>Loaded from the backend snapshot contract and saved back through <code>/projects/import</code>.</p>
+          <p>Shape the schedule, adjust timing, and keep the plan readable from phase to task level.</p>
         </div>
         <div className="hero__meta">
           <span className={`chip ${isDirty() ? "chip--warn" : ""}`}>{isDirty() ? "Unsaved changes" : "Saved"}</span>
@@ -370,23 +658,30 @@ export function PlanPage() {
         <div className="panel__header">
           <div>
             <h2>Project details</h2>
-            <p>Keep the editing model close to the backend snapshot while React owns the draft state.</p>
+            <p>Update core project details and control how the planning workspace is displayed.</p>
           </div>
           <div className="button-row">
             <button className="button button--ghost" onClick={() => setPlanViewMode("phases")} type="button">
               Phase view
             </button>
             <button className="button button--ghost" onClick={() => setPlanViewMode("tasks")} type="button">
-              Task view
+              Gantt view
             </button>
             <button className="button button--ghost" onClick={() => setShowActuals((current) => !current)} type="button">
               {showActuals ? "Hide actuals" : "Show actuals"}
             </button>
+            <select value={scaleMode} onChange={(event) => setScaleMode(event.target.value as ScaleMode)}>
+              <option value="auto">Auto scale</option>
+              <option value="2h">2-hour scale</option>
+              <option value="6h">6-hour scale</option>
+              <option value="12h">12-hour scale</option>
+              <option value="1d">1-day scale</option>
+            </select>
             <button className="button button--ghost" onClick={addPhase} type="button">
               Add phase
             </button>
             <button className="button" disabled={!isDirty() || saveMutation.isPending} onClick={() => saveMutation.mutate()} type="button">
-              {saveMutation.isPending ? "Saving..." : "Save snapshot"}
+              {saveMutation.isPending ? "Saving..." : "Save project"}
             </button>
           </div>
         </div>
@@ -420,10 +715,11 @@ export function PlanPage() {
       <section className="panel">
         <div className="panel__header">
           <div>
-            <h2>{planViewMode === "phases" ? "Phases and tasks" : "Task timeline preview"}</h2>
+            <h2>{planViewMode === "phases" ? "Phases and tasks" : "Project timeline"}</h2>
             <p>
-              The MVP keeps planning edits simple and explicit while preserving the existing backend save
-              contract.
+              {planViewMode === "phases"
+                ? "Review the schedule row by row and edit tasks as needed."
+                : "Visualize the project in a tighter, more legible timeline view."}
             </p>
           </div>
         </div>
@@ -434,7 +730,7 @@ export function PlanPage() {
             ))}
           </div>
         ) : (
-          <GanttPreview tasks={allTasks} />
+          <GanttPreview tasksByPhase={tasksByPhase} showActuals={showActuals} scaleMode={scaleMode} />
         )}
       </section>
     </div>

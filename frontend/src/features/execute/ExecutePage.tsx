@@ -69,8 +69,8 @@ export function ExecutePage() {
       <section className="hero">
         <div>
           <span className="eyebrow">Execute workspace</span>
-          <h1>Task actions stay server-driven</h1>
-          <p>The React app uses the existing task action routes instead of mutating actuals through snapshot save.</p>
+          <h1>Task execution</h1>
+          <p>Update progress, capture actuals, and keep task notes current as the project moves.</p>
         </div>
       </section>
 
@@ -79,7 +79,7 @@ export function ExecutePage() {
           <div className="panel__header">
             <div>
               <h2>Task list</h2>
-              <p>Pick a task and drive execution through the dedicated backend routes.</p>
+              <p>Pick a task and update it as work happens in the field.</p>
             </div>
           </div>
           <div className="stack">
@@ -110,7 +110,7 @@ export function ExecutePage() {
           <div className="panel__header">
             <div>
               <h2>{selectedTask?.name ?? "Select a task"}</h2>
-              <p>Actuals, status, and notes use the task-specific backend actions already implemented in FastAPI.</p>
+              <p>Capture the latest status, actual times, and notes for the selected task.</p>
             </div>
           </div>
 

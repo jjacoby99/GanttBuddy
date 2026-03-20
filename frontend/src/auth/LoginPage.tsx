@@ -31,9 +31,9 @@ export function LoginPage() {
   return (
     <div className="screen-center">
       <form className="panel panel--narrow login-panel" onSubmit={handleSubmit}>
-        <span className="eyebrow">GanttBuddy React MVP</span>
+        <span className="eyebrow">GanttBuddy</span>
         <h1>Sign in</h1>
-        <p>Authenticate against the existing FastAPI backend and keep Streamlit available in parallel.</p>
+        <p>Sign in to continue to your project workspace.</p>
 
         <label>
           <span>Email</span>

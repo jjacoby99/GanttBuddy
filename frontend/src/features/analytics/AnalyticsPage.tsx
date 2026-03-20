@@ -66,8 +66,8 @@ export function AnalyticsPage() {
       <section className="hero">
         <div>
           <span className="eyebrow">Analytics</span>
-          <h1>Backend-driven charts</h1>
-          <p>The React app reuses the dashboard and inching endpoints instead of rebuilding analytics rules in TypeScript.</p>
+          <h1>Project analytics</h1>
+          <p>Review progress, production trends, and execution performance across the full project window.</p>
         </div>
       </section>
 
@@ -75,7 +75,7 @@ export function AnalyticsPage() {
         <div className="panel__header">
           <div>
             <h2>Filters</h2>
-            <p>Date windows are passed straight through to the backend analytics contract.</p>
+            <p>Focus the charts on the date window that matters most.</p>
           </div>
         </div>
         <div className="form-grid">
@@ -134,7 +134,7 @@ export function AnalyticsPage() {
               <div className="panel__header">
                 <div>
                   <h2>By task type</h2>
-                  <p>Directly shaped from the backend breakdown response.</p>
+                  <p>Compare planned and actual hours across task categories.</p>
                 </div>
               </div>
               <div className="chart-box">
@@ -160,7 +160,7 @@ export function AnalyticsPage() {
           <div className="panel__header">
             <div>
               <h2>Inching performance</h2>
-              <p>Using the existing inching analytics endpoint for the first React cut.</p>
+              <p>Track shift-by-shift performance and overall inching trends.</p>
             </div>
           </div>
           <div className="stats-grid">

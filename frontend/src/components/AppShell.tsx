@@ -21,10 +21,8 @@ export function AppShell() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand__eyebrow">GanttBuddy</div>
-          <div className="brand__title">React MVP</div>
-          <p className="brand__copy">
-            Parallel frontend against the existing FastAPI backend contract.
-          </p>
+          <div className="brand__title">Project Workspace</div>
+          <p className="brand__copy">Plan, track, and review project schedules in one place.</p>
         </div>
 
         <nav className="nav">
