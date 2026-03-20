@@ -23,6 +23,7 @@ class Project:
     name: str
     uuid: str = field(default_factory=new_id)
     description: Optional[str] = None
+    closed: bool = field(default=False)
     phases: dict[str, Phase] = field(default_factory=dict) # map of phase uuid to phase
     phase_order: list[str] = field(default_factory=list) # list of phase uuids in order
     settings: ProjectSettings = field(default_factory=ProjectSettings)
@@ -60,6 +61,18 @@ class Project:
             return None
         
         return max(phase.actual_end for phase in self.phases.values() if phase.actual_end is not None)
+
+    @property
+    def tasks_completed(self) -> int:
+        return sum(task.completed for task in self.get_task_list())
+    
+    @property
+    def total_tasks(self) -> int:
+        return len(self.get_task_list())
+    
+    @property
+    def tasks_remaining(self) -> int:
+        return self.total_tasks - self.tasks_completed
 
     @property
     def first_ttfi_cutoff(self) -> Optional[datetime]:
