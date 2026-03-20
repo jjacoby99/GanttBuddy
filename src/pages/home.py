@@ -9,6 +9,7 @@ from models.project import ProjectType
 
 import streamlit as st
 
+from models.plan_state import PlanState
 
 # -----------------------------
 # Placeholder models / data
@@ -43,7 +44,8 @@ def open_project(project_id: str) -> None:
         st.session_state["reline_metadata"] = metadata 
     
     st.cache_data.clear() # clear cache on new project load
-    st.rerun()
+    st.session_state.plan_state = PlanState(project_id=project_id)
+    st.switch_page("pages/plan.py")
 
 
 def go_to_projects_feed() -> None:
@@ -107,8 +109,12 @@ def main() -> None:
     # Placeholder data (replace with backend calls)
     headers = st.session_state.get("auth_headers", {})
     user = get_current_user(headers)
-    last_proj = get_projects(headers, n_proj=1)
-    pid = next(iter(last_proj))
+    last_proj = get_projects(headers, n_proj=1,include_closed=True)
+
+    pid = ""
+    if last_proj:
+        pid = next(iter(last_proj))
+
     needs = get_attention_items(headers, timezone=ZoneInfo(st.context.timezone))
     activity = get_events(headers, n_events=5)
     kpis = count_activities(needs)
