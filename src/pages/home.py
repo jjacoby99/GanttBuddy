@@ -97,7 +97,7 @@ from logic.backend.activity_items import get_attention_items, count_activities
 from logic.backend.events import get_events
 from ui.create_project import create_project
 from ui.load_project import render_load_project
-from ui.load_from_excel import load_from_excel
+from ui.load_from_excel import go_to_excel_import
 
 import datetime as dt
 # -----------------------------
@@ -169,7 +169,7 @@ def main() -> None:
             st.markdown("### 📄 Import")
             st.caption("Bring in an Excel schedule and start working immediately.")
             if st.button("Import from Excel", width="stretch"):
-                load_from_excel()
+                go_to_excel_import()
 
         with c3:
             st.markdown("### 📁 Browse")

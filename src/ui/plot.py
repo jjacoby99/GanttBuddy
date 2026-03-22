@@ -254,11 +254,9 @@ def render_task_details(session):
     
     st.dataframe(
         task_df,
+        column_order=["task", "planned_duration", "actual_duration", "delay", "notes"],
         column_config={
             "task": st.column_config.TextColumn("Task Name"),
-            "planned_start": st.column_config.DatetimeColumn("Planned Start"),
-            "planned_end": st.column_config.DatetimeColumn("Planned End"),
-            "actual_start": st.column_config.DatetimeColumn("Actual Start"),
             "actual_end": st.column_config.DatetimeColumn("Actual End"),
             "planned_duration": st.column_config.NumberColumn("Planned Duration (hrs)", format="%.2f"),
             "actual_duration": st.column_config.NumberColumn("Actual Duration (hrs)", format="%.2f"),
