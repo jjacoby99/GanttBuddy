@@ -33,8 +33,6 @@ export function LoginPage() {
       <form className="panel panel--narrow login-panel" onSubmit={handleSubmit}>
         <span className="eyebrow">GanttBuddy</span>
         <h1>Sign in</h1>
-        <p>Sign in to continue to your project workspace.</p>
-
         <label>
           <span>Email</span>
           <input

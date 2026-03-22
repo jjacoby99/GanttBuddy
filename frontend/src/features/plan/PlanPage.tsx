@@ -72,6 +72,36 @@ function timelineStyle(width: number, segmentWidth: number): CSSProperties {
   return style as CSSProperties;
 }
 
+function getStringValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getSiteCode(metadata: Record<string, unknown> | null): string | null {
+  if (!metadata) {
+    return null;
+  }
+
+  const direct =
+    getStringValue(metadata.site_code) ??
+    getStringValue(metadata.siteCode) ??
+    getStringValue(metadata.site);
+  if (direct) {
+    return direct;
+  }
+
+  const nestedSite = metadata.site_details;
+  if (nestedSite && typeof nestedSite === "object") {
+    const nestedCode =
+      getStringValue((nestedSite as Record<string, unknown>).code) ??
+      getStringValue((nestedSite as Record<string, unknown>).site_code);
+    if (nestedCode) {
+      return nestedCode;
+    }
+  }
+
+  return null;
+}
+
 function TaskEditor({ task }: { task: Task }) {
   const setTask = useWorkspaceStore((state) => state.setTask);
 
@@ -658,7 +688,6 @@ export function PlanPage() {
   const navigate = useNavigate();
   const token = useAuthStore((state) => state.token);
   const draft = useWorkspaceStore((state) => state.draft);
-  const setProject = useWorkspaceStore((state) => state.setProject);
   const addPhase = useWorkspaceStore((state) => state.addPhase);
   const markSaved = useWorkspaceStore((state) => state.markSaved);
   const setPlanViewMode = useWorkspaceStore((state) => state.setPlanViewMode);
@@ -706,73 +735,102 @@ export function PlanPage() {
     return null;
   }
 
+  const hasUnsavedChanges = isDirty();
+  const siteCode = draft.project.site_code ?? getSiteCode(draft.metadata);
+
   return (
     <div className="page">
       <section className="hero">
         <div>
           <span className="eyebrow">Planning</span>
           <h1>{draft.project.name}</h1>
+          <div className="hero__details">
+            {siteCode ? (
+              <span className="chip chip--site">
+                <span className="chip__icon chip__icon--site" aria-hidden="true" />
+                {siteCode}
+              </span>
+            ) : null}
+            <span className="chip chip--muted">{draft.project.timezone_name}</span>
+          </div>
           <p>Shape the schedule, adjust timing, and keep the plan readable from phase to task level.</p>
         </div>
         <div className="hero__meta">
-          <span className={`chip ${isDirty() ? "chip--warn" : ""}`}>{isDirty() ? "Unsaved changes" : "Saved"}</span>
           <span className="chip">Updated {formatDateTime(draft.project.updated_at)}</span>
+          {hasUnsavedChanges || saveMutation.isPending ? (
+            <button
+              className="button button--icon"
+              disabled={!hasUnsavedChanges || saveMutation.isPending}
+              onClick={() => saveMutation.mutate()}
+              type="button"
+            >
+              <span className="button__icon button__icon--save" aria-hidden="true" />
+              {saveMutation.isPending ? "Saving..." : "Save project"}
+            </button>
+          ) : null}
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel panel--elevated">
         <div className="panel__header">
           <div>
-            <h2>Project details</h2>
-            <p>Update core project details and control how the planning workspace is displayed.</p>
+            <h2>Workspace</h2>
+            <p>Switch between views and keep the timeline controls close at hand without crowding the chart.</p>
           </div>
-          <div className="button-row">
-            <button className="button button--ghost" onClick={() => setPlanViewMode("phases")} type="button">
-              Phase view
+          <div className="workspace-toolbar">
+            <button
+              className="button button--ghost button--icon"
+              onClick={() => setPlanViewMode(planViewMode === "phases" ? "tasks" : "phases")}
+              type="button"
+            >
+              <span
+                className={`button__icon ${
+                  planViewMode === "phases" ? "button__icon--timeline" : "button__icon--list"
+                }`}
+                aria-hidden="true"
+              />
+              {planViewMode === "phases" ? "Show gantt" : "Show phase list"}
             </button>
-            <button className="button button--ghost" onClick={() => setPlanViewMode("tasks")} type="button">
-              Gantt view
-            </button>
-            <button className="button button--ghost" onClick={() => setShowActuals((current) => !current)} type="button">
-              {showActuals ? "Hide actuals" : "Show actuals"}
-            </button>
-            <select value={scaleMode} onChange={(event) => setScaleMode(event.target.value as ScaleMode)}>
-              <option value="auto">Auto scale</option>
-              <option value="2h">2-hour scale</option>
-              <option value="6h">6-hour scale</option>
-              <option value="12h">12-hour scale</option>
-              <option value="1d">1-day scale</option>
-            </select>
-            <button className="button button--ghost" onClick={addPhase} type="button">
-              Add phase
-            </button>
-            <button className="button" disabled={!isDirty() || saveMutation.isPending} onClick={() => saveMutation.mutate()} type="button">
-              {saveMutation.isPending ? "Saving..." : "Save project"}
-            </button>
+            {planViewMode === "phases" ? (
+              <button className="button button--ghost button--icon" onClick={addPhase} type="button">
+                <span className="button__icon button__icon--plus" aria-hidden="true" />
+                Add phase
+              </button>
+            ) : null}
           </div>
         </div>
 
-        <div className="form-grid form-grid--three">
-          <label>
-            <span>Project name</span>
-            <input
-              value={draft.project.name}
-              onChange={(event) =>
-                setProject((project) => ({
-                  ...project,
-                  name: event.target.value,
-                }))
-              }
-            />
-          </label>
-          <label>
-            <span>Project type</span>
-            <input value={draft.project.project_type} disabled />
-          </label>
-          <label>
-            <span>Timezone</span>
-            <input value={draft.project.timezone_name} disabled />
-          </label>
+        <div className="workspace-summary">
+          {planViewMode === "tasks" ? (
+            <details className="plot-controls">
+              <summary className="plot-controls__summary">
+                <span className="button__icon button__icon--sliders" aria-hidden="true" />
+                Timeline controls
+              </summary>
+              <div className="plot-controls__body">
+                <button
+                  className="button button--ghost button--icon"
+                  onClick={() => setShowActuals((current) => !current)}
+                  type="button"
+                >
+                  <span className="button__icon button__icon--eye" aria-hidden="true" />
+                  {showActuals ? "Hide actuals" : "Show actuals"}
+                </button>
+                <label className="plot-controls__field">
+                  <span>Scale</span>
+                  <select value={scaleMode} onChange={(event) => setScaleMode(event.target.value as ScaleMode)}>
+                    <option value="auto">Auto scale</option>
+                    <option value="2h">2-hour scale</option>
+                    <option value="6h">6-hour scale</option>
+                    <option value="12h">12-hour scale</option>
+                    <option value="1d">1-day scale</option>
+                  </select>
+                </label>
+              </div>
+            </details>
+          ) : (
+            <span className="workspace-hint">Phase editing controls appear directly in each phase section below.</span>
+          )}
         </div>
 
         {saveMutation.isError ? <p className="error-text">{(saveMutation.error as Error).message}</p> : null}

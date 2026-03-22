@@ -43,6 +43,7 @@ export interface ProjectSummary {
   planned_start: string | null;
   planned_finish: string | null;
   site_id: Id | null;
+  site_code?: string | null;
   timezone_name: string;
 }
 
@@ -165,6 +166,7 @@ export interface ProjectImportProject {
   closed: boolean;
   project_type: string;
   site_id: Id | null;
+  site_code?: string | null;
   timezone_name: string;
 }
 

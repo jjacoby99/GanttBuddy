@@ -19,6 +19,13 @@ import { useAuthStore } from "../../auth/auth-store";
 import { formatDate } from "../../lib/utils";
 import { useWorkspaceStore } from "../plan/workspace-store";
 
+function formatKpiValue(value: number | string | null, unit?: string | null) {
+  if (value === null || value === "") {
+    return "Not set";
+  }
+  return unit ? `${value} ${unit}` : String(value);
+}
+
 export function AnalyticsPage() {
   const navigate = useNavigate();
   const token = useAuthStore((state) => state.token);
@@ -99,10 +106,7 @@ export function AnalyticsPage() {
             {dashboardQuery.data.overview.kpis.map((kpi) => (
               <article className="stat-card" key={kpi.key}>
                 <span>{kpi.label}</span>
-                <strong>
-                  {kpi.value}
-                  {kpi.unit ? ` ${kpi.unit}` : ""}
-                </strong>
+                <strong>{formatKpiValue(kpi.value, kpi.unit)}</strong>
               </article>
             ))}
           </section>
@@ -167,7 +171,7 @@ export function AnalyticsPage() {
             {inchingQuery.data.kpis.slice(0, 6).map((kpi) => (
               <article className="stat-card" key={kpi.key}>
                 <span>{kpi.label}</span>
-                <strong>{kpi.value}</strong>
+                <strong>{formatKpiValue(kpi.value, kpi.unit)}</strong>
               </article>
             ))}
           </div>

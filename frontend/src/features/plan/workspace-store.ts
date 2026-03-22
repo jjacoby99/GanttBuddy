@@ -192,6 +192,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         closed: draft.project.closed,
         project_type: draft.project.project_type,
         site_id: draft.project.site_id,
+        site_code: draft.project.site_code,
         timezone_name: draft.project.timezone_name,
       },
       settings: draft.settings,

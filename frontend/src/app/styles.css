@@ -136,6 +136,16 @@ code {
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(10px);
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  position: relative;
+  overflow: visible;
+}
+
+.panel {
+  z-index: 0;
+}
+
+.panel--elevated {
+  z-index: 12;
 }
 
 .hero,
@@ -166,9 +176,17 @@ code {
   align-items: center;
 }
 
+.hero__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.7rem 0 0.4rem;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
+  gap: 0.45rem;
   padding: 0.45rem 0.7rem;
   border-radius: 999px;
   background: rgba(33, 92, 163, 0.1);
@@ -180,6 +198,39 @@ code {
 .chip--warn {
   background: rgba(198, 106, 26, 0.12);
   color: #9a4d0f;
+}
+
+.chip--site {
+  background: linear-gradient(135deg, rgba(15, 58, 93, 0.12), rgba(33, 92, 163, 0.18));
+  color: #0f3a5d;
+}
+
+.chip--muted {
+  background: rgba(15, 23, 42, 0.06);
+  color: rgba(18, 37, 56, 0.72);
+  font-weight: 600;
+}
+
+.chip__icon {
+  width: 0.9rem;
+  height: 0.9rem;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.chip__icon--site {
+  border: 2px solid currentColor;
+  border-radius: 999px 999px 999px 0.25rem;
+  transform: rotate(45deg);
+  position: relative;
+}
+
+.chip__icon--site::before {
+  content: "";
+  position: absolute;
+  inset: 0.18rem;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .panel__header {
@@ -215,6 +266,79 @@ code {
   color: #122538;
   padding: 0.75rem 1rem;
   border-radius: 0.9rem;
+}
+
+.button--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.button__icon {
+  width: 1rem;
+  height: 1rem;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.button__icon--save {
+  border: 2px solid currentColor;
+  border-radius: 0.2rem;
+  position: relative;
+}
+
+.button__icon--save::before {
+  content: "";
+  position: absolute;
+  left: 0.15rem;
+  right: 0.15rem;
+  top: 0.15rem;
+  height: 0.18rem;
+  background: currentColor;
+}
+
+.button__icon--timeline {
+  background:
+    linear-gradient(currentColor, currentColor) left 0.1rem top 0.2rem / 0.15rem 0.6rem no-repeat,
+    linear-gradient(currentColor, currentColor) center top 0.1rem / 0.15rem 0.8rem no-repeat,
+    linear-gradient(currentColor, currentColor) right 0.1rem top 0.35rem / 0.15rem 0.45rem no-repeat;
+}
+
+.button__icon--list {
+  background:
+    linear-gradient(currentColor, currentColor) left top 0.15rem / 1rem 0.13rem no-repeat,
+    linear-gradient(currentColor, currentColor) left center / 1rem 0.13rem no-repeat,
+    linear-gradient(currentColor, currentColor) left bottom 0.15rem / 1rem 0.13rem no-repeat;
+}
+
+.button__icon--plus {
+  background:
+    linear-gradient(currentColor, currentColor) center / 0.16rem 1rem no-repeat,
+    linear-gradient(currentColor, currentColor) center / 1rem 0.16rem no-repeat;
+}
+
+.button__icon--sliders {
+  background:
+    linear-gradient(currentColor, currentColor) left top 0.2rem / 1rem 0.12rem no-repeat,
+    radial-gradient(circle, currentColor 0 44%, transparent 48%) left 0.55rem top 0.1rem / 0.4rem 0.4rem no-repeat,
+    linear-gradient(currentColor, currentColor) left center / 1rem 0.12rem no-repeat,
+    radial-gradient(circle, currentColor 0 44%, transparent 48%) left 0.15rem center / 0.4rem 0.4rem no-repeat,
+    linear-gradient(currentColor, currentColor) left bottom 0.2rem / 1rem 0.12rem no-repeat,
+    radial-gradient(circle, currentColor 0 44%, transparent 48%) left 0.7rem bottom / 0.4rem 0.4rem no-repeat;
+}
+
+.button__icon--eye {
+  border: 2px solid currentColor;
+  border-radius: 999px / 70%;
+  position: relative;
+}
+
+.button__icon--eye::before {
+  content: "";
+  position: absolute;
+  inset: 0.22rem;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .link-button {
@@ -308,6 +432,23 @@ textarea {
   padding: 1rem;
 }
 
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.stat-card span:first-child {
+  color: rgba(18, 37, 56, 0.68);
+}
+
+.stat-card strong {
+  display: block;
+  font-size: 1.4rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
 .attention-card,
 .task-card {
   display: flex;
@@ -350,6 +491,68 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
+}
+
+.workspace-toolbar,
+.workspace-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.workspace-summary {
+  position: relative;
+  z-index: 8;
+}
+
+.workspace-hint {
+  color: rgba(18, 37, 56, 0.72);
+  font-weight: 600;
+}
+
+.plot-controls {
+  position: relative;
+}
+
+.plot-controls__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  list-style: none;
+  cursor: pointer;
+  padding: 0.75rem 1rem;
+  border-radius: 0.9rem;
+  background: rgba(15, 23, 42, 0.06);
+  font-weight: 700;
+}
+
+.plot-controls__summary::-webkit-details-marker {
+  display: none;
+}
+
+.plot-controls[open] .plot-controls__summary {
+  background: rgba(33, 92, 163, 0.12);
+  color: #163758;
+}
+
+.plot-controls__body {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  z-index: 20;
+  min-width: 280px;
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.14);
+}
+
+.plot-controls__field {
+  min-width: 180px;
 }
 
 .gantt-board {
@@ -1234,6 +1437,12 @@ textarea {
 
   .gantt-scroll {
     max-height: none;
+  }
+
+  .plot-controls__body {
+    position: static;
+    min-width: 0;
+    margin-top: 0.6rem;
   }
 
   .delay-confirm,
