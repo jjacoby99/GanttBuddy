@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from models.delay import Delay, DelayEditorRow  
+from models.forecast import ForecastResponse, parse_forecast_response
 from typing import Optional
 
 from logic.backend.export_project import project_to_import_payload
@@ -210,6 +211,23 @@ def fetch_inching_performance(
         except Exception:
             pass
         raise ValueError(f"Failed to fetch analytics for {project_id}: {e} {body}")
+
+
+@st.cache_data
+def fetch_project_forecast(headers: dict, project_id: str) -> ForecastResponse:
+    url = f"{API_BASE}/projects/{project_id}/analytics/forecast"
+
+    try:
+        response = requests.get(url=url, headers=headers, timeout=30)
+        response.raise_for_status()
+        return parse_forecast_response(response.json())
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to fetch forecast for {project_id}: {e} {body}")
     
 
 def fetch_delays(
