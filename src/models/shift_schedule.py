@@ -68,7 +68,12 @@ class ShiftDefinition(BaseModel):
         slh = first_row["shift_length_hours"]
         tz = first_row["timezone"]
 
+        id_present = "id" in df.columns
+        if id_present:
+            id = first_row["id"]
+        
         return ShiftDefinition(
+            id=id if id_present else None,
             project_id=pid,
             day_start_time=dst,
             night_start_time=nst,
@@ -111,6 +116,7 @@ class ShiftAssignment(BaseModel):
         if missing:
             raise KeyError(f"Provided dataframe is missing required columns: {", ".join(missing)}")
         
+        id_present = "id" in df.columns
         assignments = []
         for _, row in df.iterrows():
             start = row["start_date"]
@@ -118,8 +124,12 @@ class ShiftAssignment(BaseModel):
             shift_type = row["shift_type"]
             crew_id = row["crew_id"]
 
+            if id_present:
+                id = row["id"]
+            
             assignments.append(
                 ShiftAssignment(
+                    id=id if id_present else None,
                     project_id=project_id if project_id else "",
                     crew_id=crew_id,
                     shift_type=shift_type,
