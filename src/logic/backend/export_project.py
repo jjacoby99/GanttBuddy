@@ -101,7 +101,7 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
         "shift_definition": None,
         "shift_assignments": None,
         "site_id": project.site_id if project.site_id else None,
-        "timezone_name": project.timezone.tzname()
+        "timezone_name": project.timezone.key
     }
 
     #project type
