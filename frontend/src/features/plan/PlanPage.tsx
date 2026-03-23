@@ -434,10 +434,6 @@ function GanttPreview({
   return (
     <div className="gantt-board">
       <div className="gantt-board__header">
-        <div>
-          <h3>Project timeline</h3>
-          <p>See the schedule across phases, planned work, and actual progress.</p>
-        </div>
         <div className="gantt-legend">
           <span className="legend-chip legend-chip--planned">
             <span className="legend-bar legend-bar--planned" />
@@ -843,7 +839,7 @@ export function PlanPage() {
             <p>
               {planViewMode === "phases"
                 ? "Review the schedule row by row and edit tasks as needed."
-                : "Visualize the project in a tighter, more legible timeline view."}
+                : "Interact with the project Gantt chart."}
             </p>
           </div>
         </div>
