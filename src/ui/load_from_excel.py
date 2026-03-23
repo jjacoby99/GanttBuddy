@@ -46,6 +46,9 @@ def _render_project_preview(analysis: dict) -> None:
             st.metric("Rows with provided predecessors", analysis["provided_predecessor_count"])
         with m2:
             st.metric("Rows inferred from formulas", analysis["inferred_predecessor_count"])
+        m3, _ = st.columns(2)
+        with m3:
+            st.metric("Phases inferred from formulas", analysis["inferred_phase_predecessor_count"])
 
 
 def render_excel_import_page() -> None:
@@ -180,4 +183,3 @@ def render_excel_import_page() -> None:
 
                 st.cache_data.clear()
                 st.switch_page("pages/plan.py")
-

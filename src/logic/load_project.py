@@ -319,6 +319,8 @@ class ExcelProjectLoader():
                 "provided_predecessors": ExcelProjectLoader._parse_predecessor_cell(row["PREDECESSOR"]),
                 "inferred_predecessors": [],
                 "resolved_predecessors": [],
+                "inferred_phase_predecessors": [],
+                "resolved_phase_predecessors": [],
                 "predecessor_source": "provided",
             }
 
@@ -333,13 +335,23 @@ class ExcelProjectLoader():
                     uuid = new_id()
                 parsed_row["uuid"] = uuid
                 task_rows_by_excel_row[excel_row] = parsed_row
+            else:
+                from logic.generate_id import new_id
+                parsed_row["uuid"] = new_id()
 
             schedule_rows.append(parsed_row)
+
+        phase_rows_by_excel_row = {
+            parsed_row["excel_row"]: parsed_row
+            for parsed_row in schedule_rows
+            if parsed_row["is_phase"]
+        }
 
         for parsed_row in schedule_rows:
             provided_predecessors = parsed_row["provided_predecessors"]
             resolved_predecessors = list(provided_predecessors)
             predecessor_source = "provided" if provided_predecessors else "none"
+            resolved_phase_predecessors: list[str] = []
 
             if (
                 infer_predecessors
@@ -356,7 +368,19 @@ class ExcelProjectLoader():
                             parsed_row["inferred_predecessors"] = list(resolved_predecessors)
                             predecessor_source = "inferred_from_start_formula"
 
+            if infer_predecessors and parsed_row["is_phase"]:
+                ref = parsed_row["start_formula_reference"]
+                if ref is not None:
+                    ref_col, ref_row = ref
+                    if ref_col == planned_end_col_letter:
+                        predecessor_phase_row = phase_rows_by_excel_row.get(ref_row)
+                        if predecessor_phase_row is not None and predecessor_phase_row["uuid"] != parsed_row["uuid"]:
+                            resolved_phase_predecessors = [predecessor_phase_row["uuid"]]
+                            parsed_row["inferred_phase_predecessors"] = list(resolved_phase_predecessors)
+                            predecessor_source = "inferred_phase_from_start_formula"
+
             parsed_row["resolved_predecessors"] = resolved_predecessors
+            parsed_row["resolved_phase_predecessors"] = resolved_phase_predecessors
             parsed_row["predecessor_source"] = predecessor_source
 
         return df, schedule_rows, wb_values, wb_formulas
@@ -389,6 +413,7 @@ class ExcelProjectLoader():
 
         preview_rows: list[dict[str, Any]] = []
         inferred_count = 0
+        inferred_phase_count = 0
         provided_count = 0
         task_count = 0
         phase_count = 0
@@ -404,6 +429,8 @@ class ExcelProjectLoader():
                 provided_count += 1
             if parsed_row["inferred_predecessors"]:
                 inferred_count += 1
+            if parsed_row["inferred_phase_predecessors"]:
+                inferred_phase_count += 1
 
             preview_rows.append(
                 {
@@ -415,8 +442,10 @@ class ExcelProjectLoader():
                     "Planned End": row["PLANNED END"],
                     "Start Formula": parsed_row["start_formula"] or "",
                     "Provided Predecessors": ", ".join(parsed_row["provided_predecessors"]),
-                    "Inferred Predecessors": ", ".join(parsed_row["inferred_predecessors"]),
-                    "Final Predecessors": ", ".join(parsed_row["resolved_predecessors"]),
+                    "Inferred Task Predecessors": ", ".join(parsed_row["inferred_predecessors"]),
+                    "Final Task Predecessors": ", ".join(parsed_row["resolved_predecessors"]),
+                    "Inferred Phase Predecessors": ", ".join(parsed_row["inferred_phase_predecessors"]),
+                    "Final Phase Predecessors": ", ".join(parsed_row["resolved_phase_predecessors"]),
                     "Predecessor Source": parsed_row["predecessor_source"],
                     "Planned": ExcelProjectLoader._coerce_bool(row["PLANNED"])
                     if not ExcelProjectLoader._is_nan(row["PLANNED"])
@@ -433,6 +462,7 @@ class ExcelProjectLoader():
             "phase_count": phase_count,
             "provided_predecessor_count": provided_count,
             "inferred_predecessor_count": inferred_count,
+            "inferred_phase_predecessor_count": inferred_phase_count,
             "schedule_preview": pd.DataFrame(preview_rows).head(preview_limit),
             "shift_definition_preview": pd.DataFrame(
                 [
@@ -519,6 +549,8 @@ class ExcelProjectLoader():
                 # Commit previous phase implicitly by starting a new one
                 new_phase = Phase(
                     name=ExcelProjectLoader._coerce_str(row["ACTIVITY"]),
+                    uuid=parsed_row["uuid"],
+                    predecessor_ids=list(parsed_row["resolved_phase_predecessors"]),
                 )
                 new_phase.planned = ExcelProjectLoader._coerce_bool(row["PLANNED"]) if not ExcelProjectLoader._is_nan(row["PLANNED"]) else True
                 project.add_phase(new_phase)
@@ -690,8 +722,8 @@ class ExcelProjectLoader():
             source,
             sheet_name=sheet_name,
             header=0,
-            usecols="A:E",
-            names=["project_id", "day_start_time", "night_start_time", "shift_length_hours", "timezone"]
+            usecols="A:F",
+            names=["id", "project_id", "day_start_time", "night_start_time", "shift_length_hours", "timezone"]
         )
 
         df["day_start_time"] = df["day_start_time"].map(ExcelProjectLoader.coerce_time)
