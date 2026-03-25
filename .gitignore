@@ -215,3 +215,4 @@ projects/
 
 #excel files
 *.csv
+tests/data/*
