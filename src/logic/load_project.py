@@ -1,25 +1,25 @@
+import datetime as dt
 import json
-import os
-import pandas as pd
-from models.project import Project
-from models.phase import Phase
-from models.project_settings import ProjectSettings
-from models.project_metadata import RelineMetadata
-from models.project_type import ProjectType
-
-from models.shift_schedule import ShiftDefinition, ShiftAssignment
-
-from models.task import Task, TaskType
-from pprint import pprint
 import math
-from dataclasses import dataclass, field
-from typing import Any, Optional
+import os
 import re
+import warnings
+from dataclasses import dataclass, field
+from io import BytesIO
+from typing import Any, Optional, Union
+
+import pandas as pd
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
-from io import BytesIO
-from typing import Union
-import datetime as dt
+
+from logic.generate_id import new_id as new_phase_id
+from models.phase import Phase
+from models.project import Project
+from models.project_metadata import RelineMetadata
+from models.project_settings import ProjectSettings
+from models.project_type import ProjectType
+from models.shift_schedule import ShiftAssignment, ShiftDefinition
+from models.task import Task, TaskType, new_id as new_task_id
 
 
 @dataclass
@@ -93,12 +93,19 @@ class ProjectLoader():
 
         return project
 
-import warnings
 warnings.filterwarnings(
     "ignore",
     message=".*extension is not supported and will be removed",
     module="openpyxl\\worksheet\\_reader"
 )   
+
+
+@dataclass
+class ExcelReadContext:
+    data: bytes
+    excel_file: pd.ExcelFile
+    workbook_values: Workbook
+    workbook_formulas: Workbook | None = None
 
 class ExcelProjectLoader():
 
@@ -247,9 +254,28 @@ class ExcelProjectLoader():
         return data
 
     @staticmethod
-    def _load_schedule_dataframe(data: bytes, params: ExcelParameters) -> pd.DataFrame:
+    def _build_read_context(
+        data: bytes,
+        include_formulas: bool = False,
+    ) -> ExcelReadContext:
+        return ExcelReadContext(
+            data=data,
+            excel_file=pd.ExcelFile(BytesIO(data), engine="openpyxl"),
+            workbook_values=load_workbook(BytesIO(data), read_only=True, data_only=True),
+            workbook_formulas=(
+                load_workbook(BytesIO(data), read_only=True, data_only=False)
+                if include_formulas
+                else None
+            ),
+        )
+
+    @staticmethod
+    def _load_schedule_dataframe(
+        source: bytes | pd.ExcelFile,
+        params: ExcelParameters,
+    ) -> pd.DataFrame:
         df = pd.read_excel(
-            BytesIO(data),
+            source,
             sheet_name=params.sheet_name,
             header=params.start_row - 2,
             usecols=params.get_pd_usecols(),
@@ -263,6 +289,8 @@ class ExcelProjectLoader():
         df["ACTUAL START"] = df["ACTUAL START"].replace({pd.NaT: None})
         df["ACTUAL END"] = df["ACTUAL END"].replace({pd.NaT: None})
         df["ACTIVITY"] = df["ACTIVITY"].map(ExcelProjectLoader._coerce_str)
+        for col in ("PLANNED START", "PLANNED END", "ACTUAL START", "ACTUAL END"):
+            df[col] = pd.to_datetime(df[col], errors="coerce")
         df = df[df["ACTIVITY"] != ""].reset_index(drop=True)
         return df
 
@@ -288,35 +316,82 @@ class ExcelProjectLoader():
         col, row = match.groups()
         return col.upper(), int(row)
 
+    @staticmethod
+    def _extract_start_formula_map(
+        workbook_formulas: Workbook | None,
+        params: ExcelParameters,
+        excel_rows: list[int],
+    ) -> dict[int, str | None]:
+        if workbook_formulas is None or not excel_rows:
+            return {}
+
+        formula_sheet = workbook_formulas[params.sheet_name]
+        planned_start_col = params["PLANNED START"]
+        formula_by_row: dict[int, str | None] = {}
+
+        for row_cells in formula_sheet.iter_rows(
+            min_row=min(excel_rows),
+            max_row=max(excel_rows),
+            min_col=planned_start_col,
+            max_col=planned_start_col,
+        ):
+            cell = row_cells[0]
+            formula_by_row[cell.row] = cell.value if isinstance(cell.value, str) else None
+
+        return formula_by_row
+
+    @staticmethod
+    def _coerce_project_datetime(
+        value: Any,
+        timezone: dt.tzinfo | None,
+    ) -> dt.datetime | None:
+        if value is None or pd.isna(value):
+            return None
+
+        parsed = value.to_pydatetime() if isinstance(value, pd.Timestamp) else value
+        if not isinstance(parsed, dt.datetime):
+            parsed = pd.to_datetime(parsed, errors="coerce")
+            if pd.isna(parsed):
+                return None
+            parsed = parsed.to_pydatetime()
+
+        if timezone is None:
+            return parsed.astimezone() if parsed.tzinfo is not None else parsed
+
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return parsed.replace(tzinfo=timezone)
+        return parsed.astimezone(timezone)
+
+    @staticmethod
     def _build_schedule_rows(
-        data: bytes,
+        context: ExcelReadContext,
         params: ExcelParameters,
         infer_predecessors: bool = False,
-    ) -> tuple[pd.DataFrame, list[dict[str, Any]], Workbook, Workbook]:
-        df = ExcelProjectLoader._load_schedule_dataframe(data, params)
+    ) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
+        df = ExcelProjectLoader._load_schedule_dataframe(context.excel_file, params)
 
-        wb_values = load_workbook(BytesIO(data), read_only=True, data_only=True)
-        wb_formulas = load_workbook(BytesIO(data), read_only=True, data_only=False)
-        formula_sheet = wb_formulas[params.sheet_name]
-
-        planned_start_col = params["PLANNED START"]
         planned_end_col = params["PLANNED END"]
         planned_end_col_letter = get_column_letter(planned_end_col)
+        formula_by_row = ExcelProjectLoader._extract_start_formula_map(
+            workbook_formulas=context.workbook_formulas,
+            params=params,
+            excel_rows=df["_excel_row"].astype(int).tolist(),
+        )
 
         schedule_rows: list[dict[str, Any]] = []
         task_rows_by_excel_row: dict[int, dict[str, Any]] = {}
 
-        for _, row in df.iterrows():
-            excel_row = int(row["_excel_row"])
-            is_phase = ExcelProjectLoader.is_phase_cell(row["PLANNED DURATION (HOURS)"])
+        for row_data in df.to_dict(orient="records"):
+            excel_row = int(row_data["_excel_row"])
+            is_phase = ExcelProjectLoader.is_phase_cell(row_data["PLANNED DURATION (HOURS)"])
             parsed_row = {
                 "excel_row": excel_row,
                 "is_phase": is_phase,
-                "row": row,
+                "row": row_data,
                 "uuid": None,
                 "start_formula": None,
                 "start_formula_reference": None,
-                "provided_predecessors": ExcelProjectLoader._parse_predecessor_cell(row["PREDECESSOR"]),
+                "provided_predecessors": ExcelProjectLoader._parse_predecessor_cell(row_data["PREDECESSOR"]),
                 "inferred_predecessors": [],
                 "resolved_predecessors": [],
                 "inferred_phase_predecessors": [],
@@ -324,20 +399,18 @@ class ExcelProjectLoader():
                 "predecessor_source": "provided",
             }
 
-            formula_value = formula_sheet.cell(row=excel_row, column=planned_start_col).value
-            parsed_row["start_formula"] = formula_value if isinstance(formula_value, str) else None
+            formula_value = formula_by_row.get(excel_row)
+            parsed_row["start_formula"] = formula_value
             parsed_row["start_formula_reference"] = ExcelProjectLoader._parse_direct_cell_reference(formula_value)
 
             if not is_phase:
-                uuid = ExcelProjectLoader._coerce_str(row["UUID"])
+                uuid = ExcelProjectLoader._coerce_str(row_data["UUID"])
                 if uuid == "":
-                    from models.task import new_id
-                    uuid = new_id()
+                    uuid = new_task_id()
                 parsed_row["uuid"] = uuid
                 task_rows_by_excel_row[excel_row] = parsed_row
             else:
-                from logic.generate_id import new_id
-                parsed_row["uuid"] = new_id()
+                parsed_row["uuid"] = new_phase_id()
 
             schedule_rows.append(parsed_row)
 
@@ -383,7 +456,7 @@ class ExcelProjectLoader():
             parsed_row["resolved_phase_predecessors"] = resolved_phase_predecessors
             parsed_row["predecessor_source"] = predecessor_source
 
-        return df, schedule_rows, wb_values, wb_formulas
+        return df, schedule_rows
 
     @staticmethod
     def analyze_excel_project(
@@ -393,23 +466,27 @@ class ExcelProjectLoader():
         preview_limit: int = 100,
     ) -> dict[str, Any]:
         data = ExcelProjectLoader._read_excel_bytes(file)
-        _, schedule_rows, wb_values, _ = ExcelProjectLoader._build_schedule_rows(
+        context = ExcelProjectLoader._build_read_context(
             data=data,
+            include_formulas=infer_predecessors,
+        )
+        _, schedule_rows = ExcelProjectLoader._build_schedule_rows(
+            context=context,
             params=params,
             infer_predecessors=infer_predecessors,
         )
 
-        plan_sheet = wb_values[params.sheet_name]
+        plan_sheet = context.workbook_values[params.sheet_name]
         project_name = plan_sheet[params.project_name_cell].value or "Untitled Project"
-        project_id = ExcelProjectLoader.load_project_id(wb_values)
-        project_type = ExcelProjectLoader.load_project_type(wb_values)
+        project_id = ExcelProjectLoader.load_project_id(context.workbook_values)
+        project_type = ExcelProjectLoader.load_project_type(context.workbook_values)
         metadata = (
-            ExcelProjectLoader.load_metadata(wb_values)
+            ExcelProjectLoader.load_metadata(context.workbook_values)
             if project_type == ProjectType.MILL_RELINE
             else None
         )
-        shift_definition = ExcelProjectLoader.load_shift_definition(data, project_id=project_id)
-        shift_assignments = ExcelProjectLoader.load_shift_assignments(data, project_id=project_id)
+        shift_definition = ExcelProjectLoader.load_shift_definition(context.excel_file, project_id=project_id)
+        shift_assignments = ExcelProjectLoader.load_shift_assignments(context.excel_file, project_id=project_id)
 
         preview_rows: list[dict[str, Any]] = []
         inferred_count = 0
@@ -498,24 +575,36 @@ class ExcelProjectLoader():
         infer_predecessors: bool = False,
     ) -> tuple[Project, Optional[RelineMetadata]]:
         data = ExcelProjectLoader._read_excel_bytes(file)
-        _, schedule_rows, wb, _ = ExcelProjectLoader._build_schedule_rows(
+        context = ExcelProjectLoader._build_read_context(
             data=data,
+            include_formulas=infer_predecessors,
+        )
+        _, schedule_rows = ExcelProjectLoader._build_schedule_rows(
+            context=context,
             params=params,
             infer_predecessors=infer_predecessors,
         )
 
+        wb = context.workbook_values
         plan_sheet = wb[params.sheet_name]
         proj_name = plan_sheet[params.project_name_cell].value
 
         project = Project(name=proj_name if proj_name else "Untitled Project")
 
         project_id = ExcelProjectLoader.load_project_id(wb)
-        print(f"Loaded project_id {project_id}. Type: {type(project_id)}")
         if project_id is not None:
             project.uuid = project_id #existing project, preserve uuid for backend.
 
-        project.shift_definition = ExcelProjectLoader.load_shift_definition(data, project_id=project.uuid)
-        project.shift_assignments = ExcelProjectLoader.load_shift_assignments(data, project_id=project.uuid)
+        project.shift_definition = ExcelProjectLoader.load_shift_definition(
+            context.excel_file,
+            project_id=project.uuid,
+        )
+        project.shift_assignments = ExcelProjectLoader.load_shift_assignments(
+            context.excel_file,
+            project_id=project.uuid,
+        )
+        if project.shift_definition is not None:
+            project.timezone = project.shift_definition.timezone
         proj_type = ExcelProjectLoader.load_project_type(wb)
         project.project_type = proj_type
         metadata = None
@@ -529,10 +618,10 @@ class ExcelProjectLoader():
             name = ExcelProjectLoader._coerce_str(row["ACTIVITY"])
             return Task(
                 name=name,
-                start_date=pd.to_datetime(row["PLANNED START"], errors="coerce").to_pydatetime().astimezone() if not ExcelProjectLoader._is_nan(row["PLANNED START"]) else None,
-                end_date=pd.to_datetime(row["PLANNED END"], errors="coerce").to_pydatetime().astimezone() if not ExcelProjectLoader._is_nan(row["PLANNED END"]) else None,
-                actual_end=pd.to_datetime(row["ACTUAL END"], errors="coerce").to_pydatetime().astimezone() if not ExcelProjectLoader._is_nan(row["ACTUAL END"]) else None,
-                actual_start=pd.to_datetime(row["ACTUAL START"], errors="coerce").to_pydatetime().astimezone() if not ExcelProjectLoader._is_nan(row["ACTUAL START"]) else None,
+                start_date=ExcelProjectLoader._coerce_project_datetime(row["PLANNED START"], project.timezone),
+                end_date=ExcelProjectLoader._coerce_project_datetime(row["PLANNED END"], project.timezone),
+                actual_end=ExcelProjectLoader._coerce_project_datetime(row["ACTUAL END"], project.timezone),
+                actual_start=ExcelProjectLoader._coerce_project_datetime(row["ACTUAL START"], project.timezone),
                 note=ExcelProjectLoader._coerce_str(row["NOTES"]),
                 uuid=parsed_row["uuid"],
                 predecessor_ids=list(parsed_row["resolved_predecessors"]),
@@ -617,7 +706,6 @@ class ExcelProjectLoader():
         ws = wb[sheet_name]
         
         type_str = str(ws.cell(row=13, column=4).value) # D13
-        print(f"Read from 'Project Inputs' sheet for the type: {type_str}")
         proj_type = ProjectType.GENERIC
         match type_str:
             case "MILL_RELINE":
@@ -743,8 +831,8 @@ class ExcelProjectLoader():
             usecols="A:F",
             names=["id", "project_id", "shift_type", "crew_id", "start_date", "end_date"],
         )
-        df["start_date"] = pd.to_datetime(df["start_date"], errors="raise").dt.to_pydatetime()
-        df["end_date"] = pd.to_datetime(df["end_date"], errors="raise").dt.to_pydatetime()
+        df["start_date"] = pd.to_datetime(df["start_date"], errors="raise")
+        df["end_date"] = pd.to_datetime(df["end_date"], errors="raise")
 
         return ShiftAssignment.from_df(df, project_id=project_id)
 
