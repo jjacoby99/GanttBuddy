@@ -96,7 +96,7 @@ class ProjectLoader():
 warnings.filterwarnings(
     "ignore",
     message=".*extension is not supported and will be removed",
-    module="openpyxl\\worksheet\\_reader"
+    module=r"openpyxl\.worksheet\._reader"
 )   
 
 

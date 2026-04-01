@@ -26,7 +26,7 @@ def render_workspace_buttons():
 
         with st.container(horizontal_alignment="center"):
             st.info(f"Create or load a project to view.", icon=":material/info:", width=270)
-            path = Path(__file__).parent.parent.resolve() / "assets" / "ganttbuddy.png"
+            path = Path(__file__).parent.parent.parent.resolve() / "assets" / "ganttbuddy.png"
             st.space("large")
             st.image(load_image(path))
             st.stop()

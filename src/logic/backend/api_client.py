@@ -16,6 +16,7 @@ from logic.backend.export_project import project_to_import_payload
 from models.project import Project
 from models.crew import CrewOut
 from models.delay import DelayType
+from models.todo import TodoIn, TodoUpsertRow
 
 
 API_BASE = "http://127.0.0.1:8000"  # change for deployed
@@ -370,3 +371,90 @@ def closeout_project(
             pass
 
         raise ValueError(f"Failed to closeout project {project_id}. This either means the project doesn't exist or its already closed.")
+
+
+from models.task import TaskStatus
+
+def fetch_todos(
+        *,
+        headers: dict,
+        project_id: Optional[str | UUID] = None,
+        task_id: Optional[str | UUID] = None,
+        status: Optional[str | TaskStatus] = None
+):
+    params = {}
+    if project_id:
+        params["project_id"] = str(project_id)
+    
+    if task_id:
+        params["task_id"] = str(task_id)
+    
+    if status:
+        status_str = status.value if isinstance(status, TaskStatus) else status
+        params["status"] = status_str
+    
+    url = f"{API_BASE}/todos"
+
+    try:
+        resp = requests.get(url, headers=headers, params=params, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        body = ""
+        try:
+            body = resp.text
+        except Exception:
+            pass
+        
+        parts = [f"Failed to fetch todos"]
+        if project_id:
+            parts.append(f"for project id: {project_id}")
+        if task_id:
+            parts.append(f"for task id: {task_id}")
+        if status:
+            parts.append(f"with status {status_str}")
+
+        message = "\n\t".join(parts)
+
+        raise ValueError(f"Error fetching todos: {body}.\n{message}")
+
+
+def save_todos(
+    *,
+    headers: dict,
+    rows: list[TodoUpsertRow],
+    project_id: str | UUID | None = None,
+    replace: bool = False,
+) -> list[TodoIn]:
+    params: dict[str, str] = {}
+    if project_id is not None:
+        params["project_id"] = str(project_id)
+    if replace:
+        params["replace"] = "true"
+
+    payload: list[dict] = []
+    for row in rows:
+        item = row.model_dump()
+        for field in ("id", "project_id", "task_id"):
+            if item.get(field):
+                item[field] = str(item[field])
+            else:
+                item[field] = None
+        for field in ("start_date", "due_date", "completed_at"):
+            item[field] = _to_utc_iso(item.get(field))
+        payload.append(item)
+
+    url = f"{API_BASE}/todos"
+    resp = requests.put(url, headers=headers, json=payload, params=params or None, timeout=30)
+    resp.raise_for_status()
+    return [TodoIn.model_validate(item) for item in resp.json()]
+
+
+def delete_todo(
+    *,
+    headers: dict,
+    todo_id: str | UUID,
+) -> None:
+    url = f"{API_BASE}/todos/{todo_id}"
+    resp = requests.delete(url, headers=headers, timeout=30)
+    resp.raise_for_status()

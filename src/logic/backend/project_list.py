@@ -50,8 +50,8 @@ def get_projects(headers: dict, n_proj: int=-1, include_closed: bool = False) ->
             "description": description,
             "created": dt_created,
             "updated": dt_updated,
-            "planned_start": start_dt,
-            "planned_finish": end_dt,
+            "planned_start": start_dt if start else None,
+            "planned_finish": end_dt if start else None,
             "timezone_name": tz_str,
         }
     

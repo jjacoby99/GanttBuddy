@@ -138,8 +138,13 @@ def main() -> None:
         with right:
             st.markdown("#### Pick Up Where You Left Off")
             if last_proj:
-                ps = last_proj[pid].get("planned_start", None).strftime("%d/%m/%Y, %H:%M")
-                pe = last_proj[pid].get("planned_finish", None).strftime("%d/%m/%Y, %H:%M")
+                ps = last_proj[pid].get("planned_start", None)
+                if ps is not None:
+                    ps = ps.strftime("%d/%m/%Y, %H:%M")
+                
+                pe = last_proj[pid].get("planned_finish", None)
+                if pe is not None:
+                    pe = pe.strftime("%d/%m/%Y, %H:%M")
 
                 st.caption(f"**{last_proj[pid].get('name', '')}**")
                 st.caption(f"**Planned Duration**: {ps} -> {pe}")

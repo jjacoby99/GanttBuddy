@@ -150,6 +150,25 @@ def test_load_excel_project_builds_schedule_from_single_workbook_fixture(excel_b
     assert all(task.timezone_aware for task in project.get_task_list())
 
 
+def test_load_excel_project_coerces_task_datetime_fields_to_python_datetimes(excel_bytes: bytes) -> None:
+    project, _ = ExcelProjectLoader.load_excel_project(
+        file=excel_bytes,
+        params=_default_excel_parameters(),
+        infer_predecessors=False,
+    )
+
+    tasks = project.get_task_list()
+    assert tasks
+
+    for task in tasks:
+        assert isinstance(task.start_date, dt.datetime)
+        assert isinstance(task.end_date, dt.datetime)
+        if task.actual_start is not None:
+            assert isinstance(task.actual_start, dt.datetime)
+        if task.actual_end is not None:
+            assert isinstance(task.actual_end, dt.datetime)
+
+
 def test_infer_predecessors_resolves_task_and_phase_dependencies(
     excel_bytes: bytes,
     monkeypatch: pytest.MonkeyPatch,
