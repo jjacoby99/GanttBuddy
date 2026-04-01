@@ -32,6 +32,7 @@ with st.sidebar:
 
 # Logged in:
 home = st.Page("pages/home.py", title="Home", icon=":material/home:")
+todos = st.Page("pages/todo.py", title="Todos", icon=":material/checklist:")
 account = st.Page("pages/account.py", title="Account", icon=":material/person:")
 projects = st.Page("pages/projects.py", title="Load", icon=":material/folder_open:")
 excel_import = st.Page("pages/excel_import.py", title="Excel Import", icon=":material/table_view:")
@@ -45,7 +46,7 @@ analytics = st.Page("pages/analytics.py", title="Analytics", icon=":material/que
 manage = st.Page("pages/manage.py", title="Manage", icon=":material/manage_accounts:")
 
 pages = {
-    "Home": [home, account], 
+    "Home": [home, todos, account], 
     "Projects": [projects, excel_import, feed, build],
 }
 

@@ -12,12 +12,18 @@ import pandas as pd
 from typing import Literal
 
 from enum import Enum
+
 class TaskType(str, Enum):
     INCH = "INCH"
     STRIP = "STRIP"
     INSTALL = "INSTALL"
     GENERIC = "GENERIC"
 
+class TaskStatus(str, Enum):
+    NOT_STARTED = "NOT_STARTED"
+    IN_PROGRESS = "IN_PROGRESS"
+    BLOCKED = "BLOCKED"
+    COMPLETE = "COMPLETE"
 
 @dataclass_json
 @dataclass
