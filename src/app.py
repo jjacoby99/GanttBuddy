@@ -2,7 +2,7 @@ import streamlit as st
 
 from logic.state import initialize_session_state
 from logic.backend.guards import require_login, is_admin
-from logic.backend.login import is_logged_in, get_current_user, reset_auth
+from logic.backend.login import is_logged_in, get_current_user, logout
 
 st.set_page_config(
     page_title="GanttBuddy", 
@@ -27,8 +27,7 @@ with st.sidebar:
         st.caption(f":material/person: {user_data['email']}")
         st.space("stretch")
         if st.button(":material/logout: Logout", type="tertiary"):
-            reset_auth()
-            st.rerun()
+            logout()
 
 # Logged in:
 home = st.Page("pages/home.py", title="Home", icon=":material/home:")

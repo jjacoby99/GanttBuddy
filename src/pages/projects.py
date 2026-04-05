@@ -67,6 +67,18 @@ def render_select_project(projects: dict):
 def render_project_explorer():
     require_login()
     projects = get_projects(st.session_state.get("auth_headers", {}))
+    if len(projects) < 1:
+        st.info(f":material/info: No accessible projects.")
+
+        to_home = st.button(
+            label="Return to home",
+            type="primary"
+        )
+
+        if to_home:
+            st.switch_page("pages/home.py")
+
+        st.stop()
 
     with st.container(vertical_alignment="center", horizontal_alignment="center"):
         render_select_project(projects) 

@@ -13,6 +13,8 @@ from models.task import TaskType
 
 from logic.backend.api_client import fetch_analytics, fetch_inching_performance
 from ui.utils.phase_delay_plot import generate_phase_delay_plot
+from ui.create_project import create_project
+from ui.load_project import render_load_project
 from logic.backend.utils.parse_datetime import parse_backend_utc
 
 # -------------------------
@@ -509,7 +511,30 @@ def main():
     _card_css()
 
     st.title("Analytics")
+    if st.session_state.session.project is None:
+        st.info(f":material/info: load a project to view available analytics.")
 
+        container = st.container(horizontal=True)
+        load_project = container.button(
+            label=f"Load Project",
+            type="primary"
+        )
+
+        container.space("stretch")
+
+        create_proj = container.button(
+            label=f"Create project",
+            type="secondary"
+        )
+
+        if load_project:
+            render_load_project()
+
+        if create_proj:
+            create_project()
+        
+        st.stop()
+            
     # Sidebar controls
     with st.sidebar:
         st.subheader("Controls")

@@ -8,6 +8,12 @@ from ui.utils.workspace import render_workspace_buttons
 import ui.utils.custom_tabs as ct
 
 # if this tab is available, we know project has been loaded. No need to check.
+proj = st.session_state.session.project
+if proj is None:
+    st.header(f"Delay Register")
+    st.info(":material/info: Load a project to view & edit delays.")
+    st.stop()
+
 st.header(f"{st.session_state.session.project.name} - Delays")
 
 delay_register, breakdown, delay_plot = st.tabs(

@@ -8,6 +8,10 @@ def initialize_session_state():
         st.session_state["access_token"] = None
     if "auth_headers" not in st.session_state:
         st.session_state["auth_headers"] = None
+    if "auth" not in st.session_state:
+        st.session_state["auth"] = {}
+    if "backend_auth_ready" not in st.session_state:
+        st.session_state["backend_auth_ready"] = False
     if "session" not in st.session_state:
         st.session_state.session = SessionModel()
     if "selected_project_id" not in st.session_state:
@@ -21,7 +25,7 @@ def initialize_session_state():
 
 
 def state_initialized() -> bool:
-    state_vars = ["access_token", "auth_headers", "session"]
+    state_vars = ["access_token", "auth_headers", "auth", "backend_auth_ready", "session"]
     for var in state_vars:
         if not var in st.session_state:
             return False

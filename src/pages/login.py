@@ -1,6 +1,6 @@
 import streamlit as st
 
-from logic.backend.login import login, set_auth
+from logic.backend.login import render_oidc_login_button
 
 from PIL import Image
 from pathlib import Path
@@ -15,22 +15,12 @@ def render_login():
             st.space("stretch")
             st.image(Image.open(bta_path), width=100)
         
-        with st.form("login_form", width="content"):
+        with st.container(width="content"):
             st.subheader("Sign in")
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
+            st.caption("Use your organization identity provider to continue.")
 
             with st.container(horizontal_alignment="center", vertical_alignment="center"):
-                
-
-                if st.form_submit_button(":material/login: Sign In", type="tertiary"):
-                    try:
-                        token = login(username, password)
-                        st.success("Login successful!")
-                        set_auth(token)
-                        st.rerun()
-                    except Exception:
-                        st.error("Login failed. Please check your credentials.")
+                render_oidc_login_button()
 
   
 

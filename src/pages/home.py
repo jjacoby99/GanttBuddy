@@ -153,7 +153,7 @@ def main() -> None:
                     open_project(pid)
             else:
                 st.caption("No recent project found.")
-                if st.button("Browse projects", width="stretch"):
+                if st.button("Browse", width="stretch"):
                     render_load_project()
 
     st.write("")

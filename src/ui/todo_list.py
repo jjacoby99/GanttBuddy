@@ -135,7 +135,8 @@ def _normalize_for_compare(rows: list[dict]) -> str:
                     pass
             normalized[key] = str(value) if key in {"id", "owner_id", "project_id", "task_id"} and value else value
         comparable.append(normalized)
-    comparable.sort(key=lambda row: (row.get("id") or "", row.get("name") or "", row.get("task_id") or ""))
+    
+    comparable.sort(key=lambda row: row.get("priority"), reverse=False)
     return json.dumps(comparable, sort_keys=True, default=str)
 
 
@@ -333,17 +334,56 @@ def _render_empty_state() -> None:
         unsafe_allow_html=True,
     )
 
+def todos_completed_in_last_t(rows: list[dict], last_t: dt.timedelta = dt.timedelta(days=7)) -> list[dict]:
+    todos_completed_in_last_t = []
+    now = dt.datetime.now(dt.UTC)
+    for row in rows:
+        completed = row.get("completed_at", None)
+        if completed is None:
+            continue
+
+        if completed + last_t > now:
+            todos_completed_in_last_t.append(row)
+    
+    return todos_completed_in_last_t
+
+def todos_created_in_last_t(rows: list[dict], last_t: dt.timedelta = dt.timedelta(days=7)) -> list[dict]:
+    todos_created_in_last_t = []
+    now = dt.datetime.now(dt.UTC)
+
+    for row in rows:
+        created = row.get("created_at", None)
+        if created is None:
+            continue
+
+        if created + last_t > now:
+            todos_created_in_last_t.append(row)
+    return todos_created_in_last_t
 
 def _render_summary(rows: list[dict]) -> None:
+    created = todos_created_in_last_t(rows, last_t=dt.timedelta(days=7))
+    num_created_last_week = len(created)
     total = len(rows)
+
+    completed_last_week = todos_completed_in_last_t(rows, last_t=dt.timedelta(days=7))
+    num_completed_last_week = len(completed_last_week)
+
     completed = sum(1 for row in rows if row["status"] == TaskStatus.COMPLETE.value)
+
+
     blocked = sum(1 for row in rows if row["status"] == TaskStatus.BLOCKED.value)
-    high_priority = sum(1 for row in rows if int(row["priority"]) <= 1)
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Open Todos", total - completed)
-    c2.metric("Completed", completed)
-    c3.metric("Blocked", blocked)
-    c4.metric("P0-P1", high_priority)
+    high_priority = sum(1 for row in rows if int(row["priority"]) <= 1 and row["status"] != TaskStatus.COMPLETE.value)
+    
+    c1, c2 = st.columns(2)
+    c1.metric("Open Todos", total - completed, f"{num_created_last_week} created this week")
+    c1.space("medium")
+    c1.metric("Open High Priority", high_priority)
+    
+    
+    c2.metric("Completed", completed, f"{num_completed_last_week} this week")
+    c2.space("medium")
+    c2.metric("Blocked", blocked)
+    
 
 
 def _render_card(
@@ -622,7 +662,6 @@ def render_todo_list() -> None:
     rows = _current_rows()
     editing_client_id = st.session_state.get(EDITING_TODO_KEY)
 
-    st.subheader("PM Todo List")
     st.caption("Track actions across projects, filter the queue quickly, and keep PM follow-ups visible in one place.")
 
     st.markdown(
@@ -646,7 +685,7 @@ def render_todo_list() -> None:
     )
 
     render_pending_confirmation()
-    _render_summary(rows)
+    
 
     toolbar_left, toolbar_right = st.columns([1, 1])
     if toolbar_left.button(":material/add_task: Add Todo", type="primary"):
@@ -658,8 +697,14 @@ def render_todo_list() -> None:
     if toolbar_right.button(":material/refresh: Reload From API", use_container_width=True):
         _load_todos()
         st.rerun()
-
-    filtered_rows = _render_filters(rows, task_name_map, project_options, project_name_map)
+    
+    metrics_col, filter_col = st.columns([1,3])
+    with metrics_col:
+        _render_summary(rows)
+    
+    with filter_col:
+        filtered_rows = _render_filters(rows, task_name_map, project_options, project_name_map)
+    
     if not filtered_rows:
         _render_empty_state()
     else:

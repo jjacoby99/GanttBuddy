@@ -14,6 +14,17 @@ def render_load_project() -> Project:
         st.error(f"Error fetching saved projects: {e}")
         st.stop()
     
+    if len(projects) < 1:
+        st.info(f":material/info: No accessible projects.")
+        st.caption(f"Create one on the homepage to get started.")
+ 
+        exit = st.button(f"Back", type="primary")
+
+        if exit:
+            st.rerun()
+
+        st.stop()
+
     load_proj = False
     
     selected_project_id = st.selectbox(
