@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 
+import { env } from "../lib/env";
 import { useAuthStore } from "./auth-store";
 
 export function LoginPage() {
   const token = useAuthStore((state) => state.token);
-  const login = useAuthStore((state) => state.login);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const beginLogin = useAuthStore((state) => state.beginLogin);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,50 +14,32 @@ export function LoginPage() {
     return <Navigate to="/projects" replace />;
   }
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleLogin = async () => {
     setPending(true);
     setError(null);
     try {
-      await login(email, password);
+      await beginLogin();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
+      setError(err instanceof Error ? err.message : "Sign in failed");
       setPending(false);
     }
   };
 
   return (
     <div className="screen-center">
-      <form className="panel panel--narrow login-panel" onSubmit={handleSubmit}>
+      <div className="panel panel--narrow login-panel">
         <span className="eyebrow">GanttBuddy</span>
         <h1>Sign in</h1>
-        <label>
-          <span>Email</span>
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-        </label>
+        <p>
+          Authenticate with your organization account to enter the project workspace.
+        </p>
 
-        <label>
-          <span>Password</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-        </label>
-
-        <button className="button" disabled={pending} type="submit">
-          {pending ? "Signing in..." : "Sign in"}
+        <button className="button" disabled={pending} onClick={handleLogin} type="button">
+          {pending ? "Redirecting..." : `Continue with ${env.oidcProviderName}`}
         </button>
 
         {error ? <p className="error-text">{error}</p> : null}
-      </form>
+      </div>
     </div>
   );
 }

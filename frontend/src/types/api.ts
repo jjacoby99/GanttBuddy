@@ -11,12 +11,18 @@ export interface User {
   name: string;
   is_active: boolean;
   created_at: string;
+  auth_provider?: string | null;
+  last_login_at?: string | null;
   roles: Role[];
 }
 
 export interface TokenResponse {
   access_token: string;
   token_type: string;
+}
+
+export interface OIDCExchangeRequest {
+  id_token: string;
 }
 
 export interface ProjectSettings {

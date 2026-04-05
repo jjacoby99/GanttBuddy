@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
+import { AuthCallbackPage } from "../auth/AuthCallbackPage";
 import { LoginPage } from "../auth/LoginPage";
 import { AnalyticsPage } from "../features/analytics/AnalyticsPage";
 import { DelaysPage } from "../features/delays/DelaysPage";
@@ -13,6 +14,10 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     element: <LoginPage />,
+  },
+  {
+    path: "/auth/callback",
+    element: <AuthCallbackPage />,
   },
   {
     element: <ProtectedRoute />,

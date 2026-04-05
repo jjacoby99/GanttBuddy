@@ -2,13 +2,15 @@ import { create } from "zustand";
 
 import { api } from "../api/client";
 import type { User } from "../types/api";
+import { beginOidcLogin, clearOidcTransaction, completeOidcLoginFromCallback } from "./oidc";
 
 type AuthState = {
   token: string | null;
   user: User | null;
   initialized: boolean;
   bootstrap: () => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  beginLogin: () => Promise<void>;
+  finishLogin: (search: URLSearchParams) => Promise<void>;
   logout: () => void;
 };
 
@@ -45,13 +47,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ token: null, user: null, initialized: true });
     }
   },
-  login: async (email, password) => {
-    const tokenResponse = await api.login(email, password);
-    writeStoredToken(tokenResponse.access_token);
-    const user = await api.me(tokenResponse.access_token);
-    set({ token: tokenResponse.access_token, user, initialized: true });
+  beginLogin: async () => {
+    await beginOidcLogin();
+  },
+  finishLogin: async (search) => {
+    const idToken = await completeOidcLoginFromCallback(search);
+    try {
+      const tokenResponse = await api.exchangeOidcToken(idToken);
+      writeStoredToken(tokenResponse.access_token);
+      const user = await api.me(tokenResponse.access_token);
+      clearOidcTransaction();
+      set({ token: tokenResponse.access_token, user, initialized: true });
+    } catch (error) {
+      clearOidcTransaction();
+      throw error;
+    }
   },
   logout: () => {
+    clearOidcTransaction();
     writeStoredToken(null);
     set({ token: null, user: null, initialized: true });
   },

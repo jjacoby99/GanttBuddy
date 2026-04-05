@@ -78,17 +78,12 @@ async function request<T>(
 }
 
 export const api = {
-  login(email: string, password: string) {
-    const form = new URLSearchParams();
-    form.set("username", email);
-    form.set("password", password);
-    return request<TokenResponse>("/auth/login", {
+  exchangeOidcToken(idToken: string) {
+    return request<TokenResponse>("/auth/oidc/exchange", {
       method: "POST",
-      body: form,
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: JSON.stringify({ id_token: idToken }),
     });
   },
-
   me(token: string) {
     return request<User>("/auth/me", { token });
   },
