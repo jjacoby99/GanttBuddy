@@ -216,3 +216,5 @@ projects/
 #excel files
 *.csv
 tests/data/*
+
+secrets.toml
