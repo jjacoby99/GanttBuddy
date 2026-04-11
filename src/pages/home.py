@@ -166,20 +166,20 @@ def main() -> None:
         with c1:
             st.markdown("### ✨ Create")
             st.caption("Start a new schedule from scratch.")
-            if st.button("Create project", width="stretch"):
+            if st.button(":material/add_circle: Create project", width="stretch"):
                 create_project()
                 if st.session_state.session.project is not None:
                     st.switch_page("pages/plan.py")
         with c2:
             st.markdown("### 📄 Import")
             st.caption("Bring in an Excel schedule and start working immediately.")
-            if st.button("Import from Excel", width="stretch"):
+            if st.button(":material/upload_file: Import from Excel", width="stretch"):
                 go_to_excel_import()
 
         with c3:
             st.markdown("### 📁 Browse")
             st.caption("Search, filter, and open projects you have access to.")
-            if st.button("Browse projects", width="stretch"):
+            if st.button(":material/folder_open: Browse projects", width="stretch"):
                 render_load_project()
                 if st.session_state.session.project is not None:
                     st.switch_page("pages/plan.py")
