@@ -19,7 +19,8 @@ from models.delay import DelayType
 from models.todo import TodoIn, TodoUpsertRow
 
 
-API_BASE = "http://127.0.0.1:8000"  # change for deployed
+# API_BASE = "http://127.0.0.1:8000"  # change for deployed
+API_BASE = "https://ganttbuddy-api-staging-364477301326.us-west1.run.app"
 
 @st.cache_data
 def fetch_project_snapshot(project_id: str, headers) -> dict:

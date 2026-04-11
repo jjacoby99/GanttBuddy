@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import os
-
 import requests
 import streamlit as st
 
 
-API_BASE = os.getenv("GANTTBUDDY_API_BASE_URL", "http://127.0.0.1:8000")
+API_BASE = os.getenv("GANTTBUDDY_API_BASE_URL", "https://ganttbuddy-api-staging-364477301326.us-west1.run.app")
 
 
 def _auth_provider_name() -> str | None:
@@ -80,9 +79,10 @@ def logout() -> None:
 
 def is_logged_in() -> bool:
     if getattr(st.user, "is_logged_in", False):
+
         try:
             return sync_backend_auth_from_streamlit()
-        except Exception:
+        except Exception as e:
             reset_auth()
             return False
 
