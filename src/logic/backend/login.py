@@ -5,7 +5,8 @@ import requests
 import streamlit as st
 
 
-API_BASE = os.getenv("GANTTBUDDY_API_BASE_URL", "https://ganttbuddy-api-staging-364477301326.us-west1.run.app")
+# API_BASE = os.getenv("GANTTBUDDY_API_BASE_URL", "https://ganttbuddy-api-staging-364477301326.us-west1.run.app")
+API_BASE = os.getenv("GANTTBUDDY_API_BASE_URL", "https://ganttbuddy-api-production-469799823422.us-west1.run.app")
 
 
 def _auth_provider_name() -> str | None:
