@@ -181,6 +181,7 @@ def render_task_edit(session, phase: Phase, task: Task):
             actual_end=actual_end_dt if enter_actuals or not task_planned else None,
             note=task_note if task_note else "",
             predecessor_ids=predecessor_ids,
+            task_type=task_type,
             status=task_status,
             planned=task_planned,
         )
