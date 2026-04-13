@@ -218,3 +218,5 @@ projects/
 tests/data/*
 
 secrets.toml
+
+client_secrets/
