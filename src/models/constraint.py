@@ -43,6 +43,6 @@ class StartToFinish(ConstraintTypeBase):
 
 @dataclass
 class Constraint:
-    task_id: str # id of the other task in the constraint relationship
+    item_id: str # id of the other task or phase in the constraint relationship
     relation_type: ConstraintTypeBase # type of constraint relationship (FS, FF, SS, SF)
     lag: dt.timedelta = field(default_factory=lambda: dt.timedelta(0)) # optional lag time between the two tasks, default is 0 (no lag)
