@@ -4,17 +4,14 @@ import os
 import requests
 import streamlit as st
 
+from logic.backend.config import get_backend_environment_config
 
-# API_BASE = os.getenv("GANTTBUDDY_API_BASE_URL", "https://ganttbuddy-api-staging-364477301326.us-west1.run.app")
-API_BASE = os.getenv("GANTTBUDDY_API_BASE_URL", "https://ganttbuddy-api-production-469799823422.us-west1.run.app")
+CONFIG = get_backend_environment_config()
+API_BASE = CONFIG.api_base_url
 
 
 def _auth_provider_name() -> str | None:
-    try:
-        provider_name = st.secrets.get("ganttbuddy", {}).get("oidc_provider")
-    except Exception:
-        provider_name = None
-    return provider_name or os.getenv("GANTTBUDDY_OIDC_PROVIDER")
+    return CONFIG.oidc_provider
 
 
 def exchange_oidc_token(id_token: str) -> str:

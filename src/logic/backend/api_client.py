@@ -11,6 +11,7 @@ from models.delay import Delay, DelayEditorRow
 from models.forecast import ForecastResponse, parse_forecast_response
 from typing import Optional
 
+from logic.backend.config import get_backend_environment_config
 from logic.backend.export_project import project_to_import_payload
 
 from models.project import Project
@@ -19,10 +20,8 @@ from models.delay import DelayType
 from models.todo import TodoIn, TodoUpsertRow
 
 
-# API_BASE = "http://127.0.0.1:8000"  # change for deployed
-# API_BASE = "https://ganttbuddy-api-staging-364477301326.us-west1.run.app"
-API_BASE = "https://ganttbuddy-api-production-469799823422.us-west1.run.app"
-
+API_BASE = get_backend_environment_config().api_base_url
+print(API_BASE)
 @st.cache_data
 def fetch_project_snapshot(project_id: str, headers) -> dict:
     url = f"{API_BASE}/projects/{project_id}/snapshot"
