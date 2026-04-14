@@ -3,6 +3,7 @@ import pandas as pd
 from models.phase import Phase
 from models.task import Task, TaskType
 from models.session import SessionModel
+from ui.utils.constraints import build_constraint_target_labels, render_constraints_editor
 import time
 from datetime import datetime, timedelta, UTC, timezone
 
@@ -23,10 +24,6 @@ def render_task_edit(session, phase: Phase, task: Task):
         label="Edit name",
         value=task.name if task.name else ""
     )
-    
-    task_list = [t for t in phase.tasks.values()]
-
-    predecessor_ids = task.predecessor_ids
     
     # convert answer to task's boolean planned field
     type_dict = {
@@ -66,28 +63,26 @@ def render_task_edit(session, phase: Phase, task: Task):
 
         st.space(size="stretch")
 
-        has_predecessors = st.checkbox(
-            "Has Predecessors", 
-            help="Select if the new task has tasks that must complete before the task begins.",
-            value=len(predecessor_ids) > 0
-        )
+        st.caption("Constraints are edited in the grid below.")
 
-    if task_list and has_predecessors:
-        st.divider()
-        predecessor_ids = st.multiselect(
-            label="Preceding tasks",
-            options=[t.uuid for t in task_list],
-            default=predecessor_ids,
-            format_func=lambda id: phase.tasks[id].name,
-            help=f"Select all tasks that directly precede *{edited_task_name}*"
-        )
-
-    new_start_date = task.start_date
-    if predecessor_ids:
-        new_start_date = max(phase.tasks[id].end_date for id in predecessor_ids)
-        st.info(f"Earliest start based on predecessors: **{new_start_date.strftime("%Y-%m-%d %H:%M")}**")
-    
     st.divider()
+    available_predecessors = build_constraint_target_labels(
+        (
+            candidate.uuid,
+            f"{session.project.phases[candidate.phase_id].name} / {candidate.name}",
+        )
+        for candidate in session.project.get_task_list()
+        if candidate.uuid != task.uuid
+    )
+    constraints = render_constraints_editor(
+        key=f"{task.uuid}_constraints",
+        title=f"Predecessor rules for {edited_task_name or task.name}.",
+        help_text="Choose the predecessor task this task depends on.",
+        constraints=task.constraints,
+        predecessor_kind="task",
+        labels_by_id=available_predecessors,
+    )
+    
     st.caption(f"*{edited_task_name}* time stamps")
 
     label_col, start_col, end_col = st.columns([1,2,2])
@@ -103,8 +98,8 @@ def render_task_edit(session, phase: Phase, task: Task):
     with start_col:
         planned_start_dt = st.datetime_input(
             label=f"Planned Start",
-            value=task.start_date if task.start_date else new_start_date,
-            min_value=new_start_date if predecessor_ids else datetime(year=2000,month=1,day=1),
+            value=task.start_date,
+            min_value=datetime(year=2000,month=1,day=1),
             key="task_start_date_single",
             disabled=not task_planned,
             help="**Planned start** timestamp for *{edited_task_name}*"
@@ -180,7 +175,7 @@ def render_task_edit(session, phase: Phase, task: Task):
             actual_start=actual_start_dt if enter_actuals or not task_planned else None,
             actual_end=actual_end_dt if enter_actuals or not task_planned else None,
             note=task_note if task_note else "",
-            predecessor_ids=predecessor_ids,
+            constraints=constraints,
             task_type=task_type,
             status=task_status,
             planned=task_planned,
