@@ -4,6 +4,8 @@ from models.task import Task
 from models.project import Project
 from models.phase import Phase
 from models.session import SessionModel
+from models.constraint import Constraint
+from ui.utils.constraints import build_constraint_target_labels, render_constraints_editor
 import time
 
 @st.dialog("Add a new task")
@@ -77,36 +79,32 @@ def render_task_add(session: SessionModel, phase: Phase = None):
 
     preds_col.space("small")
 
-    predecessor_ids = []
-    has_predecessors = preds_col.checkbox(
-        "Has Predecessors", 
-        help="Select if the new task has tasks that must complete before the task begins.",
-        value=len(predecessor_ids) > 0
+    available_predecessors = build_constraint_target_labels(
+        (
+            task.uuid,
+            f"{proj.phases[task.phase_id].name} / {task.name}",
+        )
+        for task in proj.get_task_list()
     )
-
-    if task_list and has_predecessors:
-        st.divider()
-        precedessor_options = [t.uuid for t in task_list]
-        predecessor_ids = st.multiselect(
-            label="Preceding tasks",
-            options=precedessor_options,
-            format_func=lambda id: phase_selected.tasks[id].name,
-            help=f"Select all tasks that directly precede *{task_name}*"
+    constraints: list[Constraint] = []
+    with preds_col:
+        constraints = render_constraints_editor(
+            key=f"{phase_selected.uuid}_task_constraints",
+            title="Add one or more predecessor rules for this task.",
+            help_text="Choose the predecessor task this task depends on.",
+            constraints=[],
+            predecessor_kind="task",
+            labels_by_id=available_predecessors,
         )
 
-    new_start_date = None
-    if predecessor_ids:
-        new_start_date = max(phase_selected.tasks[id].end_date for id in predecessor_ids)
-        st.info(f"Earliest start based on predecessors: **{new_start_date.strftime("%Y-%m-%d %H:%M")}**")
-    
     start_col, end_col = st.columns(2)
     if task_type:
         # planned task
         with start_col:
             planned_start_dt = st.datetime_input(
                 label=f"Planned Start",
-                value=new_start_date,
-                min_value=new_start_date if predecessor_ids else datetime(year=2000,month=1,day=1),
+                value=None,
+                min_value=datetime(year=2000,month=1,day=1),
                 key="task_start_date_single",
                 disabled=not task_type,
                 help="**Planned start** timestamp for *{edited_task_name}*"
@@ -137,8 +135,8 @@ def render_task_add(session: SessionModel, phase: Phase = None):
         with start_col:
             actual_start_dt = st.datetime_input(
                 label=f"Actual Start",
-                value=new_start_date,
-                min_value=new_start_date if predecessor_ids else datetime(year=2000,month=1,day=1),
+                value=None,
+                min_value=datetime(year=2000,month=1,day=1),
                 key="task_actual_start",
                 help="**Actual Start** timestamp for *{edited_task_name}*"
             )
@@ -172,7 +170,7 @@ def render_task_add(session: SessionModel, phase: Phase = None):
             actual_start=None if task_type else actual_start_dt,
             actual_end=None if task_type else actual_end_dt,
             note=task_note if task_note else "",
-            predecessor_ids=predecessor_ids,
+            constraints=constraints,
             planned=task_type
         )
 
