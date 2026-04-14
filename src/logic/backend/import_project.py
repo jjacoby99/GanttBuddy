@@ -12,6 +12,7 @@ from models.project_metadata import RelineMetadata
 from models.task import Task, TaskType
 from models.project_settings import ProjectSettings
 from models.shift_schedule import ShiftAssignment, ShiftDefinition
+from models.constraint import Constraint, ConstraintRelation
 
 from logic.backend.utils.parse_datetime import parse_backend_utc
 
@@ -97,13 +98,20 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
     phases = snapshot.get("phases", [])
     tasks = snapshot.get("tasks", [])
     task_preds = snapshot.get("task_predecessors", [])
+    phase_preds = snapshot.get("phase_predecessors", [])
 
-    # Build predecessor map: task_id -> [pred_id, ...]
-    pred_map: dict[str, list[str]] = {}
+    # Legacy predecessor maps are still supported as a fallback for older snapshots.
+    task_pred_map: dict[str, list[str]] = {}
     for edge in task_preds:
         tid = edge["task_id"]
         pid = edge["predecessor_task_id"]
-        pred_map.setdefault(tid, []).append(pid)
+        task_pred_map.setdefault(tid, []).append(pid)
+
+    phase_pred_map: dict[str, list[str]] = {}
+    for edge in phase_preds:
+        phase_id = edge["phase_id"]
+        predecessor_phase_id = edge["predecessor_phase_id"]
+        phase_pred_map.setdefault(phase_id, []).append(predecessor_phase_id)
 
     settings = ProjectSettings(
         work_all_day=bool(s.get("work_all_day", False)),
@@ -141,10 +149,25 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
     # Create phases ordered by backend "position"
     phases_sorted = sorted(phases, key=lambda x: x.get("position", 0))
     for ph in phases_sorted:
+        phase_constraints = [
+            Constraint.from_dict(constraint)
+            for constraint in ph.get("constraints", [])
+        ]
+        if not phase_constraints:
+            phase_constraints = [
+                Constraint(
+                    predecessor_id=predecessor_id,
+                    predecessor_kind="phase",
+                    relation_type=ConstraintRelation.FS,
+                )
+                for predecessor_id in phase_pred_map.get(ph.get("id"), [])
+            ]
+
         phase = Phase(
             name=ph.get("name", ""),
             uuid=ph.get("id"),
-            planned=ph.get("planned", True)
+            planned=ph.get("planned", True),
+            constraints=phase_constraints,
         )
         project.add_phase(phase, position=ph.get("position", None))
 
@@ -161,6 +184,20 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
             continue
 
         for t in sorted(phase_tasks, key=lambda x: x.get("position", 0)):
+            task_constraints = [
+                Constraint.from_dict(constraint)
+                for constraint in t.get("constraints", [])
+            ]
+            if not task_constraints:
+                task_constraints = [
+                    Constraint(
+                        predecessor_id=predecessor_id,
+                        predecessor_kind="task",
+                        relation_type=ConstraintRelation.FS,
+                    )
+                    for predecessor_id in task_pred_map.get(t.get("id"), [])
+                ]
+
             task = Task(
                 name=t.get("name", ""),
                 start_date=parse_backend_utc(t.get("planned_start"),timezone=timezone),
@@ -169,7 +206,7 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
                 actual_end=parse_backend_utc(t.get("actual_end"), timezone=timezone),
                 note=t.get("note", "") or "",
                 uuid=t.get("id"),
-                predecessor_ids=pred_map.get(t.get("id"), []),
+                constraints=task_constraints,
                 phase_id=phase_id,
                 status=t.get("status", "NOT_STARTED"),
                 planned=t.get("planned", True),
