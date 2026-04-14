@@ -1,8 +1,16 @@
-from src.models.project import Project
-from src.models.task import Task
-from src.models.phase import Phase
+from __future__ import annotations
+
 import pytest
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from models.constraint import Constraint, ConstraintRelation
+from models.project import Project
+from models.task import Task
+from models.phase import Phase
 
 @pytest.fixture
 def simple_project() -> Project:
@@ -41,7 +49,7 @@ def simple_project() -> Project:
 
 
 
-def test_update_task_cascades():
+def test_update_task_cascades(simple_project: Project):
     """
         Verifies that updating a task within a project that has other tasks with it as predecessors
         has the side effect of changing the successor's start / end dates.
@@ -65,7 +73,7 @@ def test_update_task_cascades():
         The actual start and end are assumed to be accurate records that are not to be touched.
     """
 
-    proj: Project = simple_project
+    proj = simple_project
     delay_hrs = 3
 
     tid1 = (proj.phases[proj.phase_order[0]]).task_order[0]
@@ -88,6 +96,7 @@ def test_update_task_cascades():
     t2_old_end = old_t2.end_date
 
     proj.update_task(
+        phase=proj.phases[proj.phase_order[0]],
         old_task=old_t1,
         new_task=new_t1
     )
@@ -103,5 +112,69 @@ def test_update_task_cascades():
     # ensure T2's start and end dates have been updated
     assert new_t2_in_proj.start_date == t2_old_start + timedelta(hours=delay_hrs), "Task 2's new start date wasn't delayed by 3 hrs"
     assert new_t2_in_proj.end_date == t2_old_end + timedelta(hours=delay_hrs), "Task 2's new end date wasn't delayed by 3 hrs"
+
+
+def test_task_constraints_are_backfilled_from_legacy_predecessor_ids() -> None:
+    task = Task(
+        name="Task B",
+        start_date=datetime(2025, 11, 25, 17, 0),
+        end_date=datetime(2025, 11, 27, 17, 0),
+        predecessor_ids=["task-a", "task-c"],
+    )
+
+    assert task.predecessor_ids == ["task-a", "task-c"]
+    assert len(task.constraints) == 2
+    assert all(constraint.relation_type == ConstraintRelation.FS for constraint in task.constraints)
+    assert all(constraint.predecessor_kind == "task" for constraint in task.constraints)
+
+
+def test_delete_task_removes_constraints_from_successors(simple_project: Project) -> None:
+    proj = simple_project
+    phase = proj.phases[proj.phase_order[0]]
+    task_a = phase.tasks[phase.task_order[0]]
+    task_b = phase.tasks[phase.task_order[1]]
+
+    removed = phase.delete_task(task_a)
+
+    assert removed == 1
+    assert task_b.predecessor_ids == []
+    assert task_b.constraints == []
+
+
+def test_multiple_constraints_resolve_successor_to_latest_required_start() -> None:
+    phase = Phase(name="Phase 1")
+    task_a = Task(
+        name="Task A",
+        start_date=datetime(2026, 2, 1, 7, 0),
+        end_date=datetime(2026, 2, 1, 9, 0),
+    )
+    task_b = Task(
+        name="Task B",
+        start_date=datetime(2026, 2, 1, 8, 0),
+        end_date=datetime(2026, 2, 1, 12, 0),
+    )
+    task_c = Task(
+        name="Task C",
+        start_date=datetime(2026, 2, 1, 9, 0),
+        end_date=datetime(2026, 2, 1, 11, 0),
+        constraints=[
+            Constraint(predecessor_id=task_a.uuid, predecessor_kind="task", relation_type=ConstraintRelation.FS),
+            Constraint(
+                predecessor_id=task_b.uuid,
+                predecessor_kind="task",
+                relation_type=ConstraintRelation.SS,
+                lag=timedelta(hours=2),
+            ),
+        ],
+    )
+
+    phase.add_task(task_a)
+    phase.add_task(task_b)
+    phase.add_task(task_c)
+
+    phase.resolve_schedule()
+
+    assert task_c.start_date == datetime(2026, 2, 1, 10, 0)
+    assert task_c.end_date == datetime(2026, 2, 1, 12, 0)
 
     
