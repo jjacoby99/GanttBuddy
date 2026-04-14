@@ -205,8 +205,12 @@ def render_task_edit(session, phase: Phase, task: Task):
     if c3.button('Delete'):
         name = task.name
         predecessors_had = phase.delete_task(task)
+        session.project.resolve_schedule()
 
         st.info(f'\'{name}\' deleted. {predecessors_had} Tasks were preceded.')
+
+        build_timeline.clear()
+        build_gantt_df.clear()
         time.sleep(1)
         st.rerun()
 
