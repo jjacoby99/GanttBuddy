@@ -47,6 +47,7 @@ class Task:
         legacy_predecessor_ids = list(self.predecessor_ids)
         self.predecessor_ids = []
         self.add_predecessor_ids(legacy_predecessor_ids)
+        self._sync_predecessor_ids()
 
     def to_dict(self) -> dict:
         return {"Task": self.name, 

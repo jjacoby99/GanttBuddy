@@ -29,6 +29,7 @@ class Phase:
         legacy_predecessor_ids = list(self.predecessor_ids)
         self.predecessor_ids = []
         self.add_predecessor_ids(legacy_predecessor_ids)
+        self._sync_predecessor_ids()
 
     @property
     def start_date(self) -> Optional[datetime]:
