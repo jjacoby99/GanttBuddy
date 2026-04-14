@@ -4,6 +4,7 @@ from dataclasses_json import dataclass_json
 import numpy as np
 import pandas as pd
 from models.task import Task
+from models.constraint import Constraint, ConstraintRelation, earliest_start_from_constraint
 from typing import Optional
 from datetime import datetime, timedelta
 from logic.generate_id import new_id
@@ -19,9 +20,15 @@ class Phase:
     task_order: list[str] = field(default_factory=list) # list of task uuids in order
     tasks: dict[str, Task] = field(default_factory=dict) # map of task uuid to task
     preceding_phase: Optional[Phase] = None
+    constraints: list[Constraint] = field(default_factory=list)
     predecessor_ids: list[str] = field(default_factory=list)
     _sort_mode: SortMode = SortMode.manual
     planned: bool = True
+
+    def __post_init__(self):
+        legacy_predecessor_ids = list(self.predecessor_ids)
+        self.predecessor_ids = []
+        self.add_predecessor_ids(legacy_predecessor_ids)
 
     @property
     def start_date(self) -> Optional[datetime]:
@@ -169,43 +176,74 @@ class Phase:
 
 
     def add_predecessor(self, predesessor: str):
-        if predesessor in self.predecessor_ids:
-            return
-        self.predecessor_ids.append(predesessor)
+        self.add_constraint(
+            Constraint(
+                predecessor_id=predesessor,
+                predecessor_kind="phase",
+                relation_type=ConstraintRelation.FS,
+            )
+        )
+
+    def add_constraint(self, constraint: Constraint) -> None:
+        for existing in self.constraints:
+            if (
+                existing.predecessor_id == constraint.predecessor_id
+                and existing.predecessor_kind == constraint.predecessor_kind
+                and existing.relation_type == constraint.relation_type
+                and existing.lag == constraint.lag
+            ):
+                return
+        self.constraints.append(constraint)
+        self._sync_predecessor_ids()
+
+    def add_predecessor_ids(self, predecessor_ids: list[str]) -> None:
+        for predecessor_id in predecessor_ids:
+            self.add_predecessor(predecessor_id)
+
+    def remove_constraints_for_predecessor(
+        self,
+        predecessor_id: str,
+        *,
+        predecessor_kind: str = "task",
+    ) -> int:
+        removed = 0
+        if predecessor_kind == "task":
+            for task in self.tasks.values():
+                removed += task.remove_constraints_for_predecessor(
+                    predecessor_id,
+                    predecessor_kind=predecessor_kind,
+                )
+            return removed
+
+        original_len = len(self.constraints)
+        self.constraints = [
+            constraint
+            for constraint in self.constraints
+            if not (
+                constraint.predecessor_id == predecessor_id
+                and constraint.predecessor_kind == predecessor_kind
+            )
+        ]
+        self._sync_predecessor_ids()
+        return original_len - len(self.constraints)
+
+    def _sync_predecessor_ids(self) -> None:
+        self.predecessor_ids = [
+            constraint.predecessor_id
+            for constraint in self.constraints
+            if constraint.predecessor_kind == "phase"
+        ]
 
     def edit_task(self, old_task: Task, new_task: Task):
         if not old_task.uuid in self.tasks.keys():
             raise RuntimeError(f"Provided task {old_task} not found.")
-        
-        # only edit phase durations if required. 
-        pre_task_edits = False
-        if old_task.start_date != new_task.start_date:
-            pre_task_edits = True
 
-        post_task_edits = False
-        if old_task.end_date != new_task.end_date:
-            post_task_edits = True
-        
-        new_task.uuid = old_task.uuid # preserve uuid
-        order = self.task_order.index(old_task.uuid) # preserve order
+        new_task.uuid = old_task.uuid
+        order = self.task_order.index(old_task.uuid)
         del self.tasks[old_task.uuid]
         self.tasks[new_task.uuid] = new_task
         self.task_order[order] = new_task.uuid
-
-        return
-        # handle the case where the start date has changed, affecting tasks before and after 
-        if pre_task_edits:
-            pass
-
-        # handle the case where the end date has changed, affecting tasks after 
-        if post_task_edits:
-            for i, tid in enumerate(self.task_order, start=self.task_order[order]):
-                task = self.task_order[tid]
-                predecessor_ids = task.predecessor_ids
-
-                if new_task.uuid in predecessor_ids:
-                    # shift each task after current back by (old_task.end_date - new_task.end_date)
-                    pass
+        self.resolve_schedule()
     
     @property
     def tasks_completed(self) -> int:
@@ -222,16 +260,88 @@ class Phase:
             raise RuntimeError(f"Provided task {task} not found.")
         
         # check for tasks using this as predecessor
-        predecessor_count = 0
-        for t in self.tasks.values():
-            if task.uuid in t.predecessor_ids:
-                t.predecessor_ids.remove(task.uuid)
-                predecessor_count += 1
+        predecessor_count = self.remove_constraints_for_predecessor(
+            task.uuid,
+            predecessor_kind="task",
+        )
 
         del self.tasks[task.uuid]
         self.task_order.remove(task.uuid)
+        self.resolve_schedule()
 
         return predecessor_count
+
+    def shift(self, delta: timedelta, shift_actuals: bool = False) -> None:
+        if delta == timedelta(0):
+            return
+        for task in self.tasks.values():
+            task.shift(delta=delta, shift_actuals=shift_actuals)
+
+    def resolve_planned_dates(self, lookup, *, preserve_if_later: bool = True) -> bool:
+        if not self.constraints or not self.tasks:
+            return False
+
+        required_starts: list[datetime] = []
+        for constraint in self.constraints:
+            predecessor_window = lookup(constraint)
+            if predecessor_window is None:
+                continue
+
+            predecessor_start, predecessor_end = predecessor_window
+            required_starts.append(
+                earliest_start_from_constraint(
+                    predecessor_start=predecessor_start,
+                    predecessor_end=predecessor_end,
+                    successor_duration=self.planned_duration,
+                    relation=constraint.relation_type,
+                    lag=constraint.lag,
+                )
+            )
+
+        if not required_starts:
+            return False
+
+        earliest_allowed_start = max(required_starts)
+        new_start = max(self.start_date, earliest_allowed_start) if preserve_if_later else earliest_allowed_start
+        if new_start == self.start_date:
+            return False
+
+        self.shift(new_start - self.start_date)
+        return True
+
+    def resolve_schedule(self) -> None:
+        resolved: set[str] = set()
+        visiting: set[str] = set()
+
+        def resolve_task(task_id: str) -> None:
+            if task_id in resolved:
+                return
+            if task_id in visiting:
+                raise ValueError(f"Cycle detected while resolving task constraints in phase {self.name}.")
+
+            visiting.add(task_id)
+            task = self.tasks[task_id]
+            for constraint in task.constraints:
+                if constraint.predecessor_kind != "task":
+                    continue
+                if constraint.predecessor_id in self.tasks:
+                    resolve_task(constraint.predecessor_id)
+
+            task.resolve_planned_dates(
+                lambda constraint: (
+                    None
+                    if constraint.predecessor_kind != "task" or constraint.predecessor_id not in self.tasks
+                    else (
+                        self.tasks[constraint.predecessor_id].start_date,
+                        self.tasks[constraint.predecessor_id].end_date,
+                    )
+                )
+            )
+            visiting.remove(task_id)
+            resolved.add(task_id)
+
+        for task_id in list(self.task_order):
+            resolve_task(task_id)
 
     def __len__(self):
         """
@@ -245,8 +355,9 @@ class Phase:
     def to_dict(self) -> dict:
         return {
             "name": self.name,
-            "tasks": [t.to_dict() for t in self.tasks],
+            "tasks": [self.tasks[tid].to_dict() for tid in self.task_order],
             "preceding_phase": self.preceding_phase.name if self.preceding_phase else None,
+            "constraints": [constraint.to_dict() for constraint in self.constraints],
             "predecessor_ids": self.predecessor_ids,
             "uuid": self.uuid
         }
@@ -260,9 +371,17 @@ class Phase:
         
         phase = Phase.__new__(Phase)  
         phase.name = data["name"]
-        phase.tasks = [Task.from_dict(t) for t in data["tasks"]]
+        tasks = [Task.from_dict(t) for t in data["tasks"]]
+        phase.tasks = {task.uuid: task for task in tasks}
+        phase.task_order = [task.uuid for task in tasks]
         phase.preceding_phase = data.get("preceding_phase", None)
-        phase.predecessor_ids = data.get("predecessor_ids", [])
+        phase.constraints = [
+            Constraint.from_dict(item)
+            for item in data.get("constraints", [])
+        ]
+        phase.add_predecessor_ids(data.get("predecessor_ids", []))
+        phase._sort_mode = data.get("_sort_mode", SortMode.manual)
+        phase.planned = data.get("planned", True)
         phase.uuid = data.get("uuid", new_id())
         return phase
     

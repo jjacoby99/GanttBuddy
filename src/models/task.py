@@ -1,10 +1,11 @@
 from __future__ import annotations
 import datetime as dt
 
-from typing import Optional
+from typing import Callable, Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from models.project_settings import ProjectSettings
+from models.constraint import Constraint, ConstraintRelation, earliest_start_from_constraint
 from exceptions.date_error import InvalidDateError
 from exceptions.time_error import InvalidTimeError
 from logic.generate_id import new_id
@@ -35,11 +36,17 @@ class Task:
     actual_end: Optional[dt.datetime] = None
     note: str = ""
     uuid: str = field(default_factory=new_id)
+    constraints: list[Constraint] = field(default_factory=list)
     predecessor_ids: list[str] = field(default_factory=list)
     phase_id: str = ""
     status: Literal["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETE"] = "NOT_STARTED"
     planned: bool = field(default=True) 
     task_type: TaskType = field(default=TaskType.GENERIC)
+
+    def __post_init__(self):
+        legacy_predecessor_ids = list(self.predecessor_ids)
+        self.predecessor_ids = []
+        self.add_predecessor_ids(legacy_predecessor_ids)
 
     def to_dict(self) -> dict:
         return {"Task": self.name, 
@@ -48,6 +55,7 @@ class Task:
                 "Actual_Start": self.actual_start,
                 "Actual_Finish": self.actual_end,
                 "Note": self.note,
+                "constraints": [constraint.to_dict() for constraint in self.constraints],
                 "predecessor_ids": self.predecessor_ids,
                 "uuid": self.uuid,
                 "phase_id": self.phase_id,
@@ -58,7 +66,7 @@ class Task:
     
     def __str__(self) -> str:
         return f"Task(name = {self.name}, start_date={self.start_date}, end_date={self.end_date}, actual_start={self.actual_start}, actual_end={self.actual_end}, note={self.note})"
-    
+
     @property
     def planned_duration(self) -> dt.timedelta:
         """Returns the planned duration of the task as a timedelta."""
@@ -177,12 +185,103 @@ class Task:
         task.actual_end = data.get("Actual_Finish", None)
         task.note = data.get("note", "")
         task.preceding_task = data.get("preceding_task", None)
-        task.predecessor_ids = data.get("predecessor_ids", [])
+        task.constraints = [
+            Constraint.from_dict(item)
+            for item in data.get("constraints", [])
+        ]
+        task.add_predecessor_ids(data.get("predecessor_ids", []))
         task.uuid = data.get("uuid", new_id())
         task.phase_id = data.get("phase_id", "")
         task.status = data.get("status", "NOT_STARTED")
         task.planned = data.get("planned", True)
+        task.task_type = data.get("task_type", TaskType.GENERIC)
         return task
+
+    def add_constraint(self, constraint: Constraint) -> None:
+        for existing in self.constraints:
+            if (
+                existing.predecessor_id == constraint.predecessor_id
+                and existing.predecessor_kind == constraint.predecessor_kind
+                and existing.relation_type == constraint.relation_type
+                and existing.lag == constraint.lag
+            ):
+                return
+        self.constraints.append(constraint)
+        self._sync_predecessor_ids()
+
+    def add_predecessor_ids(self, predecessor_ids: list[str]) -> None:
+        for predecessor_id in predecessor_ids:
+            self.add_constraint(
+                Constraint(
+                    predecessor_id=predecessor_id,
+                    predecessor_kind="task",
+                    relation_type=ConstraintRelation.FS,
+                )
+            )
+
+    def remove_constraints_for_predecessor(
+        self,
+        predecessor_id: str,
+        *,
+        predecessor_kind: str = "task",
+    ) -> int:
+        original_len = len(self.constraints)
+        self.constraints = [
+            constraint
+            for constraint in self.constraints
+            if not (
+                constraint.predecessor_id == predecessor_id
+                and constraint.predecessor_kind == predecessor_kind
+            )
+        ]
+        self._sync_predecessor_ids()
+        return original_len - len(self.constraints)
+
+    def _sync_predecessor_ids(self) -> None:
+        self.predecessor_ids = [
+            constraint.predecessor_id
+            for constraint in self.constraints
+            if constraint.predecessor_kind == "task"
+        ]
+
+    def resolve_planned_dates(
+        self,
+        lookup: Callable[[Constraint], tuple[dt.datetime, dt.datetime] | None],
+        *,
+        preserve_if_later: bool = True,
+    ) -> bool:
+        if not self.constraints:
+            return False
+
+        required_starts: list[dt.datetime] = []
+        for constraint in self.constraints:
+            predecessor_window = lookup(constraint)
+            if predecessor_window is None:
+                continue
+
+            predecessor_start, predecessor_end = predecessor_window
+            required_starts.append(
+                earliest_start_from_constraint(
+                    predecessor_start=predecessor_start,
+                    predecessor_end=predecessor_end,
+                    successor_duration=self.planned_duration,
+                    relation=constraint.relation_type,
+                    lag=constraint.lag,
+                )
+            )
+
+        if not required_starts:
+            return False
+
+        earliest_allowed_start = max(required_starts)
+        new_start = max(self.start_date, earliest_allowed_start) if preserve_if_later else earliest_allowed_start
+        if new_start == self.start_date:
+            return False
+
+        duration = self.planned_duration
+        self.start_date = new_start
+        self.end_date = new_start + duration
+        return True
 
     def calculate_end_date(self, duration: int, settings: ProjectSettings) -> dt.datetime:
         """

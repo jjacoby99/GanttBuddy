@@ -266,8 +266,7 @@ class Project:
             If old_task is not found, a ValueError is thrown.
         """        
         self.phases[phase.uuid].edit_task(old_task, new_task)
-
-        # handle increased / decreased durations based on predecessors   
+        self.resolve_schedule()
 
     def add_phase(self, phase: Phase, position: int | None = None):
         self.phases[phase.uuid] = phase
@@ -318,7 +317,8 @@ class Project:
     def add_task_to_phase(self, phase: Phase, task: Task, position: int | None = None): 
         if not phase.uuid in self.phases.keys():
             raise ValueError(f"Provided phase {phase.name} does not exist.")
-        self.phases[phase.uuid].add_task(task, position=position)          
+        self.phases[phase.uuid].add_task(task, position=position)
+        self.resolve_schedule()
 
     def delete_phase(self, phase: Phase):
         if not phase.uuid in self.phases.keys():
@@ -326,10 +326,46 @@ class Project:
         
         # check for phases using this as predecessor
         for p in self.phases.values():
-            if p.predecessor_ids == phase.uuid:
-                p.predecessor_ids.remove(phase.uuid)
+            p.remove_constraints_for_predecessor(phase.uuid, predecessor_kind="phase")
         del self.phases[phase.uuid]
         self.phase_order.remove(phase.uuid)
+        self.resolve_schedule()
+
+    def resolve_schedule(self) -> None:
+        resolved: set[str] = set()
+        visiting: set[str] = set()
+
+        def resolve_phase(phase_id: str) -> None:
+            if phase_id in resolved:
+                return
+            if phase_id in visiting:
+                raise ValueError(f"Cycle detected while resolving phase constraints in project {self.name}.")
+
+            visiting.add(phase_id)
+            phase = self.phases[phase_id]
+
+            for constraint in phase.constraints:
+                if constraint.predecessor_kind != "phase":
+                    continue
+                if constraint.predecessor_id in self.phases:
+                    resolve_phase(constraint.predecessor_id)
+
+            phase.resolve_planned_dates(
+                lambda constraint: (
+                    None
+                    if constraint.predecessor_kind != "phase" or constraint.predecessor_id not in self.phases
+                    else (
+                        self.phases[constraint.predecessor_id].start_date,
+                        self.phases[constraint.predecessor_id].end_date,
+                    )
+                )
+            )
+            phase.resolve_schedule()
+            visiting.remove(phase_id)
+            resolved.add(phase_id)
+
+        for phase_id in list(self.phase_order):
+            resolve_phase(phase_id)
 
     def to_dict(self) -> dict:
         return {
