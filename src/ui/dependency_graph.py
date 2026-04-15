@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import textwrap
 
 import plotly.graph_objects as go
 import streamlit as st
@@ -93,6 +94,28 @@ def _format_lag_hours(lag_hours: float) -> str:
         return ""
     rounded = round(lag_hours, 2)
     return f" ({rounded:g}h)"
+
+
+def _format_duration_hours(hours: float) -> str:
+    rounded = round(hours, 2)
+    return f"{rounded:g}h"
+
+
+def _wrap_node_label(label: str, *, width: int = 14, max_lines: int = 3) -> str:
+    wrapped = textwrap.wrap(label, width=width, break_long_words=False, break_on_hyphens=False)
+    if not wrapped:
+        return label
+    if len(wrapped) > max_lines:
+        remaining = " ".join(wrapped[max_lines - 1 :])
+        wrapped = wrapped[: max_lines - 1] + textwrap.wrap(
+            remaining,
+            width=width,
+            max_lines=1,
+            placeholder="...",
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+    return "<br>".join(wrapped)
 
 
 def _build_edge_label(constraint: Constraint) -> str:
@@ -212,7 +235,7 @@ def build_dependency_graph_data(project: Project) -> DependencyGraphData:
                 GraphNode(
                     id=task.uuid,
                     kind="task",
-                    label=task.name,
+                    label=_wrap_node_label(task.name),
                     x=center_x,
                     y=-(task_index * TASK_Y_GAP),
                     phase_id=phase.uuid,
@@ -388,8 +411,18 @@ def build_dependency_figure(
                 "color": "#f8fafc",
                 "line": {"width": 1.5, "color": "#0f172a"},
             },
-            customdata=[[node.phase_name, node.id, "task"] for node in task_nodes],
-            hovertemplate="<b>%{text}</b><br>Phase: %{customdata[0]}<extra></extra>",
+            customdata=[
+                [
+                    node.phase_name,
+                    node.id,
+                    "task",
+                    _format_duration_hours(
+                        project.phases[node.phase_id].tasks[node.id].planned_duration.total_seconds() / 3600
+                    ),
+                ]
+                for node in task_nodes
+            ],
+            hovertemplate="<b>%{text}</b><br>Phase: %{customdata[0]}<br>Planned duration: %{customdata[3]}<extra></extra>",
             name="Tasks",
         )
     )
