@@ -152,7 +152,12 @@ def render_constraints_editor(
     if not labels_by_id:
         st.caption(help_text)
         st.info(f"No available {predecessor_kind} predecessors yet.")
-        return []
+        return [
+            constraint
+            for constraint in constraints
+            if constraint.predecessor_kind != predecessor_kind
+            or constraint.relation_type not in ALLOWED_CONSTRAINT_RELATIONS
+        ]
 
     editor_df = constraints_to_editor_df(
         constraints,
@@ -197,7 +202,13 @@ def render_constraints_editor(
         predecessor_kind=predecessor_kind,
         id_by_label=id_by_label,
     )
+    preserved_constraints = [
+        constraint
+        for constraint in constraints
+        if constraint.predecessor_kind != predecessor_kind
+        or constraint.relation_type not in ALLOWED_CONSTRAINT_RELATIONS
+    ]
     for message in dict.fromkeys(messages):
         st.warning(message, icon=":material/warning:")
 
-    return constraints_out
+    return preserved_constraints + constraints_out
