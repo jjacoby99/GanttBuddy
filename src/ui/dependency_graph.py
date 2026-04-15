@@ -123,6 +123,21 @@ def _build_edge_label(constraint: Constraint) -> str:
     return f"{constraint.relation_type.value}{_format_lag_hours(lag_hours)}"
 
 
+def _offset_point_toward(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    distance: float,
+) -> tuple[float, float]:
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    length = math.hypot(dx, dy)
+    if math.isclose(length, 0.0, abs_tol=1e-9):
+        return start
+    unit_x = dx / length
+    unit_y = dy / length
+    return start[0] + (unit_x * distance), start[1] + (unit_y * distance)
+
+
 def _quadratic_bezier_point(
     p0: tuple[float, float],
     p1: tuple[float, float],
@@ -178,7 +193,7 @@ def _build_edge_route(
     else:
         normal_x = -tangent_y / tangent_length
         normal_y = tangent_x / tangent_length
-    label_offset = 0.38 if not is_phase_edge else 0.32
+    label_offset = 0.14 if not is_phase_edge else 0.18
     arrow_tail_x, arrow_tail_y = _quadratic_bezier_point(p0, p1, p2, 0.88)
     return EdgeRoute(
         points_x=[point[0] for point in samples],
@@ -327,10 +342,26 @@ def build_dependency_figure(
             lane_offset=lane_offset,
             is_phase_edge=is_phase_edge,
         )
+        target_radius = 0.42 if not is_phase_edge else 0.2
+        source_radius = 0.42 if source.kind == "task" else 0.2
+        line_start = _offset_point_toward(
+            (source.x, source.y),
+            (route.points_x[1], route.points_y[1]),
+            source_radius,
+        )
+        line_end = _offset_point_toward(
+            (target.x, target.y),
+            (route.arrow_tail_x, route.arrow_tail_y),
+            target_radius,
+        )
+        line_x = list(route.points_x)
+        line_y = list(route.points_y)
+        line_x[0], line_y[0] = line_start
+        line_x[-1], line_y[-1] = line_end
 
         fig.add_annotation(
-            x=target.x,
-            y=target.y,
+            x=line_end[0],
+            y=line_end[1],
             ax=route.arrow_tail_x,
             ay=route.arrow_tail_y,
             xref="x",
@@ -343,15 +374,15 @@ def build_dependency_figure(
             arrowwidth=1.8 if not is_phase_edge else 2.2,
             arrowcolor=line_color,
             opacity=0.95,
-            standoff=14 if not is_phase_edge else 18,
-            startstandoff=14 if source.kind == "task" else 18,
+            standoff=0,
+            startstandoff=0,
             text="",
         )
 
         fig.add_trace(
             go.Scatter(
-                x=route.points_x,
-                y=route.points_y,
+                x=line_x,
+                y=line_y,
                 mode="lines",
                 line={"color": line_color, "width": 1.2, "dash": line_dash, "shape": "spline", "smoothing": 1.15},
                 hoverinfo="skip",
