@@ -162,6 +162,11 @@ class Task:
         self.status = "NOT_STARTED"
 
     def to_excel_row(self) -> dict:
+        excel_predecessors = [
+            constraint.predecessor_id
+            for constraint in self.constraints
+            if constraint.predecessor_kind == "task"
+        ]
         return {
             "number": None,
             "name": self.name,
@@ -173,7 +178,7 @@ class Task:
             "actual_start": self.actual_start,
             "actual_end": self.actual_end,
             "notes": self.note if self.note else "",
-            "predecessors": ",".join(self.predecessor_ids),
+            "predecessors": ",".join(excel_predecessors),
             "uuid": self.uuid,
             "planned": self.planned
         } 
