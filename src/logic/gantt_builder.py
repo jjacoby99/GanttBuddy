@@ -10,6 +10,7 @@ from streamlit import cache_data
 from logic.plot_utilities import adjust_color_any
 from plotly.colors import qualitative as q
 
+from models.constraint import Constraint
 from models.project import Project
 from models.gantt_models import GanttInputs
 from models.gantt_state import GanttState
@@ -256,6 +257,20 @@ def _format_duration(td, resolution: str = "hours") -> str:
     return f"{seconds / 3600:.2f} h"
 
 
+def _serialize_constraints(constraints: list[Constraint]) -> list[dict[str, object]]:
+    serialized: list[dict[str, object]] = []
+    for constraint in constraints or []:
+        serialized.append(
+            {
+                "predecessor_id": constraint.predecessor_id,
+                "predecessor_kind": constraint.predecessor_kind,
+                "relation_type": constraint.relation_type.value,
+                "lag_hours": constraint.lag.total_seconds() / 3600,
+            }
+        )
+    return serialized
+
+
 # -----------------------------
 # Your color map (kept)
 # -----------------------------
@@ -320,7 +335,7 @@ def build_gantt_df(project: Project, inputs: GanttState) -> pd.DataFrame | None:
             "Status": ph.status,
             "PlannedDuration": getattr(ph, "planned_duration", None),
             "ActualDuration": getattr(ph, "actual_duration", None),
-            "Predecessors": [],
+            "Predecessors": _serialize_constraints(getattr(ph, "constraints", [])),
             "Note": None,
             "IsMilestone": False,
             "DurationResolution": duration_resolution,
@@ -345,7 +360,7 @@ def build_gantt_df(project: Project, inputs: GanttState) -> pd.DataFrame | None:
                 "Status": ph.status,
                 "PlannedDuration": getattr(ph, "planned_duration", None),
                 "ActualDuration": getattr(ph, "actual_duration", None),
-                "Predecessors": [],
+                "Predecessors": _serialize_constraints(getattr(ph, "constraints", [])),
                 "Note": None,
                 "IsMilestone": False,
                 "DurationResolution": duration_resolution,
@@ -357,8 +372,7 @@ def build_gantt_df(project: Project, inputs: GanttState) -> pd.DataFrame | None:
             t = ph.tasks[t_id]
 
             uuid = getattr(t, "uuid", None)
-            preds = getattr(t, "predecessor_ids", None)
-            preds = list(preds) if preds is not None else []
+            preds = _serialize_constraints(getattr(t, "constraints", []))
 
             planned_start = getattr(t, "start_date", None)
             planned_end   = getattr(t, "end_date", None)
