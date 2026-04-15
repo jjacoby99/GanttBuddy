@@ -65,8 +65,14 @@ class EdgeRoute:
     label_y: float
     label_dx: float
     label_dy: float
-    arrow_tail_x: float
-    arrow_tail_y: float
+    mid_arrow_start_x: float
+    mid_arrow_start_y: float
+    mid_arrow_end_x: float
+    mid_arrow_end_y: float
+    arrow_base_x: float
+    arrow_base_y: float
+    arrow_tip_x: float
+    arrow_tip_y: float
 
 
 def _phase_palette(index: int) -> tuple[str, str]:
@@ -138,6 +144,21 @@ def _offset_point_toward(
     return start[0] + (unit_x * distance), start[1] + (unit_y * distance)
 
 
+def _offset_point_from_end(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    distance_back: float,
+) -> tuple[float, float]:
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    length = math.hypot(dx, dy)
+    if math.isclose(length, 0.0, abs_tol=1e-9):
+        return end
+    unit_x = dx / length
+    unit_y = dy / length
+    return end[0] - (unit_x * distance_back), end[1] - (unit_y * distance_back)
+
+
 def _quadratic_bezier_point(
     p0: tuple[float, float],
     p1: tuple[float, float],
@@ -194,7 +215,10 @@ def _build_edge_route(
         normal_x = -tangent_y / tangent_length
         normal_y = tangent_x / tangent_length
     label_offset = 0.14 if not is_phase_edge else 0.18
-    arrow_tail_x, arrow_tail_y = _quadratic_bezier_point(p0, p1, p2, 0.88)
+    mid_arrow_start_x, mid_arrow_start_y = _quadratic_bezier_point(p0, p1, p2, 0.46)
+    mid_arrow_end_x, mid_arrow_end_y = _quadratic_bezier_point(p0, p1, p2, 0.54)
+    arrow_base_x, arrow_base_y = _quadratic_bezier_point(p0, p1, p2, 0.86)
+    arrow_tip_x, arrow_tip_y = _quadratic_bezier_point(p0, p1, p2, 0.98)
     return EdgeRoute(
         points_x=[point[0] for point in samples],
         points_y=[point[1] for point in samples],
@@ -202,9 +226,33 @@ def _build_edge_route(
         label_y=label_y + (normal_y * label_offset),
         label_dx=normal_x,
         label_dy=normal_y,
-        arrow_tail_x=arrow_tail_x,
-        arrow_tail_y=arrow_tail_y,
+        mid_arrow_start_x=mid_arrow_start_x,
+        mid_arrow_start_y=mid_arrow_start_y,
+        mid_arrow_end_x=mid_arrow_end_x,
+        mid_arrow_end_y=mid_arrow_end_y,
+        arrow_base_x=arrow_base_x,
+        arrow_base_y=arrow_base_y,
+        arrow_tip_x=arrow_tip_x,
+        arrow_tip_y=arrow_tip_y,
     )
+
+
+def _edge_color(edge: GraphEdge, project: Project) -> str:
+    if edge.target_kind == "phase":
+        return "rgba(124, 58, 237, 0.8)"
+
+    target_phase = next(
+        (project.phases[pid] for pid in project.phase_order if edge.target_id in project.phases[pid].tasks),
+        None,
+    )
+    if target_phase is None:
+        return "rgba(30, 41, 59, 0.85)"
+
+    target_task = target_phase.tasks[edge.target_id]
+    if target_task.completed:
+        return "rgba(22, 163, 74, 0.9)"
+
+    return "rgba(30, 41, 59, 0.85)"
 
 
 def build_dependency_graph_data(project: Project) -> DependencyGraphData:
@@ -331,7 +379,7 @@ def build_dependency_figure(
         target = node_lookup[edge.target_id]
 
         is_phase_edge = edge.target_kind == "phase"
-        line_color = "rgba(30, 41, 59, 0.85)" if not is_phase_edge else "rgba(124, 58, 237, 0.8)"
+        line_color = _edge_color(edge, project)
         line_dash = "solid" if not is_phase_edge else "dash"
         target_edges = incoming_edges_by_target.get(edge.target_id, [])
         edge_index = target_edges.index(edge)
@@ -342,42 +390,74 @@ def build_dependency_figure(
             lane_offset=lane_offset,
             is_phase_edge=is_phase_edge,
         )
-        target_radius = 0.42 if not is_phase_edge else 0.2
-        source_radius = 0.42 if source.kind == "task" else 0.2
-        line_start = _offset_point_toward(
-            (source.x, source.y),
-            (route.points_x[1], route.points_y[1]),
-            source_radius,
-        )
-        line_end = _offset_point_toward(
-            (target.x, target.y),
-            (route.arrow_tail_x, route.arrow_tail_y),
-            target_radius,
-        )
+        target_radius = 0.68 if not is_phase_edge else 0.24
+        source_radius = 0.58 if source.kind == "task" else 0.24
+        if is_phase_edge:
+            line_start = _offset_point_toward(
+                (source.x, source.y),
+                (route.points_x[1], route.points_y[1]),
+                source_radius,
+            )
+            line_end = _offset_point_toward(
+                (target.x, target.y),
+                (route.arrow_base_x, route.arrow_base_y),
+                target_radius,
+            )
+        else:
+            # Let task curves run underneath the node boxes so the visible line
+            # appears to terminate cleanly at the task boundary.
+            line_start = (source.x, source.y)
+            line_end = (target.x, target.y)
         line_x = list(route.points_x)
         line_y = list(route.points_y)
         line_x[0], line_y[0] = line_start
         line_x[-1], line_y[-1] = line_end
-
-        fig.add_annotation(
-            x=line_end[0],
-            y=line_end[1],
-            ax=route.arrow_tail_x,
-            ay=route.arrow_tail_y,
-            xref="x",
-            yref="y",
-            axref="x",
-            ayref="y",
-            showarrow=True,
-            arrowhead=3,
-            arrowsize=1.1,
-            arrowwidth=1.8 if not is_phase_edge else 2.2,
-            arrowcolor=line_color,
-            opacity=0.95,
-            standoff=0,
-            startstandoff=0,
-            text="",
+        arrow_base = _offset_point_from_end(
+            (route.arrow_base_x, route.arrow_base_y),
+            line_end,
+            0.28 if not is_phase_edge else 0.18,
         )
+
+        if is_phase_edge:
+            fig.add_annotation(
+                x=line_end[0],
+                y=line_end[1],
+                ax=arrow_base[0],
+                ay=arrow_base[1],
+                xref="x",
+                yref="y",
+                axref="x",
+                ayref="y",
+                showarrow=True,
+                arrowhead=3,
+                arrowsize=1.1,
+                arrowwidth=2.2,
+                arrowcolor=line_color,
+                opacity=0.95,
+                standoff=0,
+                startstandoff=0,
+                text="",
+            )
+        else:
+            fig.add_annotation(
+                x=route.mid_arrow_end_x,
+                y=route.mid_arrow_end_y,
+                ax=route.mid_arrow_start_x,
+                ay=route.mid_arrow_start_y,
+                xref="x",
+                yref="y",
+                axref="x",
+                ayref="y",
+                showarrow=True,
+                arrowhead=3,
+                arrowsize=1.05,
+                arrowwidth=1.8,
+                arrowcolor=line_color,
+                opacity=0.98,
+                standoff=0,
+                startstandoff=0,
+                text="",
+            )
 
         fig.add_trace(
             go.Scatter(
@@ -413,9 +493,9 @@ def build_dependency_figure(
             x=[node.x for node in phase_nodes],
             y=[node.y for node in phase_nodes],
             mode="markers+text",
-            text=[node.label for node in phase_nodes],
+            text=[f"<b>{node.label}</b>" for node in phase_nodes],
             textposition="top center",
-            textfont={"size": 13, "color": "#0f172a"},
+            textfont={"size": 17, "color": "#312e81"},
             marker={
                 "size": 24,
                 "symbol": "diamond",
