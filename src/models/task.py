@@ -37,7 +37,6 @@ class Task:
     note: str = ""
     uuid: str = field(default_factory=new_id)
     constraints: list[Constraint] = field(default_factory=list)
-    predecessor_ids: list[str] = field(default_factory=list)
     phase_id: str = ""
     status: Literal["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETE"] = "NOT_STARTED"
     planned: bool = field(default=True) 
@@ -53,10 +52,6 @@ class Task:
             seen_predecessors.add(dedupe_key)
             deduped_constraints.append(constraint)
         self.constraints = deduped_constraints
-        legacy_predecessor_ids = list(self.predecessor_ids)
-        self.predecessor_ids = []
-        self.add_predecessor_ids(legacy_predecessor_ids)
-        self._sync_predecessor_ids()
 
     def to_dict(self) -> dict:
         return {"Task": self.name, 
@@ -66,7 +61,6 @@ class Task:
                 "Actual_Finish": self.actual_end,
                 "Note": self.note,
                 "constraints": [constraint.to_dict() for constraint in self.constraints],
-                "predecessor_ids": self.predecessor_ids,
                 "uuid": self.uuid,
                 "phase_id": self.phase_id,
                 "status": self.status,
@@ -204,7 +198,15 @@ class Task:
             Constraint.from_dict(item)
             for item in data.get("constraints", [])
         ]
-        task.add_predecessor_ids(data.get("predecessor_ids", []))
+        if not task.constraints:
+            task.constraints = [
+                Constraint(
+                    predecessor_id=predecessor_id,
+                    predecessor_kind="task",
+                    relation_type=ConstraintRelation.FS,
+                )
+                for predecessor_id in data.get("predecessor_ids", [])
+            ]
         task.uuid = data.get("uuid", new_id())
         task.phase_id = data.get("phase_id", "")
         task.status = data.get("status", "NOT_STARTED")
@@ -219,20 +221,8 @@ class Task:
                 and existing.predecessor_kind == constraint.predecessor_kind
             ):
                 self.constraints[index] = constraint
-                self._sync_predecessor_ids()
                 return
         self.constraints.append(constraint)
-        self._sync_predecessor_ids()
-
-    def add_predecessor_ids(self, predecessor_ids: list[str]) -> None:
-        for predecessor_id in predecessor_ids:
-            self.add_constraint(
-                Constraint(
-                    predecessor_id=predecessor_id,
-                    predecessor_kind="task",
-                    relation_type=ConstraintRelation.FS,
-                )
-            )
 
     def remove_constraints_for_predecessor(
         self,
@@ -249,15 +239,7 @@ class Task:
                 and constraint.predecessor_kind == predecessor_kind
             )
         ]
-        self._sync_predecessor_ids()
         return original_len - len(self.constraints)
-
-    def _sync_predecessor_ids(self) -> None:
-        self.predecessor_ids = [
-            constraint.predecessor_id
-            for constraint in self.constraints
-            if constraint.predecessor_kind == "task"
-        ]
 
     def resolve_planned_dates(
         self,
