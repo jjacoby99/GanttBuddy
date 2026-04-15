@@ -97,22 +97,6 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
     shift_assignments = snapshot["shift_assignments"]
     phases = snapshot.get("phases", [])
     tasks = snapshot.get("tasks", [])
-    task_preds = snapshot.get("task_predecessors", [])
-    phase_preds = snapshot.get("phase_predecessors", [])
-
-    # Legacy predecessor maps are still supported as a fallback for older snapshots.
-    task_pred_map: dict[str, list[str]] = {}
-    for edge in task_preds:
-        tid = edge["task_id"]
-        pid = edge["predecessor_task_id"]
-        task_pred_map.setdefault(tid, []).append(pid)
-
-    phase_pred_map: dict[str, list[str]] = {}
-    for edge in phase_preds:
-        phase_id = edge["phase_id"]
-        predecessor_phase_id = edge["predecessor_phase_id"]
-        phase_pred_map.setdefault(phase_id, []).append(predecessor_phase_id)
-
     settings = ProjectSettings(
         work_all_day=bool(s.get("work_all_day", False)),
         work_start_time=_parse_time(s.get("work_start_time")),
@@ -153,15 +137,6 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
             Constraint.from_dict(constraint)
             for constraint in ph.get("constraints", [])
         ]
-        if not phase_constraints:
-            phase_constraints = [
-                Constraint(
-                    predecessor_id=predecessor_id,
-                    predecessor_kind="phase",
-                    relation_type=ConstraintRelation.FS,
-                )
-                for predecessor_id in phase_pred_map.get(ph.get("id"), [])
-            ]
 
         phase = Phase(
             name=ph.get("name", ""),
@@ -188,15 +163,6 @@ def snapshot_to_project(snapshot: dict[str, Any]) -> tuple[Project, Optional[Rel
                 Constraint.from_dict(constraint)
                 for constraint in t.get("constraints", [])
             ]
-            if not task_constraints:
-                task_constraints = [
-                    Constraint(
-                        predecessor_id=predecessor_id,
-                        predecessor_kind="task",
-                        relation_type=ConstraintRelation.FS,
-                    )
-                    for predecessor_id in task_pred_map.get(t.get("id"), [])
-                ]
 
             task = Task(
                 name=t.get("name", ""),
