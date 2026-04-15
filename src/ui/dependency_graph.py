@@ -56,6 +56,16 @@ class DependencyGraphData:
     bubbles: list[PhaseBubble]
 
 
+@dataclass(frozen=True)
+class EdgeRoute:
+    points_x: list[float]
+    points_y: list[float]
+    label_x: float
+    label_y: float
+    arrow_tail_x: float
+    arrow_tail_y: float
+
+
 def _phase_palette(index: int) -> tuple[str, str]:
     fills = [
         "rgba(14, 116, 144, 0.14)",
@@ -86,6 +96,62 @@ def _format_lag_hours(lag_hours: float) -> str:
 def _build_edge_label(constraint: Constraint) -> str:
     lag_hours = constraint.lag.total_seconds() / 3600
     return f"{constraint.relation_type.value}{_format_lag_hours(lag_hours)}"
+
+
+def _quadratic_bezier_point(
+    p0: tuple[float, float],
+    p1: tuple[float, float],
+    p2: tuple[float, float],
+    t: float,
+) -> tuple[float, float]:
+    inv_t = 1 - t
+    x = (inv_t * inv_t * p0[0]) + (2 * inv_t * t * p1[0]) + (t * t * p2[0])
+    y = (inv_t * inv_t * p0[1]) + (2 * inv_t * t * p1[1]) + (t * t * p2[1])
+    return x, y
+
+
+def _build_edge_route(
+    source: GraphNode,
+    target: GraphNode,
+    *,
+    lane_offset: float,
+    is_phase_edge: bool,
+) -> EdgeRoute:
+    p0 = (source.x, source.y)
+    p2 = (target.x, target.y)
+    midpoint_x = (source.x + target.x) / 2
+    midpoint_y = (source.y + target.y) / 2
+
+    same_column = math.isclose(source.x, target.x, abs_tol=0.05)
+    bend_direction = 1.0 if lane_offset >= 0 else -1.0
+    if math.isclose(lane_offset, 0.0, abs_tol=1e-9):
+        bend_direction = 1.0 if target.x >= source.x else -1.0
+
+    if is_phase_edge:
+        bend_strength = 0.55 + abs(target.x - source.x) * 0.05
+        control_x = midpoint_x
+        control_y = midpoint_y + 0.9 + lane_offset
+    else:
+        base_bend = 1.2 if same_column else 0.75
+        bend_strength = base_bend + abs(target.y - source.y) * 0.12 + abs(lane_offset) * 1.4
+        control_x = midpoint_x + bend_direction * bend_strength
+        control_y = midpoint_y + (lane_offset * 0.55)
+
+    p1 = (control_x, control_y)
+    samples = [
+        _quadratic_bezier_point(p0, p1, p2, t)
+        for t in (0.0, 0.18, 0.36, 0.5, 0.64, 0.82, 1.0)
+    ]
+    label_x, label_y = _quadratic_bezier_point(p0, p1, p2, 0.5)
+    arrow_tail_x, arrow_tail_y = _quadratic_bezier_point(p0, p1, p2, 0.88)
+    return EdgeRoute(
+        points_x=[point[0] for point in samples],
+        points_y=[point[1] for point in samples],
+        label_x=label_x,
+        label_y=label_y,
+        arrow_tail_x=arrow_tail_x,
+        arrow_tail_y=arrow_tail_y,
+    )
 
 
 def build_dependency_graph_data(project: Project) -> DependencyGraphData:
@@ -179,6 +245,19 @@ def build_dependency_figure(
 ) -> go.Figure:
     graph = build_dependency_graph_data(project)
     node_lookup = {node.id: node for node in graph.nodes}
+    visible_edges: list[GraphEdge] = []
+    for edge in graph.edges:
+        if edge.target_kind == "task" and not show_task_edges:
+            continue
+        if edge.target_kind == "phase" and not show_phase_edges:
+            continue
+        if edge.source_id not in node_lookup or edge.target_id not in node_lookup:
+            continue
+        visible_edges.append(edge)
+
+    incoming_edges_by_target: dict[str, list[GraphEdge]] = {}
+    for edge in visible_edges:
+        incoming_edges_by_target.setdefault(edge.target_id, []).append(edge)
 
     fig = go.Figure()
 
@@ -194,26 +273,28 @@ def build_dependency_figure(
             layer="below",
         )
 
-    for edge in graph.edges:
-        if edge.target_kind == "task" and not show_task_edges:
-            continue
-        if edge.target_kind == "phase" and not show_phase_edges:
-            continue
-
-        source = node_lookup.get(edge.source_id)
-        target = node_lookup.get(edge.target_id)
-        if source is None or target is None:
-            continue
+    for edge in visible_edges:
+        source = node_lookup[edge.source_id]
+        target = node_lookup[edge.target_id]
 
         is_phase_edge = edge.target_kind == "phase"
         line_color = "rgba(30, 41, 59, 0.85)" if not is_phase_edge else "rgba(124, 58, 237, 0.8)"
         line_dash = "solid" if not is_phase_edge else "dash"
+        target_edges = incoming_edges_by_target.get(edge.target_id, [])
+        edge_index = target_edges.index(edge)
+        lane_offset = (edge_index - ((len(target_edges) - 1) / 2)) * (0.95 if not is_phase_edge else 0.55)
+        route = _build_edge_route(
+            source,
+            target,
+            lane_offset=lane_offset,
+            is_phase_edge=is_phase_edge,
+        )
 
         fig.add_annotation(
             x=target.x,
             y=target.y,
-            ax=source.x,
-            ay=source.y,
+            ax=route.arrow_tail_x,
+            ay=route.arrow_tail_y,
             xref="x",
             yref="y",
             axref="x",
@@ -226,24 +307,33 @@ def build_dependency_figure(
             opacity=0.95,
             standoff=14 if not is_phase_edge else 18,
             startstandoff=14 if source.kind == "task" else 18,
-            text=edge.label if show_labels else "",
-            font={"size": 11, "color": line_color},
-            bgcolor="rgba(255,255,255,0.72)" if show_labels else None,
-            borderpad=2,
+            text="",
         )
 
-        midpoint_x = (source.x + target.x) / 2
-        midpoint_y = (source.y + target.y) / 2
         fig.add_trace(
             go.Scatter(
-                x=[source.x, midpoint_x, target.x],
-                y=[source.y, midpoint_y, target.y],
+                x=route.points_x,
+                y=route.points_y,
                 mode="lines",
                 line={"color": line_color, "width": 1.2, "dash": line_dash},
                 hoverinfo="skip",
                 showlegend=False,
             )
         )
+
+        if show_labels and edge.label:
+            fig.add_trace(
+                go.Scatter(
+                    x=[route.label_x],
+                    y=[route.label_y],
+                    mode="text",
+                    text=[edge.label],
+                    textfont={"size": 11, "color": line_color},
+                    textposition="top center",
+                    hoverinfo="skip",
+                    showlegend=False,
+                )
+            )
 
     phase_nodes = [node for node in graph.nodes if node.kind == "phase"]
     task_nodes = [node for node in graph.nodes if node.kind == "task"]
@@ -277,7 +367,7 @@ def build_dependency_figure(
             textposition="middle center",
             textfont={"size": 11, "color": "#0f172a"},
             marker={
-                "size": 34,
+                "size": 54,
                 "symbol": "square",
                 "color": "#f8fafc",
                 "line": {"width": 1.5, "color": "#0f172a"},
