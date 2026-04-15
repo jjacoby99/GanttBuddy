@@ -62,6 +62,8 @@ class EdgeRoute:
     points_y: list[float]
     label_x: float
     label_y: float
+    label_dx: float
+    label_dy: float
     arrow_tail_x: float
     arrow_tail_y: float
 
@@ -143,12 +145,25 @@ def _build_edge_route(
         for t in (0.0, 0.18, 0.36, 0.5, 0.64, 0.82, 1.0)
     ]
     label_x, label_y = _quadratic_bezier_point(p0, p1, p2, 0.5)
+    tangent_before = _quadratic_bezier_point(p0, p1, p2, 0.46)
+    tangent_after = _quadratic_bezier_point(p0, p1, p2, 0.54)
+    tangent_x = tangent_after[0] - tangent_before[0]
+    tangent_y = tangent_after[1] - tangent_before[1]
+    tangent_length = math.hypot(tangent_x, tangent_y)
+    if math.isclose(tangent_length, 0.0, abs_tol=1e-9):
+        normal_x, normal_y = 0.0, 1.0
+    else:
+        normal_x = -tangent_y / tangent_length
+        normal_y = tangent_x / tangent_length
+    label_offset = 0.38 if not is_phase_edge else 0.32
     arrow_tail_x, arrow_tail_y = _quadratic_bezier_point(p0, p1, p2, 0.88)
     return EdgeRoute(
         points_x=[point[0] for point in samples],
         points_y=[point[1] for point in samples],
-        label_x=label_x,
-        label_y=label_y,
+        label_x=label_x + (normal_x * label_offset),
+        label_y=label_y + (normal_y * label_offset),
+        label_dx=normal_x,
+        label_dy=normal_y,
         arrow_tail_x=arrow_tail_x,
         arrow_tail_y=arrow_tail_y,
     )
@@ -315,7 +330,7 @@ def build_dependency_figure(
                 x=route.points_x,
                 y=route.points_y,
                 mode="lines",
-                line={"color": line_color, "width": 1.2, "dash": line_dash},
+                line={"color": line_color, "width": 1.2, "dash": line_dash, "shape": "spline", "smoothing": 1.15},
                 hoverinfo="skip",
                 showlegend=False,
             )
@@ -330,6 +345,7 @@ def build_dependency_figure(
                     text=[edge.label],
                     textfont={"size": 11, "color": line_color},
                     textposition="top center",
+                    marker={"size": 1, "color": "rgba(0,0,0,0)"},
                     hoverinfo="skip",
                     showlegend=False,
                 )
@@ -365,9 +381,9 @@ def build_dependency_figure(
             mode="markers+text",
             text=[node.label for node in task_nodes],
             textposition="middle center",
-            textfont={"size": 11, "color": "#0f172a"},
+            textfont={"size": 12, "color": "#0f172a"},
             marker={
-                "size": 54,
+                "size": 72,
                 "symbol": "square",
                 "color": "#f8fafc",
                 "line": {"width": 1.5, "color": "#0f172a"},
