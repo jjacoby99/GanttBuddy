@@ -10,7 +10,15 @@ import streamlit as st
 from models.constraint import Constraint, ConstraintRelation
 
 
-CONSTRAINT_RELATION_OPTIONS = [relation.value for relation in ConstraintRelation]
+ALLOWED_CONSTRAINT_RELATIONS = [
+    ConstraintRelation.FS,
+    ConstraintRelation.SS,
+]
+CONSTRAINT_RELATION_OPTIONS = [relation.value for relation in ALLOWED_CONSTRAINT_RELATIONS]
+
+
+def relation_label(relation_value: str) -> str:
+    return ConstraintRelation(relation_value).label
 
 
 def build_constraint_target_labels(items: Iterable[tuple[str, str]]) -> dict[str, str]:
@@ -33,6 +41,8 @@ def constraints_to_editor_df(
     for constraint in constraints:
         if constraint.predecessor_kind != predecessor_kind:
             continue
+        if constraint.relation_type not in ALLOWED_CONSTRAINT_RELATIONS:
+            continue
         rows.append(
             {
                 "relation_type": constraint.relation_type.value,
@@ -53,14 +63,52 @@ def constraints_to_editor_df(
     return pd.DataFrame(rows)
 
 
+def validate_constraints(
+    constraints: list[Constraint],
+    *,
+    predecessor_kind: str,
+    allowed_predecessor_ids: set[str] | None = None,
+    current_item_id: str | None = None,
+) -> tuple[list[Constraint], list[str]]:
+    sanitized: list[Constraint] = []
+    messages: list[str] = []
+    seen_predecessors: set[str] = set()
+
+    for constraint in constraints:
+        if constraint.predecessor_kind != predecessor_kind:
+            continue
+
+        if allowed_predecessor_ids is not None and constraint.predecessor_id not in allowed_predecessor_ids:
+            messages.append(f"Ignored an unavailable predecessor: `{constraint.predecessor_id}`.")
+            continue
+
+        if current_item_id is not None and constraint.predecessor_id == current_item_id:
+            messages.append("A task or phase cannot depend on itself.")
+            continue
+
+        if constraint.relation_type not in ALLOWED_CONSTRAINT_RELATIONS:
+            messages.append(
+                f"Only {', '.join(option.value for option in ALLOWED_CONSTRAINT_RELATIONS)} relations are supported here."
+            )
+            continue
+
+        if constraint.predecessor_id in seen_predecessors:
+            messages.append("Each predecessor can only be used once. Duplicate rows were ignored.")
+            continue
+
+        seen_predecessors.add(constraint.predecessor_id)
+        sanitized.append(constraint)
+
+    return sanitized, messages
+
+
 def constraints_from_editor_df(
     df: pd.DataFrame,
     *,
     predecessor_kind: str,
     id_by_label: dict[str, str],
-) -> list[Constraint]:
+) -> tuple[list[Constraint], list[str]]:
     constraints: list[Constraint] = []
-    seen: set[tuple[str, str, str, int]] = set()
 
     for record in df.to_dict(orient="records"):
         predecessor_label = record.get("predecessor")
@@ -76,11 +124,6 @@ def constraints_from_editor_df(
 
         lag_hours_value = 0.0 if lag_hours is None or pd.isna(lag_hours) else float(lag_hours)
         lag_seconds = int(dt.timedelta(hours=lag_hours_value).total_seconds())
-        dedupe_key = (predecessor_id, predecessor_kind, str(relation_value), lag_seconds)
-        if dedupe_key in seen:
-            continue
-        seen.add(dedupe_key)
-
         constraints.append(
             Constraint(
                 predecessor_id=predecessor_id,
@@ -90,7 +133,11 @@ def constraints_from_editor_df(
             )
         )
 
-    return constraints
+    return validate_constraints(
+        constraints,
+        predecessor_kind=predecessor_kind,
+        allowed_predecessor_ids=set(id_by_label.values()),
+    )
 
 
 def render_constraints_editor(
@@ -127,6 +174,7 @@ def render_constraints_editor(
                 options=CONSTRAINT_RELATION_OPTIONS,
                 help="How this item depends on its predecessor.",
                 required=True,
+                format_func=relation_label,
             ),
             "predecessor": st.column_config.SelectboxColumn(
                 label="Predecessor",
@@ -144,9 +192,12 @@ def render_constraints_editor(
         },
     )
 
-    st.caption(title)
-    return constraints_from_editor_df(
+    constraints_out, messages = constraints_from_editor_df(
         edited_df,
         predecessor_kind=predecessor_kind,
         id_by_label=id_by_label,
     )
+    for message in dict.fromkeys(messages):
+        st.warning(message, icon=":material/warning:")
+
+    return constraints_out

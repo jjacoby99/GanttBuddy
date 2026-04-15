@@ -181,7 +181,12 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
                 "name": getattr(p, "name", ""),
                 "sort_mode": getattr(p, "_sort_mode", "manual"),
                 "position": int(phase_pos),
-                "planned": getattr(p, "planned", True)
+                "planned": getattr(p, "planned", True),
+                "constraints": [
+                    constraint.to_dict()
+                    for constraint in getattr(p, "constraints", [])
+                ],
+                "predecessor_ids": list(getattr(p, "predecessor_ids", []) or []),
             }
         )
 
@@ -239,7 +244,12 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
                     "status": status,
                     "position": int(task_pos),
                     "planned": getattr(t,"planned", True),
-                    "task_type": t.task_type.name
+                    "task_type": t.task_type.name,
+                    "constraints": [
+                        constraint.to_dict()
+                        for constraint in getattr(t, "constraints", [])
+                    ],
+                    "predecessor_ids": list(getattr(t, "predecessor_ids", []) or []),
                 }
             )
 

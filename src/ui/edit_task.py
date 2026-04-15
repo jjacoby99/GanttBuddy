@@ -1,11 +1,13 @@
 import streamlit as st
-import pandas as pd
+from copy import deepcopy
 from models.phase import Phase
 from models.task import Task, TaskType
 from models.session import SessionModel
+from models.constraint import Constraint, earliest_start_from_constraint
 from ui.utils.constraints import build_constraint_target_labels, render_constraints_editor
+from ui.utils.timezones import from_datetime_input_value, to_datetime_input_value
 import time
-from datetime import datetime, timedelta, UTC, timezone
+from datetime import datetime, timedelta
 
 from logic.gantt_builder import build_timeline, build_gantt_df # need to clear cache when task updated.
 
@@ -25,6 +27,36 @@ def render_task_edit(session, phase: Phase, task: Task):
         value=task.name if task.name else ""
     )
     
+    dur, unit = st.columns(2)
+    planned_duration = task.planned_duration
+    duration_defaults = {
+        "minutes": planned_duration.total_seconds() / 60,
+        "hours": planned_duration.total_seconds() / 3600,
+        "days": planned_duration.total_seconds() / 86400,
+    }
+    
+    default_duration_unit = "hours"
+    if planned_duration.total_seconds() % 86400 == 0:
+        default_duration_unit = "days"
+    
+
+    task_duration = dur.number_input(
+        label="Duration",
+        min_value=0.0,
+        value=float(duration_defaults[default_duration_unit]),
+        step=0.25,
+    )
+    duration_unit = unit.selectbox(
+        label="Unit",
+        options=["minutes", "hours", "days"],
+        index=["minutes", "hours", "days"].index(default_duration_unit),
+    )
+    tdur = timedelta(hours=float(task_duration))
+    if duration_unit == "minutes":
+        tdur = timedelta(minutes=float(task_duration))
+    elif duration_unit == "days":
+        tdur = timedelta(days=float(task_duration))
+
     # convert answer to task's boolean planned field
     type_dict = {
         ":material/event_available: Planned": True,
@@ -63,27 +95,43 @@ def render_task_edit(session, phase: Phase, task: Task):
 
         st.space(size="stretch")
 
-        st.caption("Constraints are edited in the grid below.")
-
-    st.divider()
-    available_predecessors = build_constraint_target_labels(
-        (
-            candidate.uuid,
-            f"{session.project.phases[candidate.phase_id].name} / {candidate.name}",
+        has_constraints = st.checkbox(
+            label="Add predecessor constraints?",
+            value=len(task.constraints) > 0,
+            help="Select to add dependencies that this task has on other tasks."
         )
-        for candidate in session.project.get_task_list()
-        if candidate.uuid != task.uuid
-    )
-    constraints = render_constraints_editor(
-        key=f"{task.uuid}_constraints",
-        title=f"Predecessor rules for {edited_task_name or task.name}.",
-        help_text="Choose the predecessor task this task depends on.",
-        constraints=task.constraints,
-        predecessor_kind="task",
-        labels_by_id=available_predecessors,
-    )
-    
+
+    constraints: list[Constraint] = []
+    earliest_start = None
+    if has_constraints:
+        available_predecessors = build_constraint_target_labels(
+            (candidate.uuid, candidate.name)
+            for candidate in phase.tasks.values()
+            if candidate.uuid != task.uuid
+        )
+        constraints = render_constraints_editor(
+            key=f"{task.uuid}_constraints",
+            title=f"Predecessor rules for {edited_task_name or task.name}.",
+            help_text="Choose the predecessor task this task depends on.",
+            constraints=task.constraints,
+            predecessor_kind="task",
+            labels_by_id=available_predecessors,
+        )
+        if constraints:
+            earliest_start = max(
+                earliest_start_from_constraint(
+                    predecessor_start=phase.tasks[constraint.predecessor_id].start_date,
+                    predecessor_end=phase.tasks[constraint.predecessor_id].end_date,
+                    successor_duration=tdur,
+                    relation=constraint.relation_type,
+                    lag=constraint.lag,
+                )
+                for constraint in constraints
+            )
+            st.info(f":material/info: Earliest start based on constraints: *{earliest_start.strftime('%b %d, %Y %I:%M %p')}*")
+
     st.caption(f"*{edited_task_name}* time stamps")
+    tz = session.project.timezone
 
     label_col, start_col, end_col = st.columns([1,2,2])
     with label_col:
@@ -98,13 +146,13 @@ def render_task_edit(session, phase: Phase, task: Task):
     with start_col:
         planned_start_dt = st.datetime_input(
             label=f"Planned Start",
-            value=task.start_date,
-            min_value=datetime(year=2000,month=1,day=1),
+            value=to_datetime_input_value(task.start_date, tz),
+            min_value=to_datetime_input_value(earliest_start, tz) if earliest_start else datetime(year=2000,month=1,day=1),
             key="task_start_date_single",
             disabled=not task_planned,
             help="**Planned start** timestamp for *{edited_task_name}*"
         )
-        planned_start_dt = planned_start_dt.astimezone()
+        planned_start_dt = from_datetime_input_value(planned_start_dt, tz)
 
 
     with end_col:
@@ -112,31 +160,31 @@ def render_task_edit(session, phase: Phase, task: Task):
     
         planned_end_dt = st.datetime_input(
             label=f"Planned Finish",
-            value=task.end_date if task.end_date else min_end_day,
-            min_value=min_end_day if planned_start_dt else None,
+            value=to_datetime_input_value(planned_start_dt + tdur, tz) if planned_start_dt else to_datetime_input_value(task.end_date, tz),
+            min_value=to_datetime_input_value(min_end_day, tz) if planned_start_dt else None,
             disabled=not task_planned,
             key="task_start_date",
             help=f"**Planned end** timestamp for *{edited_task_name}*"
         )
-        planned_end_dt = planned_end_dt.astimezone()
+        planned_end_dt = from_datetime_input_value(planned_end_dt, tz)
 
+    actual_start_dt = None
+    actual_end_dt = None
     if enter_actuals or not task_planned:
         actual_start_dt = start_col.datetime_input(
             label="Actual Start",
-            value=task.actual_start if task.actual_start else None,
+            value=to_datetime_input_value(task.actual_start, tz),
             help=f"**Actual start** timestamp for *{edited_task_name}*"
         )
 
-        if actual_start_dt:
-            actual_start_dt = actual_start_dt.astimezone()
+        actual_start_dt = from_datetime_input_value(actual_start_dt, tz)
 
         actual_end_dt = end_col.datetime_input(
             label=f"Actual Finish",
-            value=task.actual_end if task.actual_end else None,
+            value=to_datetime_input_value(task.actual_end, tz),
             help=f"**Actual end** timestamp for *{edited_task_name}*"
         )
-        if actual_end_dt:
-            actual_end_dt = actual_end_dt.astimezone()
+        actual_end_dt = from_datetime_input_value(actual_end_dt, tz)
 
 
     if not planned_start_dt or not planned_end_dt:
@@ -180,6 +228,14 @@ def render_task_edit(session, phase: Phase, task: Task):
             status=task_status,
             planned=task_planned,
         )
+        try:
+            draft_project = deepcopy(session.project)
+            draft_phase = draft_project.phases[phase.uuid]
+            draft_old_task = draft_phase.tasks[task.uuid]
+            draft_project.update_task(phase=draft_phase, old_task=draft_old_task, new_task=new_task)
+        except ValueError as exc:
+            st.error(f"Unable to update task: {exc}")
+            st.stop()
         session.project.update_task(phase=phase, old_task=task, new_task=new_task)
 
         st.info(f"'{edited_task_name}' updated successfully.")

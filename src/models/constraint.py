@@ -72,4 +72,24 @@ def earliest_start_from_constraint(
     if relation == ConstraintRelation.SF:
         return predecessor_start + lag - successor_duration
     raise ValueError(f"Unsupported constraint relation: {relation}")
+
+def earliest_start_from_constraints(
+    *,
+    successor_duration: dt.timedelta,
+    constraints: list[Constraint],
+) -> dt.datetime:
+    if not constraints:
+        return None
+
+    earliest_starts = [
+        earliest_start_from_constraint(
+            predecessor_start=constraint.predecessor_start,
+            predecessor_end=constraint.predecessor_end,
+            successor_duration=successor_duration,
+            relation=constraint.relation_type,
+            lag=constraint.lag,
+        )
+        for constraint in constraints
+    ]
+    return max(earliest_starts)
     

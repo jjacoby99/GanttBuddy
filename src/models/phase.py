@@ -26,6 +26,15 @@ class Phase:
     planned: bool = True
 
     def __post_init__(self):
+        deduped_constraints: list[Constraint] = []
+        seen_predecessors: set[tuple[str, str]] = set()
+        for constraint in self.constraints:
+            dedupe_key = (constraint.predecessor_id, constraint.predecessor_kind)
+            if dedupe_key in seen_predecessors:
+                continue
+            seen_predecessors.add(dedupe_key)
+            deduped_constraints.append(constraint)
+        self.constraints = deduped_constraints
         legacy_predecessor_ids = list(self.predecessor_ids)
         self.predecessor_ids = []
         self.add_predecessor_ids(legacy_predecessor_ids)
@@ -186,13 +195,13 @@ class Phase:
         )
 
     def add_constraint(self, constraint: Constraint) -> None:
-        for existing in self.constraints:
+        for index, existing in enumerate(self.constraints):
             if (
                 existing.predecessor_id == constraint.predecessor_id
                 and existing.predecessor_kind == constraint.predecessor_kind
-                and existing.relation_type == constraint.relation_type
-                and existing.lag == constraint.lag
             ):
+                self.constraints[index] = constraint
+                self._sync_predecessor_ids()
                 return
         self.constraints.append(constraint)
         self._sync_predecessor_ids()

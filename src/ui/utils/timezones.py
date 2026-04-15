@@ -42,6 +42,26 @@ def label_timezones_relative_to_user(user_tz_name: str) -> list[tuple[str, str]]
 
     return results
 
+
+def to_datetime_input_value(value: datetime | None, timezone_name: ZoneInfo) -> datetime | None:
+    if value is None:
+        return None
+
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value
+
+    return value.astimezone(timezone_name).replace(tzinfo=None)
+
+
+def from_datetime_input_value(value: datetime | None, timezone_name: ZoneInfo) -> datetime | None:
+    if value is None:
+        return None
+
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone_name)
+
+    return value.astimezone(timezone_name)
+
 # Example:
 # labels = label_timezones_relative_to_user("America/Vancouver")
 # tz_name, label = labels[0]
