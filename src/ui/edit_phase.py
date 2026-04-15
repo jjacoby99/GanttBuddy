@@ -44,7 +44,6 @@ def render_phase_edit(session: SessionModel, phase: Phase, plan_state: PlanState
                 draft_phase = draft_project.phases[phase.uuid]
                 draft_phase.name = new_name
                 draft_phase.constraints = constraints
-                draft_phase._sync_predecessor_ids()
                 draft_project.resolve_schedule()
             except ValueError as exc:
                 st.error(f"Unable to update phase: {exc}")
@@ -52,7 +51,6 @@ def render_phase_edit(session: SessionModel, phase: Phase, plan_state: PlanState
 
             phase.name = new_name
             phase.constraints = constraints
-            phase._sync_predecessor_ids()
             session.project.resolve_schedule()
             st.rerun()
         
