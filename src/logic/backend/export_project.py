@@ -46,14 +46,6 @@ def _working_days_to_mask(working_days: List[bool]) -> int:
             mask |= (1 << i)
     return mask
 
-
-def _constraints_for_kind(entity: Any, *, predecessor_kind: str) -> list[Any]:
-    return [
-        constraint
-        for constraint in getattr(entity, "constraints", []) or []
-        if getattr(constraint, "predecessor_kind", None) == predecessor_kind
-    ]
-
 from models.project_metadata import RelineMetadata
 from models.project import Project
 
@@ -72,13 +64,11 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
       - name, uuid, _sort_mode
       - task_order: list[UUID/str]
       - tasks: dict[uuid -> Task]
-      - predecessor_ids: list[UUID/str] (optional)
     Each Task has:
       - name, uuid, phase_id
       - start_date/end_date (planned)
       - actual_start/actual_end
       - note
-      - predecessor_ids: list[UUID/str]
       - status (optional)
     
     Metadata:
@@ -103,8 +93,6 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
         "settings": None,
         "phases": [],
         "tasks": [],
-        "task_predecessors": [],
-        "phase_predecessors": [],
         "metadata": metadata.model_dump(mode="json") if metadata is not None else None, #new 
         "shift_definition": None,
         "shift_assignments": None,
@@ -194,21 +182,8 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
                     constraint.to_dict()
                     for constraint in getattr(p, "constraints", [])
                 ],
-                "predecessor_ids": [
-                    constraint.predecessor_id
-                    for constraint in _constraints_for_kind(p, predecessor_kind="phase")
-                ],
             }
         )
-
-        # Phase predecessor links (optional)
-        for constraint in _constraints_for_kind(p, predecessor_kind="phase"):
-            payload["phase_predecessors"].append(
-                {
-                    "phase_id": _iso(phase_uuid),
-                    "predecessor_phase_id": _iso(constraint.predecessor_id),
-                }
-            )
 
         # Tasks in this phase
         tasks_dict = getattr(p, "tasks", {}) or {}
@@ -260,20 +235,7 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
                         constraint.to_dict()
                         for constraint in getattr(t, "constraints", [])
                     ],
-                    "predecessor_ids": [
-                        constraint.predecessor_id
-                        for constraint in _constraints_for_kind(t, predecessor_kind="task")
-                    ],
                 }
             )
-
-            # Task predecessor links (normalized)
-            for constraint in _constraints_for_kind(t, predecessor_kind="task"):
-                payload["task_predecessors"].append(
-                    {
-                        "task_id": _iso(task_uuid),
-                        "predecessor_task_id": _iso(constraint.predecessor_id),
-                    }
-                )
     return payload
 
