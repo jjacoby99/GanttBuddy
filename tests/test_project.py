@@ -120,6 +120,35 @@ def test_update_task_cascades(simple_project: Project):
     assert new_t2_in_proj.end_date == t2_old_end + timedelta(hours=delay_hrs), "Task 2's new end date wasn't delayed by 3 hrs"
 
 
+def test_update_task_pulls_successor_earlier_when_constraint_anchor_moves_earlier(simple_project: Project) -> None:
+    proj = simple_project
+
+    tid1 = proj.phases[proj.phase_order[0]].task_order[0]
+    tid2 = proj.phases[proj.phase_order[0]].task_order[1]
+
+    old_t1 = proj.phases[proj.phase_order[0]].tasks[tid1]
+    old_t2 = proj.phases[proj.phase_order[0]].tasks[tid2]
+    old_t2_start = old_t2.start_date
+    old_t2_end = old_t2.end_date
+
+    new_t1 = Task(
+        name="Task 1",
+        start_date=old_t1.start_date - timedelta(hours=2),
+        end_date=old_t1.end_date - timedelta(hours=2),
+    )
+
+    proj.update_task(
+        phase=proj.phases[proj.phase_order[0]],
+        old_task=old_t1,
+        new_task=new_t1,
+    )
+
+    new_t2_in_proj: Task = proj.phases[proj.phase_order[0]].tasks[tid2]
+
+    assert new_t2_in_proj.start_date == old_t2_start - timedelta(hours=2)
+    assert new_t2_in_proj.end_date == old_t2_end - timedelta(hours=2)
+
+
 def test_task_constraints_preserve_explicit_constraint_definitions() -> None:
     task = Task(
         name="Task B",
@@ -194,5 +223,49 @@ def test_multiple_constraints_resolve_successor_to_latest_required_start() -> No
 
     assert task_c.start_date == datetime(2026, 2, 1, 10, 0)
     assert task_c.end_date == datetime(2026, 2, 1, 12, 0)
+
+
+def test_task_constraints_only_resolve_within_a_phase_while_phase_constraints_drive_cross_phase_order() -> None:
+    phase_a = Phase(name="Phase A")
+    task_a = Task(
+        name="Task A",
+        start_date=datetime(2026, 3, 1, 7, 0),
+        end_date=datetime(2026, 3, 1, 9, 0),
+    )
+    phase_a.add_task(task_a)
+
+    phase_b = Phase(
+        name="Phase B",
+        constraints=[
+            Constraint(
+                predecessor_id=phase_a.uuid,
+                predecessor_kind="phase",
+                relation_type=ConstraintRelation.FS,
+            )
+        ],
+    )
+    task_b = Task(
+        name="Task B",
+        start_date=datetime(2026, 3, 1, 7, 0),
+        end_date=datetime(2026, 3, 1, 8, 0),
+        constraints=[
+            Constraint(
+                predecessor_id=task_a.uuid,
+                predecessor_kind="task",
+                relation_type=ConstraintRelation.FS,
+            )
+        ],
+    )
+    phase_b.add_task(task_b)
+
+    project = Project(name="Scoped Constraints")
+    project.add_phase(phase_a)
+    project.add_phase(phase_b)
+
+    project.resolve_schedule()
+
+    assert phase_b.start_date == task_a.end_date
+    assert task_b.start_date == phase_b.start_date
+    assert task_b.end_date == phase_b.start_date + timedelta(hours=1)
 
     
