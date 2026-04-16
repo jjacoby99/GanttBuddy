@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from models.constraint import Constraint, ConstraintRelation
+from logic.constraint_inference import infer_missing_project_constraints
 from models.project import Project
 from models.task import Task
 from models.phase import Phase
@@ -267,5 +268,122 @@ def test_task_constraints_only_resolve_within_a_phase_while_phase_constraints_dr
     assert phase_b.start_date == task_a.end_date
     assert task_b.start_date == phase_b.start_date
     assert task_b.end_date == phase_b.start_date + timedelta(hours=1)
+
+
+def test_infer_missing_project_constraints_adds_task_and_phase_fs_links() -> None:
+    phase_a = Phase(name="Phase A")
+    task_a = Task(
+        name="Task A",
+        start_date=datetime(2026, 4, 1, 7, 0),
+        end_date=datetime(2026, 4, 1, 9, 0),
+    )
+    task_b = Task(
+        name="Task B",
+        start_date=datetime(2026, 4, 1, 9, 0),
+        end_date=datetime(2026, 4, 1, 11, 0),
+    )
+    phase_a.add_task(task_a)
+    phase_a.add_task(task_b)
+
+    phase_b = Phase(name="Phase B")
+    task_c = Task(
+        name="Task C",
+        start_date=datetime(2026, 4, 1, 11, 0),
+        end_date=datetime(2026, 4, 1, 13, 0),
+    )
+    phase_b.add_task(task_c)
+
+    project = Project(name="Inference Demo")
+    project.add_phase(phase_a)
+    project.add_phase(phase_b)
+
+    report = infer_missing_project_constraints(project, apply=True)
+
+    assert report["task_successor_count"] == 1
+    assert report["task_constraint_count"] == 1
+    assert report["phase_successor_count"] == 1
+    assert report["phase_constraint_count"] == 1
+    assert len(report["preview_rows"]) == 2
+
+    assert len(task_b.constraints) == 1
+    assert task_b.constraints[0].predecessor_id == task_a.uuid
+    assert task_b.constraints[0].predecessor_kind == "task"
+    assert task_b.constraints[0].relation_type == ConstraintRelation.FS
+
+    assert len(phase_b.constraints) == 1
+    assert phase_b.constraints[0].predecessor_id == phase_a.uuid
+    assert phase_b.constraints[0].predecessor_kind == "phase"
+    assert phase_b.constraints[0].relation_type == ConstraintRelation.FS
+
+
+def test_infer_missing_project_constraints_skips_items_with_existing_constraints() -> None:
+    phase = Phase(name="Phase A")
+    task_a = Task(
+        name="Task A",
+        start_date=datetime(2026, 4, 1, 7, 0),
+        end_date=datetime(2026, 4, 1, 9, 0),
+    )
+    task_b = Task(
+        name="Task B",
+        start_date=datetime(2026, 4, 1, 9, 0),
+        end_date=datetime(2026, 4, 1, 11, 0),
+        constraints=[
+            Constraint(
+                predecessor_id="existing-predecessor",
+                predecessor_kind="task",
+                relation_type=ConstraintRelation.FS,
+            )
+        ],
+    )
+    phase.add_task(task_a)
+    phase.add_task(task_b)
+
+    project = Project(name="Existing Constraints")
+    project.add_phase(phase)
+
+    report = infer_missing_project_constraints(project, apply=True)
+
+    assert report["task_successor_count"] == 0
+    assert report["task_constraint_count"] == 0
+    assert task_b.constraints[0].predecessor_id == "existing-predecessor"
+
+
+def test_infer_missing_project_constraints_stitches_unplanned_tasks_without_creating_cycles() -> None:
+    phase = Phase(name="Phase A")
+    task_a = Task(
+        name="Task A",
+        start_date=datetime(2026, 4, 1, 7, 0),
+        end_date=datetime(2026, 4, 1, 9, 0),
+    )
+    unplanned = Task(
+        name="Unexpected Work",
+        start_date=datetime(2026, 4, 1, 9, 0),
+        end_date=datetime(2026, 4, 1, 9, 0),
+        actual_start=datetime(2026, 4, 1, 9, 0),
+        actual_end=datetime(2026, 4, 1, 11, 0),
+        planned=False,
+    )
+    task_b = Task(
+        name="Task B",
+        start_date=datetime(2026, 4, 1, 9, 0),
+        end_date=datetime(2026, 4, 1, 12, 0),
+    )
+    phase.add_task(task_a)
+    phase.add_task(unplanned)
+    phase.add_task(task_b)
+
+    project = Project(name="Unplanned Stitching")
+    project.add_phase(phase)
+
+    report = infer_missing_project_constraints(project, apply=True)
+
+    assert report["task_successor_count"] == 2
+    assert report["task_constraint_count"] == 2
+    assert len(unplanned.constraints) == 1
+    assert unplanned.constraints[0].predecessor_id == task_a.uuid
+    assert unplanned.constraints[0].predecessor_kind == "task"
+    assert len(task_b.constraints) == 1
+    assert task_b.constraints[0].predecessor_id == unplanned.uuid
+    assert task_b.constraints[0].predecessor_kind == "task"
 
     
