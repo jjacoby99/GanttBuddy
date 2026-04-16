@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import Literal
 
 
 @dataclass
@@ -8,7 +7,6 @@ class PlanState:
     _expanded_phase_ids: set[str] = field(default_factory=set)
     show_actuals: bool = False
     highlight_delayed_tasks: bool = False
-    view_mode: Literal["Simple", "Detailed"] = "Detailed"
 
     def sync_with_project(self, project_id: str, phase_ids: list[str]) -> None:
         phase_id_set = set(phase_ids)
@@ -38,9 +36,6 @@ class PlanState:
             self._expanded_phase_ids.remove(pid)
             return
         self._expanded_phase_ids.add(pid)
-
-    def toggle_view_mode(self):
-        self.view_mode = "Detailed" if self.view_mode == "Simple" else "Simple"
 
 
 class TaskColumns:

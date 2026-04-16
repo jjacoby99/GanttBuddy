@@ -9,23 +9,28 @@ from ui.utils.workspace import render_workspace_buttons
 
 render_workspace_buttons()
 
+VIEW_OPTIONS = {
+    "Plan": ":material/list_alt: Plan",
+    "Visualize": ":material/view_timeline: Visualize",
+    "Dependencies": ":material/account_tree: Dependencies",
+}
 
-task_tab, plot_tab, dependency_tab = st.tabs(
-    [":material/list_alt: Plan", 
-     ":material/view_timeline: Visualize",
-     ":material/account_tree: Dependencies"]
+selected_view = st.segmented_control(
+    "Workspace View",
+    options=list(VIEW_OPTIONS.keys()),
+    format_func=lambda view: VIEW_OPTIONS[view],
+    default="Plan",
+    selection_mode="single",
+    width="stretch",
 )
 
-with task_tab:
+if selected_view == "Plan":
     render_plan(st.session_state.session)
-
-
-with plot_tab:
+elif selected_view == "Visualize":
     render_gantt(st.session_state.session)
     st.divider()
     render_task_details(st.session_state.session)
-
-with dependency_tab:
+elif selected_view == "Dependencies":
     render_dependency_graph(st.session_state.session.project)
 
 
