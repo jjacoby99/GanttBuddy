@@ -37,6 +37,7 @@ class GraphEdge:
     lag_hours: float
     predecessor_kind: str
     label: str
+    target_completed: bool = False
 
 
 @dataclass(frozen=True)
@@ -127,6 +128,10 @@ def _wrap_node_label(label: str, *, width: int = 14, max_lines: int = 3) -> str:
 def _build_edge_label(constraint: Constraint) -> str:
     lag_hours = constraint.lag.total_seconds() / 3600
     return f"{constraint.relation_type.value}{_format_lag_hours(lag_hours)}"
+
+
+def _build_edge_label_from_parts(relation_value: str, lag_hours: float) -> str:
+    return f"{relation_value}{_format_lag_hours(lag_hours)}"
 
 
 def _offset_point_toward(
@@ -237,53 +242,87 @@ def _build_edge_route(
     )
 
 
-def _edge_color(edge: GraphEdge, project: Project) -> str:
+def _edge_color(edge: GraphEdge) -> str:
     if edge.target_kind == "phase":
         return "rgba(124, 58, 237, 0.8)"
 
-    target_phase = next(
-        (project.phases[pid] for pid in project.phase_order if edge.target_id in project.phases[pid].tasks),
-        None,
-    )
-    if target_phase is None:
-        return "rgba(30, 41, 59, 0.85)"
-
-    target_task = target_phase.tasks[edge.target_id]
-    if target_task.completed:
+    if edge.target_completed:
         return "rgba(22, 163, 74, 0.9)"
 
     return "rgba(30, 41, 59, 0.85)"
 
 
-def build_dependency_graph_data(project: Project) -> DependencyGraphData:
+def _project_dependency_snapshot(project: Project) -> tuple:
+    phase_snapshots: list[tuple] = []
+    for phase_id in project.phase_order:
+        phase = project.phases[phase_id]
+        phase_constraints = tuple(
+            (
+                constraint.predecessor_id,
+                constraint.predecessor_kind,
+                constraint.relation_type.value,
+                constraint.lag.total_seconds() / 3600,
+            )
+            for constraint in phase.constraints
+        )
+        task_snapshots = tuple(
+            (
+                task.uuid,
+                task.name,
+                task.completed,
+                task.planned_duration.total_seconds() / 3600,
+                tuple(
+                    (
+                        constraint.predecessor_id,
+                        constraint.predecessor_kind,
+                        constraint.relation_type.value,
+                        constraint.lag.total_seconds() / 3600,
+                    )
+                    for constraint in task.constraints
+                ),
+            )
+            for task in phase.get_task_list()
+        )
+        phase_snapshots.append(
+            (
+                phase.uuid,
+                phase.name,
+                phase_constraints,
+                task_snapshots,
+            )
+        )
+    return tuple(phase_snapshots)
+
+
+@st.cache_data(show_spinner=False)
+def build_dependency_graph_data(project_snapshot: tuple) -> DependencyGraphData:
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
     bubbles: list[PhaseBubble] = []
 
-    for phase_index, phase_id in enumerate(project.phase_order):
-        phase = project.phases[phase_id]
+    for phase_index, (phase_id, phase_name, phase_constraints, task_snapshots) in enumerate(project_snapshot):
         fill, line = _phase_palette(phase_index)
         center_x = phase_index * PHASE_X_GAP
-        task_ids = list(phase.task_order)
+        task_ids = [task_id for task_id, *_ in task_snapshots]
         task_count = max(len(task_ids), 1)
         bottom_y = -(task_count - 1) * TASK_Y_GAP
 
         nodes.append(
             GraphNode(
-                id=phase.uuid,
+                id=phase_id,
                 kind="phase",
-                label=phase.name,
+                label=phase_name,
                 x=center_x,
                 y=PHASE_HEADER_Y,
-                phase_id=phase.uuid,
-                phase_name=phase.name,
+                phase_id=phase_id,
+                phase_name=phase_name,
             )
         )
 
         bubbles.append(
             PhaseBubble(
-                phase_id=phase.uuid,
-                phase_name=phase.name,
+                phase_id=phase_id,
+                phase_name=phase_name,
                 x0=center_x - 2.15,
                 x1=center_x + 2.15,
                 y0=bottom_y - 0.9,
@@ -292,60 +331,68 @@ def build_dependency_graph_data(project: Project) -> DependencyGraphData:
             )
         )
 
-        for task_index, task_id in enumerate(task_ids):
-            task = phase.tasks[task_id]
+        for task_index, (task_id, task_name, task_completed, _task_planned_duration_hours, task_constraints) in enumerate(task_snapshots):
             nodes.append(
                 GraphNode(
-                    id=task.uuid,
+                    id=task_id,
                     kind="task",
-                    label=_wrap_node_label(task.name),
+                    label=_wrap_node_label(task_name),
                     x=center_x,
                     y=-(task_index * TASK_Y_GAP),
-                    phase_id=phase.uuid,
-                    phase_name=phase.name,
+                    phase_id=phase_id,
+                    phase_name=phase_name,
                 )
             )
 
-            for constraint in task.constraints:
+            for predecessor_id, predecessor_kind, relation_value, lag_hours in task_constraints:
                 edges.append(
                     GraphEdge(
-                        source_id=constraint.predecessor_id,
-                        target_id=task.uuid,
-                        source_kind=constraint.predecessor_kind,
+                        source_id=predecessor_id,
+                        target_id=task_id,
+                        source_kind=predecessor_kind,
                         target_kind="task",
-                        relation=constraint.relation_type,
-                        lag_hours=constraint.lag.total_seconds() / 3600,
-                        predecessor_kind=constraint.predecessor_kind,
-                        label=_build_edge_label(constraint),
+                        relation=ConstraintRelation(relation_value),
+                        lag_hours=lag_hours,
+                        predecessor_kind=predecessor_kind,
+                        label=_build_edge_label_from_parts(relation_value, lag_hours),
+                        target_completed=task_completed,
                     )
                 )
 
-        for constraint in phase.constraints:
+        for predecessor_id, predecessor_kind, relation_value, lag_hours in phase_constraints:
             edges.append(
                 GraphEdge(
-                    source_id=constraint.predecessor_id,
-                    target_id=phase.uuid,
-                    source_kind=constraint.predecessor_kind,
+                    source_id=predecessor_id,
+                    target_id=phase_id,
+                    source_kind=predecessor_kind,
                     target_kind="phase",
-                    relation=constraint.relation_type,
-                    lag_hours=constraint.lag.total_seconds() / 3600,
-                    predecessor_kind=constraint.predecessor_kind,
-                    label=_build_edge_label(constraint),
+                    relation=ConstraintRelation(relation_value),
+                    lag_hours=lag_hours,
+                    predecessor_kind=predecessor_kind,
+                    label=_build_edge_label_from_parts(relation_value, lag_hours),
                 )
             )
 
     return DependencyGraphData(nodes=nodes, edges=edges, bubbles=bubbles)
 
 
-def build_dependency_figure(
-    project: Project,
+@st.cache_data(show_spinner=False)
+def build_dependency_figure_dict(
+    project_snapshot: tuple,
     *,
     show_task_edges: bool = True,
     show_phase_edges: bool = True,
     show_labels: bool = True,
-) -> go.Figure:
-    graph = build_dependency_graph_data(project)
+) -> dict:
+    graph = build_dependency_graph_data(project_snapshot)
     node_lookup = {node.id: node for node in graph.nodes}
+    task_duration_lookup: dict[str, float] = {}
+    total_task_count = 0
+    for _phase_id, _phase_name, _phase_constraints, task_snapshots in project_snapshot:
+        total_task_count += len(task_snapshots)
+        for task_id, _task_name, _task_completed, planned_duration_hours, _task_constraints in task_snapshots:
+            task_duration_lookup[task_id] = planned_duration_hours
+
     visible_edges: list[GraphEdge] = []
     for edge in graph.edges:
         if edge.target_kind == "task" and not show_task_edges:
@@ -359,6 +406,12 @@ def build_dependency_figure(
     incoming_edges_by_target: dict[str, list[GraphEdge]] = {}
     for edge in visible_edges:
         incoming_edges_by_target.setdefault(edge.target_id, []).append(edge)
+
+    edge_position_lookup: dict[tuple[str, str, str], tuple[int, int]] = {}
+    for target_id, target_edges in incoming_edges_by_target.items():
+        total = len(target_edges)
+        for index, edge in enumerate(target_edges):
+            edge_position_lookup[(target_id, edge.source_id, edge.label)] = (index, total)
 
     fig = go.Figure()
 
@@ -379,11 +432,10 @@ def build_dependency_figure(
         target = node_lookup[edge.target_id]
 
         is_phase_edge = edge.target_kind == "phase"
-        line_color = _edge_color(edge, project)
+        line_color = _edge_color(edge)
         line_dash = "solid" if not is_phase_edge else "dash"
-        target_edges = incoming_edges_by_target.get(edge.target_id, [])
-        edge_index = target_edges.index(edge)
-        lane_offset = (edge_index - ((len(target_edges) - 1) / 2)) * (0.95 if not is_phase_edge else 0.55)
+        edge_index, target_edge_count = edge_position_lookup[(edge.target_id, edge.source_id, edge.label)]
+        lane_offset = (edge_index - ((target_edge_count - 1) / 2)) * (0.95 if not is_phase_edge else 0.55)
         route = _build_edge_route(
             source,
             target,
@@ -527,9 +579,7 @@ def build_dependency_figure(
                     node.phase_name,
                     node.id,
                     "task",
-                    _format_duration_hours(
-                        project.phases[node.phase_id].tasks[node.id].planned_duration.total_seconds() / 3600
-                    ),
+                    _format_duration_hours(task_duration_lookup[node.id]),
                 ]
                 for node in task_nodes
             ],
@@ -539,7 +589,7 @@ def build_dependency_figure(
     )
 
     fig.update_layout(
-        height=max(480, 200 + max((len(project.get_task_list()) * 38), 0)),
+        height=max(480, 200 + max((total_task_count * 38), 0)),
         margin={"l": 20, "r": 20, "t": 30, "b": 20},
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
@@ -548,7 +598,7 @@ def build_dependency_figure(
     )
     fig.update_xaxes(visible=False)
     fig.update_yaxes(visible=False)
-    return fig
+    return fig.to_dict()
 
 
 def _render_dependency_summary(project: Project) -> None:
@@ -576,11 +626,14 @@ def render_dependency_graph(project: Project) -> None:
     show_phase_edges = controls[1].toggle("Phase edges", value=True)
     show_labels = controls[2].toggle("Relation labels", value=True)
 
-    fig = build_dependency_figure(
-        project,
-        show_task_edges=show_task_edges,
-        show_phase_edges=show_phase_edges,
-        show_labels=show_labels,
+    project_snapshot = _project_dependency_snapshot(project)
+    fig = go.Figure(
+        build_dependency_figure_dict(
+            project_snapshot,
+            show_task_edges=show_task_edges,
+            show_phase_edges=show_phase_edges,
+            show_labels=show_labels,
+        )
     )
     st.plotly_chart(fig, width="stretch")
 
