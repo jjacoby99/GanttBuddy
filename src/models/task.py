@@ -245,7 +245,7 @@ class Task:
         self,
         lookup: Callable[[Constraint], tuple[dt.datetime, dt.datetime] | None],
         *,
-        preserve_if_later: bool = True,
+        preserve_if_later: bool = False,
     ) -> bool:
         if not self.constraints:
             return False

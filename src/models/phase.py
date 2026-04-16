@@ -273,7 +273,7 @@ class Phase:
         for task in self.tasks.values():
             task.shift(delta=delta, shift_actuals=shift_actuals)
 
-    def resolve_planned_dates(self, lookup, *, preserve_if_later: bool = True) -> bool:
+    def resolve_planned_dates(self, lookup, *, preserve_if_later: bool = False) -> bool:
         if not self.constraints or not self.tasks:
             return False
 
