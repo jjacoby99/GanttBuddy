@@ -56,7 +56,7 @@ def write_phase_header(phase: Phase, phase_idx: int, columns: TaskColumns, col_w
             phase_columns[columns.actual_start].markdown(f"**{phase.actual_start.strftime('%Y-%m-%d %H:%M') if phase.actual_start else '-'}**")
             phase_columns[columns.actual_finish].markdown(f"**{phase.actual_end.strftime('%Y-%m-%d %H:%M') if phase.actual_end else '-'}**")
     
-    button_label = ":material/keyboard_arrow_down:" if plan_ui_state.expanded_phases[phase.uuid] else ":material/keyboard_arrow_up:"
+    button_label = ":material/keyboard_arrow_down:" if plan_ui_state.is_phase_expanded(phase.uuid) else ":material/keyboard_arrow_up:"
     button_clicked = phase_columns[columns.edit].button(button_label, key=f"edit_{phase.name}_{phase_idx}", help=f"View tasks within *{phase.name}*")
     
     if button_clicked:
@@ -82,7 +82,7 @@ def render_tasks_table(session, plan_ui_state: PlanState):
             with st.container(border=True):
                 write_phase_header(phase, phase_idx, columns, col_widths, plan_ui_state)
                 
-                if not plan_ui_state.expanded_phases[phase.uuid]:
+                if not plan_ui_state.is_phase_expanded(phase.uuid):
                     continue
                 
                 cols = st.columns(col_widths)

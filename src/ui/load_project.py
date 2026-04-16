@@ -1,6 +1,7 @@
 import streamlit as st
 
 from models.project import Project, ProjectType
+from models.plan_state import PlanState
 
 from logic.backend.project_list import get_projects
 from logic.backend.api_client import fetch_project_snapshot
@@ -70,6 +71,7 @@ def render_load_project() -> Project:
     if metadata and proj.project_type == ProjectType.MILL_RELINE: 
         st.session_state["reline_metadata"] = metadata
     st.session_state["selected_project_id"] = selected_project_id
+    st.session_state.plan_state = PlanState(project_id=selected_project_id)
     st.success(f"*{projects[selected_project_id]}* Loaded Successfully!")
     st.cache_data.clear()
     st.switch_page("pages/plan.py")

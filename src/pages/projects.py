@@ -7,6 +7,7 @@ from logic.backend.import_project import snapshot_to_project
 
 from models.session import SessionModel
 from models.project import Project, ProjectType
+from models.plan_state import PlanState
 
 
 
@@ -59,6 +60,7 @@ def render_select_project(projects: dict):
         st.session_state["reline_metadata"] = metadata 
         
     st.session_state["selected_project_id"] = selected_project_id
+    st.session_state.plan_state = PlanState(project_id=selected_project_id)
     st.success(f"*{projects[selected_project_id]}* Loaded Successfully!")
     st.cache_data.clear()
     return

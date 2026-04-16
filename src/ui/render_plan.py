@@ -36,7 +36,10 @@ def render_display_preferences(plan_ui_state: PlanState):
 def render_plan(session: SessionModel):
     
     plan_ui_state: PlanState = st.session_state.plan_state
-    plan_ui_state.initialize_expanded_phases(list(session.project.phase_order))
+    plan_ui_state.sync_with_project(
+        project_id=session.project.uuid,
+        phase_ids=list(session.project.phase_order),
+    )
 
     if notice := st.session_state.pop("plan_constraint_update_notice", None):
         st.info(notice)

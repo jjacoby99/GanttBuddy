@@ -5,37 +5,39 @@ from typing import Literal
 @dataclass
 class PlanState:
     project_id: str = ""
-    expanded_phases: dict[str, bool] = field(default_factory=dict)
+    _expanded_phase_ids: set[str] = field(default_factory=set)
     show_actuals: bool = False
     highlight_delayed_tasks: bool = False
-    initialized: bool = False
     view_mode: Literal["Simple", "Detailed"] = "Detailed"
 
-    def initialize_expanded_phases(self, phase_ids: list[str]):
-        if self.initialized:
-            return
-        if len(self.expanded_phases) != len(phase_ids):
-            for pid in phase_ids:
-                self.expanded_phases.setdefault(pid, False)
-            
-            # clear potential old keys
-            for key in list(self.expanded_phases.keys()):
-                if key not in phase_ids:
-                    del self.expanded_phases[key]
+    def sync_with_project(self, project_id: str, phase_ids: list[str]) -> None:
+        phase_id_set = set(phase_ids)
 
-        self.initialized = True
+        # A project switch should always rebuild the expander map from the new phase ids.
+        if self.project_id != project_id:
+            self.project_id = project_id
+            self._expanded_phase_ids = set()
+            return
+
+        self._expanded_phase_ids.intersection_update(phase_id_set)
 
     def add_phase(self, phase_id: str) -> None:
-        self.expanded_phases[phase_id] = False
+        self._expanded_phase_ids.discard(phase_id)
 
     def remove_phase(self, phase_id: str) -> None:
-        if phase_id in self.expanded_phases:
-            del self.expanded_phases[phase_id]
+        self._expanded_phase_ids.discard(phase_id)
+
+    def is_phase_expanded(self, phase_id: str) -> bool:
+        return phase_id in self._expanded_phase_ids
+
+    def expanded_phase_ids(self) -> set[str]:
+        return set(self._expanded_phase_ids)
 
     def toggle_phase_expansion(self, pid: str):
-        if pid not in self.expanded_phases:
+        if pid in self._expanded_phase_ids:
+            self._expanded_phase_ids.remove(pid)
             return
-        self.expanded_phases[pid] = not self.expanded_phases[pid]
+        self._expanded_phase_ids.add(pid)
 
     def toggle_view_mode(self):
         self.view_mode = "Detailed" if self.view_mode == "Simple" else "Simple"

@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from models.project_type import ProjectType
 from models.event import EventIn
+from models.plan_state import PlanState
 
 from logic.backend.guards import require_login
 from logic.backend.api_client import fetch_project_snapshot
@@ -75,6 +76,7 @@ def load_project_into_session(project_id: str):
     st.session_state.session.project = project
     if project.project_type == ProjectType.MILL_RELINE and metadata is not None:
         st.session_state["reline_metadata"] = metadata 
+    st.session_state.plan_state = PlanState(project_id=project_id)
     st.switch_page("pages/plan.py")
 
 from datetime import datetime, timezone, timedelta
