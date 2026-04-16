@@ -15,6 +15,13 @@ def is_timezone_aware(dt):
     """Check if a datetime object is timezone aware."""
     return dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
 
+
+def _snapshot_task_schedule(session: SessionModel) -> dict[str, tuple[datetime, datetime, str]]:
+    return {
+        task.uuid: (task.start_date, task.end_date, task.name)
+        for task in session.project.get_task_list()
+    }
+
 @st.dialog(f"Edit Task")
 def render_task_edit(session, phase: Phase, task: Task):
     phases = session.project.phases
@@ -98,7 +105,7 @@ def render_task_edit(session, phase: Phase, task: Task):
         has_constraints = st.checkbox(
             label="Add predecessor constraints?",
             value=len(task.constraints) > 0,
-            help="Select to add dependencies that this task has on other tasks."
+            help="Select to add dependencies that this task has on other tasks in this phase."
         )
 
     constraints: list[Constraint] = []
@@ -112,7 +119,7 @@ def render_task_edit(session, phase: Phase, task: Task):
         constraints = render_constraints_editor(
             key=f"{task.uuid}_constraints",
             title=f"Predecessor rules for {edited_task_name or task.name}.",
-            help_text="Choose the predecessor task this task depends on.",
+            help_text="Choose the predecessor task in this phase that this task depends on.",
             constraints=task.constraints,
             predecessor_kind="task",
             labels_by_id=available_predecessors,
@@ -215,6 +222,7 @@ def render_task_edit(session, phase: Phase, task: Task):
     )
     c1, c2, c3 = st.columns(3)
     if c1.button(label=f"Update", disabled=not edited_task_name, type='primary'):
+        schedule_before = _snapshot_task_schedule(session)
         new_task = Task(
             name=edited_task_name, 
             phase_id=phase.uuid,
@@ -237,6 +245,26 @@ def render_task_edit(session, phase: Phase, task: Task):
             st.error(f"Unable to update task: {exc}")
             st.stop()
         session.project.update_task(phase=phase, old_task=task, new_task=new_task)
+
+        auto_updated_tasks = [
+            name
+            for task_id, (start_dt, end_dt, name) in _snapshot_task_schedule(session).items()
+            if task_id != task.uuid
+            and task_id in schedule_before
+            and (start_dt != schedule_before[task_id][0] or end_dt != schedule_before[task_id][1])
+        ]
+
+        if auto_updated_tasks:
+            preview_names = ", ".join(auto_updated_tasks[:3])
+            extra_count = len(auto_updated_tasks) - 3
+            if extra_count > 0:
+                preview_names = f"{preview_names}, and {extra_count} more"
+            st.session_state["plan_constraint_update_notice"] = (
+                f":material/info: Constraint-based rescheduling updated {len(auto_updated_tasks)} dependent "
+                f"task(s): {preview_names}."
+            )
+        else:
+            st.session_state.pop("plan_constraint_update_notice", None)
 
         st.info(f"'{edited_task_name}' updated successfully.")
 
@@ -267,4 +295,3 @@ def render_task_edit(session, phase: Phase, task: Task):
 
 
         
-
