@@ -43,18 +43,18 @@ def _render_project_preview(analysis: dict) -> None:
 
         m1, m2 = st.columns(2)
         with m1:
-            st.metric("Rows with provided predecessors", analysis["provided_predecessor_count"])
+            st.metric("Rows with provided links", analysis["provided_predecessor_count"])
         with m2:
-            st.metric("Rows inferred from formulas", analysis["inferred_predecessor_count"])
+            st.metric("Task constraint rows inferred", analysis["inferred_predecessor_count"])
         m3, _ = st.columns(2)
         with m3:
-            st.metric("Phases inferred from formulas", analysis["inferred_phase_predecessor_count"])
+            st.metric("Phase constraint rows inferred", analysis["inferred_phase_predecessor_count"])
 
 
 def render_excel_import_page() -> None:
     st.title("Import from Excel")
     st.caption(
-        "Review a workbook before import, adjust the start row, and optionally infer task predecessors from planned start formulas."
+        "Review a workbook before import, adjust the start row, and optionally infer typed constraints from planned start and finish formulas."
     )
 
     st.session_state.setdefault("excel_import_start_row", 8)
@@ -80,9 +80,9 @@ def render_excel_import_page() -> None:
             )
         with c3:
             infer_predecessors = st.toggle(
-                "Infer predecessors",
+                "Infer constraints",
                 value=st.session_state["excel_import_infer_predecessors"],
-                help="When the predecessor column is blank, infer a predecessor if planned start directly references another task's planned end cell.",
+                help="When the predecessor column is blank, infer FS, SS, FF, or SF constraints from simple planned start and finish formulas.",
             )
 
         st.session_state["excel_import_start_row"] = int(start_row)
@@ -131,7 +131,7 @@ def render_excel_import_page() -> None:
     with tabs[0]:
         st.dataframe(analysis["schedule_preview"], hide_index=True, width="stretch")
         st.caption(
-            "The final predecessor column reflects provided ids first, then inferred ids when the toggle is enabled and the predecessor cell is blank."
+            "Provided IDs stay authoritative. When that column is blank, simple start and finish formulas can infer typed constraints and lag."
         )
 
     with tabs[1]:

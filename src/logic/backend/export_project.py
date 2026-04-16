@@ -64,13 +64,11 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
       - name, uuid, _sort_mode
       - task_order: list[UUID/str]
       - tasks: dict[uuid -> Task]
-      - predecessor_ids: list[UUID/str] (optional)
     Each Task has:
       - name, uuid, phase_id
       - start_date/end_date (planned)
       - actual_start/actual_end
       - note
-      - predecessor_ids: list[UUID/str]
       - status (optional)
     
     Metadata:
@@ -95,8 +93,6 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
         "settings": None,
         "phases": [],
         "tasks": [],
-        "task_predecessors": [],
-        "phase_predecessors": [],
         "metadata": metadata.model_dump(mode="json") if metadata is not None else None, #new 
         "shift_definition": None,
         "shift_assignments": None,
@@ -181,18 +177,13 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
                 "name": getattr(p, "name", ""),
                 "sort_mode": getattr(p, "_sort_mode", "manual"),
                 "position": int(phase_pos),
-                "planned": getattr(p, "planned", True)
+                "planned": getattr(p, "planned", True),
+                "constraints": [
+                    constraint.to_dict()
+                    for constraint in getattr(p, "constraints", [])
+                ],
             }
         )
-
-        # Phase predecessor links (optional)
-        for pred_phase_id in getattr(p, "predecessor_ids", []) or []:
-            payload["phase_predecessors"].append(
-                {
-                    "phase_id": _iso(phase_uuid),
-                    "predecessor_phase_id": _iso(pred_phase_id),
-                }
-            )
 
         # Tasks in this phase
         tasks_dict = getattr(p, "tasks", {}) or {}
@@ -239,17 +230,12 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
                     "status": status,
                     "position": int(task_pos),
                     "planned": getattr(t,"planned", True),
-                    "task_type": t.task_type.name
+                    "task_type": t.task_type.name,
+                    "constraints": [
+                        constraint.to_dict()
+                        for constraint in getattr(t, "constraints", [])
+                    ],
                 }
             )
-
-            # Task predecessor links (normalized)
-            for pred_task_id in getattr(t, "predecessor_ids", []) or []:
-                payload["task_predecessors"].append(
-                    {
-                        "task_id": _iso(task_uuid),
-                        "predecessor_task_id": _iso(pred_task_id),
-                    }
-                )
     return payload
 

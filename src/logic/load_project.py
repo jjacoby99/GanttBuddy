@@ -13,6 +13,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 
 from logic.generate_id import new_id as new_phase_id
+from models.constraint import Constraint, ConstraintRelation
 from models.phase import Phase
 from models.project import Project
 from models.project_metadata import RelineMetadata
@@ -113,6 +114,10 @@ class ExcelProjectLoader():
     _hours_pat = re.compile(r"\b(\d+(?:\.\d+)?)\s*hour(s)?\b", re.IGNORECASE)
     _cell_ref_pat = re.compile(
         r"^\s*=?(?:'[^']+'!)?\$?([A-Z]{1,3})\$?(\d+)\s*$",
+        re.IGNORECASE,
+    )
+    _cell_ref_with_offset_pat = re.compile(
+        r"^\s*=?(?:'[^']+'!)?\$?([A-Z]{1,3})\$?(\d+)\s*(?:(\+|-)\s*([0-9]+(?:\.[0-9]+)?(?:/[0-9]+(?:\.[0-9]+)?)?))?\s*$",
         re.IGNORECASE,
     )
 
@@ -317,28 +322,110 @@ class ExcelProjectLoader():
         return col.upper(), int(row)
 
     @staticmethod
-    def _extract_start_formula_map(
+    def _parse_excel_offset_days(raw_value: str) -> float:
+        if "/" in raw_value:
+            numerator, denominator = raw_value.split("/", 1)
+            return float(numerator) / float(denominator)
+        return float(raw_value)
+
+    @staticmethod
+    def _parse_formula_reference(
+        formula: Any,
+    ) -> tuple[str, int, float] | None:
+        if not isinstance(formula, str):
+            return None
+
+        match = ExcelProjectLoader._cell_ref_with_offset_pat.match(formula)
+        if match is None:
+            return None
+
+        col, row, sign, raw_offset = match.groups()
+        offset_days = 0.0
+        if raw_offset is not None:
+            offset_days = ExcelProjectLoader._parse_excel_offset_days(raw_offset)
+            if sign == "-":
+                offset_days *= -1.0
+
+        return col.upper(), int(row), offset_days
+
+    @staticmethod
+    def _extract_formula_map(
         workbook_formulas: Workbook | None,
         params: ExcelParameters,
         excel_rows: list[int],
+        *,
+        column_name: str,
     ) -> dict[int, str | None]:
         if workbook_formulas is None or not excel_rows:
             return {}
 
         formula_sheet = workbook_formulas[params.sheet_name]
-        planned_start_col = params["PLANNED START"]
+        formula_col = params[column_name]
         formula_by_row: dict[int, str | None] = {}
 
         for row_cells in formula_sheet.iter_rows(
             min_row=min(excel_rows),
             max_row=max(excel_rows),
-            min_col=planned_start_col,
-            max_col=planned_start_col,
+            min_col=formula_col,
+            max_col=formula_col,
         ):
             cell = row_cells[0]
             formula_by_row[cell.row] = cell.value if isinstance(cell.value, str) else None
 
         return formula_by_row
+
+    @staticmethod
+    def _build_constraint_from_formula_reference(
+        *,
+        predecessor_id: str,
+        predecessor_kind: str,
+        ref_col: str,
+        planned_start_col_letter: str,
+        planned_end_col_letter: str,
+        successor_field: str,
+        offset_days: float,
+    ) -> Constraint | None:
+        relation: ConstraintRelation | None = None
+        if successor_field == "start":
+            if ref_col == planned_start_col_letter:
+                relation = ConstraintRelation.SS
+            elif ref_col == planned_end_col_letter:
+                relation = ConstraintRelation.FS
+        elif successor_field == "end":
+            if ref_col == planned_start_col_letter:
+                relation = ConstraintRelation.SF
+            elif ref_col == planned_end_col_letter:
+                relation = ConstraintRelation.FF
+
+        if relation is None:
+            return None
+
+        return Constraint(
+            predecessor_id=predecessor_id,
+            predecessor_kind=predecessor_kind,
+            relation_type=relation,
+            lag=dt.timedelta(days=offset_days),
+        )
+
+    @staticmethod
+    def _dedupe_constraints(constraints: list[Constraint]) -> list[Constraint]:
+        deduped: list[Constraint] = []
+        seen: set[tuple[str, str]] = set()
+        for constraint in constraints:
+            dedupe_key = (constraint.predecessor_id, constraint.predecessor_kind)
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            deduped.append(constraint)
+        return deduped
+
+    @staticmethod
+    def _constraint_preview(constraint: Constraint) -> str:
+        lag_hours = constraint.lag.total_seconds() / 3600
+        lag_suffix = ""
+        if not math.isclose(lag_hours, 0.0, abs_tol=1e-9):
+            lag_suffix = f" ({lag_hours:g}h)"
+        return f"{constraint.predecessor_id}:{constraint.relation_type.value}{lag_suffix}"
 
     @staticmethod
     def _coerce_project_datetime(
@@ -370,12 +457,19 @@ class ExcelProjectLoader():
     ) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
         df = ExcelProjectLoader._load_schedule_dataframe(context.excel_file, params)
 
-        planned_end_col = params["PLANNED END"]
-        planned_end_col_letter = get_column_letter(planned_end_col)
-        formula_by_row = ExcelProjectLoader._extract_start_formula_map(
+        planned_start_col_letter = get_column_letter(params["PLANNED START"])
+        planned_end_col_letter = get_column_letter(params["PLANNED END"])
+        start_formula_by_row = ExcelProjectLoader._extract_formula_map(
             workbook_formulas=context.workbook_formulas,
             params=params,
             excel_rows=df["_excel_row"].astype(int).tolist(),
+            column_name="PLANNED START",
+        )
+        end_formula_by_row = ExcelProjectLoader._extract_formula_map(
+            workbook_formulas=context.workbook_formulas,
+            params=params,
+            excel_rows=df["_excel_row"].astype(int).tolist(),
+            column_name="PLANNED END",
         )
 
         schedule_rows: list[dict[str, Any]] = []
@@ -391,17 +485,23 @@ class ExcelProjectLoader():
                 "uuid": None,
                 "start_formula": None,
                 "start_formula_reference": None,
+                "end_formula": None,
+                "end_formula_reference": None,
                 "provided_predecessors": ExcelProjectLoader._parse_predecessor_cell(row_data["PREDECESSOR"]),
-                "inferred_predecessors": [],
-                "resolved_predecessors": [],
-                "inferred_phase_predecessors": [],
-                "resolved_phase_predecessors": [],
+                "provided_constraints": [],
+                "inferred_constraints": [],
+                "resolved_constraints": [],
+                "inferred_phase_constraints": [],
+                "resolved_phase_constraints": [],
                 "predecessor_source": "provided",
             }
 
-            formula_value = formula_by_row.get(excel_row)
-            parsed_row["start_formula"] = formula_value
-            parsed_row["start_formula_reference"] = ExcelProjectLoader._parse_direct_cell_reference(formula_value)
+            start_formula_value = start_formula_by_row.get(excel_row)
+            parsed_row["start_formula"] = start_formula_value
+            parsed_row["start_formula_reference"] = ExcelProjectLoader._parse_formula_reference(start_formula_value)
+            end_formula_value = end_formula_by_row.get(excel_row)
+            parsed_row["end_formula"] = end_formula_value
+            parsed_row["end_formula_reference"] = ExcelProjectLoader._parse_formula_reference(end_formula_value)
 
             if not is_phase:
                 uuid = ExcelProjectLoader._coerce_str(row_data["UUID"])
@@ -422,38 +522,83 @@ class ExcelProjectLoader():
 
         for parsed_row in schedule_rows:
             provided_predecessors = parsed_row["provided_predecessors"]
-            resolved_predecessors = list(provided_predecessors)
+            provided_constraints = [
+                Constraint(
+                    predecessor_id=predecessor_id,
+                    predecessor_kind="phase" if parsed_row["is_phase"] else "task",
+                    relation_type=ConstraintRelation.FS,
+                )
+                for predecessor_id in provided_predecessors
+            ]
+            resolved_constraints = list(provided_constraints) if not parsed_row["is_phase"] else []
             predecessor_source = "provided" if provided_predecessors else "none"
-            resolved_phase_predecessors: list[str] = []
+            resolved_phase_constraints: list[Constraint] = list(provided_constraints) if parsed_row["is_phase"] else []
 
             if (
                 infer_predecessors
                 and not parsed_row["is_phase"]
                 and not provided_predecessors
             ):
-                ref = parsed_row["start_formula_reference"]
-                if ref is not None:
-                    ref_col, ref_row = ref
-                    if ref_col == planned_end_col_letter:
-                        predecessor_row = task_rows_by_excel_row.get(ref_row)
-                        if predecessor_row is not None and predecessor_row["uuid"] != parsed_row["uuid"]:
-                            resolved_predecessors = [predecessor_row["uuid"]]
-                            parsed_row["inferred_predecessors"] = list(resolved_predecessors)
-                            predecessor_source = "inferred_from_start_formula"
+                inferred_task_constraints: list[Constraint] = []
+                for successor_field, ref in (
+                    ("start", parsed_row["start_formula_reference"]),
+                    ("end", parsed_row["end_formula_reference"]),
+                ):
+                    if ref is None:
+                        continue
+                    ref_col, ref_row, offset_days = ref
+                    predecessor_row = task_rows_by_excel_row.get(ref_row)
+                    if predecessor_row is None or predecessor_row["uuid"] == parsed_row["uuid"]:
+                        continue
+                    constraint = ExcelProjectLoader._build_constraint_from_formula_reference(
+                        predecessor_id=predecessor_row["uuid"],
+                        predecessor_kind="task",
+                        ref_col=ref_col,
+                        planned_start_col_letter=planned_start_col_letter,
+                        planned_end_col_letter=planned_end_col_letter,
+                        successor_field=successor_field,
+                        offset_days=offset_days,
+                    )
+                    if constraint is not None:
+                        inferred_task_constraints.append(constraint)
 
-            if infer_predecessors and parsed_row["is_phase"]:
-                ref = parsed_row["start_formula_reference"]
-                if ref is not None:
-                    ref_col, ref_row = ref
-                    if ref_col == planned_end_col_letter:
-                        predecessor_phase_row = phase_rows_by_excel_row.get(ref_row)
-                        if predecessor_phase_row is not None and predecessor_phase_row["uuid"] != parsed_row["uuid"]:
-                            resolved_phase_predecessors = [predecessor_phase_row["uuid"]]
-                            parsed_row["inferred_phase_predecessors"] = list(resolved_phase_predecessors)
-                            predecessor_source = "inferred_phase_from_start_formula"
+                if inferred_task_constraints:
+                    resolved_constraints = ExcelProjectLoader._dedupe_constraints(inferred_task_constraints)
+                    parsed_row["inferred_constraints"] = list(resolved_constraints)
+                    predecessor_source = "inferred_from_formula"
 
-            parsed_row["resolved_predecessors"] = resolved_predecessors
-            parsed_row["resolved_phase_predecessors"] = resolved_phase_predecessors
+            if infer_predecessors and parsed_row["is_phase"] and not provided_predecessors:
+                inferred_phase_constraints: list[Constraint] = []
+                for successor_field, ref in (
+                    ("start", parsed_row["start_formula_reference"]),
+                    ("end", parsed_row["end_formula_reference"]),
+                ):
+                    if ref is None:
+                        continue
+                    ref_col, ref_row, offset_days = ref
+                    predecessor_phase_row = phase_rows_by_excel_row.get(ref_row)
+                    if predecessor_phase_row is None or predecessor_phase_row["uuid"] == parsed_row["uuid"]:
+                        continue
+                    constraint = ExcelProjectLoader._build_constraint_from_formula_reference(
+                        predecessor_id=predecessor_phase_row["uuid"],
+                        predecessor_kind="phase",
+                        ref_col=ref_col,
+                        planned_start_col_letter=planned_start_col_letter,
+                        planned_end_col_letter=planned_end_col_letter,
+                        successor_field=successor_field,
+                        offset_days=offset_days,
+                    )
+                    if constraint is not None:
+                        inferred_phase_constraints.append(constraint)
+
+                if inferred_phase_constraints:
+                    resolved_phase_constraints = ExcelProjectLoader._dedupe_constraints(inferred_phase_constraints)
+                    parsed_row["inferred_phase_constraints"] = list(resolved_phase_constraints)
+                    predecessor_source = "inferred_from_formula"
+
+            parsed_row["provided_constraints"] = list(provided_constraints)
+            parsed_row["resolved_constraints"] = resolved_constraints
+            parsed_row["resolved_phase_constraints"] = resolved_phase_constraints
             parsed_row["predecessor_source"] = predecessor_source
 
         return df, schedule_rows
@@ -504,9 +649,9 @@ class ExcelProjectLoader():
 
             if parsed_row["provided_predecessors"]:
                 provided_count += 1
-            if parsed_row["inferred_predecessors"]:
+            if parsed_row["inferred_constraints"]:
                 inferred_count += 1
-            if parsed_row["inferred_phase_predecessors"]:
+            if parsed_row["inferred_phase_constraints"]:
                 inferred_phase_count += 1
 
             preview_rows.append(
@@ -518,12 +663,28 @@ class ExcelProjectLoader():
                     "Planned Start": row["PLANNED START"],
                     "Planned End": row["PLANNED END"],
                     "Start Formula": parsed_row["start_formula"] or "",
-                    "Provided Predecessors": ", ".join(parsed_row["provided_predecessors"]),
-                    "Inferred Task Predecessors": ", ".join(parsed_row["inferred_predecessors"]),
-                    "Final Task Predecessors": ", ".join(parsed_row["resolved_predecessors"]),
-                    "Inferred Phase Predecessors": ", ".join(parsed_row["inferred_phase_predecessors"]),
-                    "Final Phase Predecessors": ", ".join(parsed_row["resolved_phase_predecessors"]),
-                    "Predecessor Source": parsed_row["predecessor_source"],
+                    "End Formula": parsed_row["end_formula"] or "",
+                    "Provided Constraints": ", ".join(
+                        ExcelProjectLoader._constraint_preview(constraint)
+                        for constraint in parsed_row["provided_constraints"]
+                    ),
+                    "Inferred Task Constraints": ", ".join(
+                        ExcelProjectLoader._constraint_preview(constraint)
+                        for constraint in parsed_row["inferred_constraints"]
+                    ),
+                    "Final Task Constraints": ", ".join(
+                        ExcelProjectLoader._constraint_preview(constraint)
+                        for constraint in parsed_row["resolved_constraints"]
+                    ),
+                    "Inferred Phase Constraints": ", ".join(
+                        ExcelProjectLoader._constraint_preview(constraint)
+                        for constraint in parsed_row["inferred_phase_constraints"]
+                    ),
+                    "Final Phase Constraints": ", ".join(
+                        ExcelProjectLoader._constraint_preview(constraint)
+                        for constraint in parsed_row["resolved_phase_constraints"]
+                    ),
+                    "Constraint Source": parsed_row["predecessor_source"],
                     "Planned": ExcelProjectLoader._coerce_bool(row["PLANNED"])
                     if not ExcelProjectLoader._is_nan(row["PLANNED"])
                     else True,
@@ -624,7 +785,7 @@ class ExcelProjectLoader():
                 actual_start=ExcelProjectLoader._coerce_project_datetime(row["ACTUAL START"], project.timezone),
                 note=ExcelProjectLoader._coerce_str(row["NOTES"]),
                 uuid=parsed_row["uuid"],
-                predecessor_ids=list(parsed_row["resolved_predecessors"]),
+                constraints=list(parsed_row["resolved_constraints"]),
                 planned=ExcelProjectLoader._coerce_bool(row["PLANNED"]) if not ExcelProjectLoader._is_nan(row["PLANNED"]) else True,
                 task_type=ExcelProjectLoader._infer_task_type(name),
             )
@@ -639,7 +800,7 @@ class ExcelProjectLoader():
                 new_phase = Phase(
                     name=ExcelProjectLoader._coerce_str(row["ACTIVITY"]),
                     uuid=parsed_row["uuid"],
-                    predecessor_ids=list(parsed_row["resolved_phase_predecessors"]),
+                    constraints=list(parsed_row["resolved_phase_constraints"]),
                 )
                 new_phase.planned = ExcelProjectLoader._coerce_bool(row["PLANNED"]) if not ExcelProjectLoader._is_nan(row["PLANNED"]) else True
                 project.add_phase(new_phase)

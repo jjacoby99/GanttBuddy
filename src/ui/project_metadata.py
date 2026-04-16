@@ -95,25 +95,7 @@ def render_reline_metadata_form(
 
     st.divider()
 
-    c4, c5, c6 = st.columns(3)
-    with c4:
-        crew_count_day = st.number_input(
-            "Crew Count (Day)",
-            min_value=0,
-            step=1,
-            value=int(ex.crew_count_day or 5),
-        )
-
-    with c5:
-        crew_count_night = st.number_input(
-            "Crew Count (Night)",
-            min_value=0,
-            step=1,
-            value=int(ex.crew_count_night or 5),
-        )
-
-    with c6:
-        supervisor = st.text_input("Supervisor", value=_s(ex.supervisor))
+    supervisor = st.text_input("Supervisor", value=_s(ex.supervisor))
 
     notes = st.text_area("Notes", value=_s(ex.notes), height=90)
 
@@ -135,8 +117,6 @@ def render_reline_metadata_form(
         "scope": scope or None,
         "liner_type": liner_type or None,
         "template_version": template_version or getattr(ex, "template_version", None),
-        "crew_count_day": crew_count_day,
-        "crew_count_night": crew_count_night,
         "supervisor": supervisor.strip() or "Unnamed",
         "notes": notes.strip() or "",
     }

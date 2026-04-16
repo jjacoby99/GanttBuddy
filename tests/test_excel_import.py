@@ -11,6 +11,7 @@ from openpyxl import Workbook
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from logic.load_project import DataColumn, ExcelParameters, ExcelProjectLoader
+from models.constraint import ConstraintRelation
 from models.project_type import ProjectType
 
 
@@ -143,8 +144,8 @@ def test_load_excel_project_builds_schedule_from_single_workbook_fixture(excel_b
     assert first_task.name == "Task A"
     assert second_task.name == "Task B"
     assert third_task.name == "Task C"
-    assert first_task.predecessor_ids == []
-    assert second_task.predecessor_ids == []
+    assert first_task.constraints == []
+    assert second_task.constraints == []
     assert second_task.planned is False
     assert second_task.status == "COMPLETE"
     assert all(task.timezone_aware for task in project.get_task_list())
@@ -174,14 +175,17 @@ def test_infer_predecessors_resolves_task_and_phase_dependencies(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fake_formula_map(*args, **kwargs) -> dict[int, str | None]:
-        return {
-            11: "=E10",
-            12: "=E9",
-        }
+        column_name = kwargs.get("column_name")
+        if column_name == "PLANNED START":
+            return {
+                11: "=E10",
+                12: "=E9",
+            }
+        return {}
 
     monkeypatch.setattr(
         ExcelProjectLoader,
-        "_extract_start_formula_map",
+        "_extract_formula_map",
         staticmethod(fake_formula_map),
     )
 
@@ -206,5 +210,11 @@ def test_infer_predecessors_resolves_task_and_phase_dependencies(
     task_a = first_phase.tasks[first_phase.task_order[0]]
     task_b = first_phase.tasks[first_phase.task_order[1]]
 
-    assert task_b.predecessor_ids == [task_a.uuid]
-    assert second_phase.predecessor_ids == [first_phase.uuid]
+    assert len(task_b.constraints) == 1
+    assert task_b.constraints[0].predecessor_id == task_a.uuid
+    assert task_b.constraints[0].predecessor_kind == "task"
+    assert task_b.constraints[0].relation_type == ConstraintRelation.FS
+    assert len(second_phase.constraints) == 1
+    assert second_phase.constraints[0].predecessor_id == first_phase.uuid
+    assert second_phase.constraints[0].predecessor_kind == "phase"
+    assert second_phase.constraints[0].relation_type == ConstraintRelation.FS

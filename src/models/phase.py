@@ -21,14 +21,19 @@ class Phase:
     tasks: dict[str, Task] = field(default_factory=dict) # map of task uuid to task
     preceding_phase: Optional[Phase] = None
     constraints: list[Constraint] = field(default_factory=list)
-    predecessor_ids: list[str] = field(default_factory=list)
     _sort_mode: SortMode = SortMode.manual
     planned: bool = True
 
     def __post_init__(self):
-        legacy_predecessor_ids = list(self.predecessor_ids)
-        self.predecessor_ids = []
-        self.add_predecessor_ids(legacy_predecessor_ids)
+        deduped_constraints: list[Constraint] = []
+        seen_predecessors: set[tuple[str, str]] = set()
+        for constraint in self.constraints:
+            dedupe_key = (constraint.predecessor_id, constraint.predecessor_kind)
+            if dedupe_key in seen_predecessors:
+                continue
+            seen_predecessors.add(dedupe_key)
+            deduped_constraints.append(constraint)
+        self.constraints = deduped_constraints
 
     @property
     def start_date(self) -> Optional[datetime]:
@@ -98,6 +103,11 @@ class Phase:
         return "BLOCKED"
 
     def to_excel_row(self) -> dict:
+        excel_predecessors = [
+            constraint.predecessor_id
+            for constraint in self.constraints
+            if constraint.predecessor_kind == "phase"
+        ]
         return {
             "number": None,
             "name": self.name,
@@ -109,7 +119,7 @@ class Phase:
             "actual_start": self.actual_start,
             "actual_end": self.actual_end,
             "notes": None,
-            "predecessors": ",".join(self.predecessor_ids),
+            "predecessors": ",".join(excel_predecessors),
             "uuid": self.uuid
         }
 
@@ -185,20 +195,14 @@ class Phase:
         )
 
     def add_constraint(self, constraint: Constraint) -> None:
-        for existing in self.constraints:
+        for index, existing in enumerate(self.constraints):
             if (
                 existing.predecessor_id == constraint.predecessor_id
                 and existing.predecessor_kind == constraint.predecessor_kind
-                and existing.relation_type == constraint.relation_type
-                and existing.lag == constraint.lag
             ):
+                self.constraints[index] = constraint
                 return
         self.constraints.append(constraint)
-        self._sync_predecessor_ids()
-
-    def add_predecessor_ids(self, predecessor_ids: list[str]) -> None:
-        for predecessor_id in predecessor_ids:
-            self.add_predecessor(predecessor_id)
 
     def remove_constraints_for_predecessor(
         self,
@@ -224,15 +228,7 @@ class Phase:
                 and constraint.predecessor_kind == predecessor_kind
             )
         ]
-        self._sync_predecessor_ids()
         return original_len - len(self.constraints)
-
-    def _sync_predecessor_ids(self) -> None:
-        self.predecessor_ids = [
-            constraint.predecessor_id
-            for constraint in self.constraints
-            if constraint.predecessor_kind == "phase"
-        ]
 
     def edit_task(self, old_task: Task, new_task: Task):
         if not old_task.uuid in self.tasks.keys():
@@ -277,7 +273,7 @@ class Phase:
         for task in self.tasks.values():
             task.shift(delta=delta, shift_actuals=shift_actuals)
 
-    def resolve_planned_dates(self, lookup, *, preserve_if_later: bool = True) -> bool:
+    def resolve_planned_dates(self, lookup, *, preserve_if_later: bool = False) -> bool:
         if not self.constraints or not self.tasks:
             return False
 
@@ -358,7 +354,6 @@ class Phase:
             "tasks": [self.tasks[tid].to_dict() for tid in self.task_order],
             "preceding_phase": self.preceding_phase.name if self.preceding_phase else None,
             "constraints": [constraint.to_dict() for constraint in self.constraints],
-            "predecessor_ids": self.predecessor_ids,
             "uuid": self.uuid
         }
     
@@ -379,7 +374,15 @@ class Phase:
             Constraint.from_dict(item)
             for item in data.get("constraints", [])
         ]
-        phase.add_predecessor_ids(data.get("predecessor_ids", []))
+        if not phase.constraints:
+            phase.constraints = [
+                Constraint(
+                    predecessor_id=predecessor_id,
+                    predecessor_kind="phase",
+                    relation_type=ConstraintRelation.FS,
+                )
+                for predecessor_id in data.get("predecessor_ids", [])
+            ]
         phase._sort_mode = data.get("_sort_mode", SortMode.manual)
         phase.planned = data.get("planned", True)
         phase.uuid = data.get("uuid", new_id())

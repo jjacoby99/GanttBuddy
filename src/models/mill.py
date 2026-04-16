@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
+from models.constraint import Constraint, ConstraintRelation
 from models.project import Project
 from models.phase import Phase
 from models.task import Task, TaskType
@@ -166,6 +167,18 @@ class MillRelineBuilder(ProjectBuilder):
         self.mill = mill
         super().__init__(type=ProjectType.MILL_RELINE, location=Location.HVC)
 
+    @staticmethod
+    def _sequential_task_constraints(prev_task: Task | None) -> list[Constraint]:
+        if prev_task is None:
+            return []
+        return [
+            Constraint(
+                predecessor_id=prev_task.uuid,
+                predecessor_kind="task",
+                relation_type=ConstraintRelation.FS,
+            )
+        ]
+
     def _build_discharge_cone_removal(self, start_date: dt.datetime) -> Phase:
         phase = Phase(
             name="Discharge Cone Removal",
@@ -224,13 +237,11 @@ class MillRelineBuilder(ProjectBuilder):
             # ---------------------------------
             duration = 2 * inputs.shell.t_row_strip * num_shell_row + num_fh * inputs.feed_end.t_liner_strip + num_filler * inputs.feed_end.t_filler_strip
             task_end = task_start + dt.timedelta(minutes=duration)
-            predecessor_id = prev_task.uuid if prev_task else None
-
             task = Task(
                 name=f"Remove 2 Rows Shell ({2 * inputs.shell.modules_per_row_strip}) {num_fh} FH & {num_filler} Filler",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else [],
+                constraints=self._sequential_task_constraints(prev_task),
                 task_type=TaskType.STRIP,
             )
             
@@ -248,13 +259,11 @@ class MillRelineBuilder(ProjectBuilder):
             task_start = task_end
             task_end = task_start + dt.timedelta(minutes=inputs.t_inch)
 
-            predecessor_id = prev_task.uuid if prev_task else None
-            
             task = Task(
                 name=f"Inch {i+1}",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else [],
+                constraints=self._sequential_task_constraints(prev_task),
                 task_type=TaskType.INCH,
             )
             phase.add_task(task)
@@ -283,13 +292,11 @@ class MillRelineBuilder(ProjectBuilder):
             # ---------------------------------
             duration = inputs.shell.t_row_install * num_shell_row + num_head * inputs.feed_end.n_liner_install + num_grate * inputs.feed_end.n_grates_install
             task_end = task_start + dt.timedelta(minutes=duration)
-            predecessor_id = prev_task.uuid if prev_task else None
-
             task = Task(
                 name=f"Install {num_shell_row} rows Megaliner Shell, {num_head} Megaliner Head, {num_grate} Grate",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else [],
+                constraints=self._sequential_task_constraints(prev_task),
                 task_type=TaskType.INSTALL,
             )
             
@@ -307,13 +314,11 @@ class MillRelineBuilder(ProjectBuilder):
             task_start = task_end
             task_end = task_start + dt.timedelta(minutes=inputs.t_inch)
 
-            predecessor_id = prev_task.uuid if prev_task else None
-            
             task = Task(
                 name=f"Inch {i+1}",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else [],
+                constraints=self._sequential_task_constraints(prev_task),
                 task_type=TaskType.INCH,
             )
 
@@ -347,7 +352,7 @@ class MillRelineBuilder(ProjectBuilder):
             name=f"Strip 1 Row of Grates/Interlock",
             start_date=task_start,
             end_date=task_end,
-            predecessor_ids=[],
+            constraints=[],
             task_type=TaskType.STRIP,
         )
 
@@ -359,7 +364,7 @@ class MillRelineBuilder(ProjectBuilder):
             name="Inch 1",
             start_date = task_end,
             end_date=inch_end,
-            predecessor_ids=[task.uuid],
+            constraints=self._sequential_task_constraints(task),
             task_type=TaskType.INCH,
         )
 
@@ -377,13 +382,11 @@ class MillRelineBuilder(ProjectBuilder):
             duration += 30 if work_task != "Strip 1 Row of Grates/Interlock + Middle & Outer Pulp" else 0
 
             task_end = task_start + dt.timedelta(minutes=duration)
-            predecessor_id = prev_task.uuid if prev_task else None
-
             task = Task(
                 name=work_task,
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else [],
+                constraints=self._sequential_task_constraints(prev_task),
                 task_type=TaskType.STRIP,
             )
             
@@ -402,13 +405,11 @@ class MillRelineBuilder(ProjectBuilder):
             task_start = task_end
             task_end = task_start + dt.timedelta(minutes=inputs.t_inch)
 
-            predecessor_id = prev_task.uuid if prev_task else None
-            
             task = Task(
                 name=f"Inch {i+2}",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else [],
+                constraints=self._sequential_task_constraints(prev_task),
                 task_type=TaskType.INCH,
             )
 
@@ -434,21 +435,21 @@ class MillRelineBuilder(ProjectBuilder):
                 name="Install 1 rows pulp lifters",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[prev_task.uuid] if prev_task else [],
+                constraints=self._sequential_task_constraints(prev_task),
                 task_type=TaskType.INSTALL,
             )
             phase.add_task(task)
 
+            prev_task = task
+
             task_start = task_end
             task_end = task_start + dt.timedelta(minutes=inputs.t_inch)
-
-            predecessor_id = prev_task.uuid if prev_task else None
             
             task = Task(
                 name=f"Inch {i+1}",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[predecessor_id] if prev_task else [],
+                constraints=self._sequential_task_constraints(prev_task),
                 task_type=TaskType.INCH,
             )
 
@@ -475,7 +476,7 @@ class MillRelineBuilder(ProjectBuilder):
                 name="Install Discharger - 1 Inner, Mid and Outer, Filling Segment + add washout repairs",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[prev_task.uuid] if prev_task else [],
+                constraints=self._sequential_task_constraints(prev_task),
                 task_type=TaskType.INSTALL,
             )
 
@@ -489,7 +490,7 @@ class MillRelineBuilder(ProjectBuilder):
                 name=f"Inch {i+1}",
                 start_date=task_start,
                 end_date=task_end,
-                predecessor_ids=[task.uuid],
+                constraints=self._sequential_task_constraints(task),
                 task_type=TaskType.INCH,
             ) 
             phase.add_task(inch)

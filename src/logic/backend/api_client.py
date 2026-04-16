@@ -21,7 +21,7 @@ from models.todo import TodoIn, TodoUpsertRow
 
 
 API_BASE = get_backend_environment_config().api_base_url
-print(API_BASE)
+
 @st.cache_data
 def fetch_project_snapshot(project_id: str, headers) -> dict:
     url = f"{API_BASE}/projects/{project_id}/snapshot"

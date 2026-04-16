@@ -1,48 +1,57 @@
 import streamlit as st
-from datetime import date, timedelta
-from models.task import Task
+from copy import deepcopy
 from models.phase import Phase
 from models.session import SessionModel
 from models.plan_state import PlanState
+from ui.utils.constraints import build_constraint_target_labels, render_constraints_editor
 
 import time
 from datetime import datetime
 
 @st.dialog(f"Add a new phase to your project.")
 def render_add_phase(session: SessionModel, plan_state: PlanState, position: int | None = None):
-    
     phase_name = st.text_input(
-        label="Enter the name of a project phase",
+        label="Name",
         placeholder="Construction",
         key="phase_name"
     )
 
     if not phase_name:
         return
-    
-    predecessor_ids = []
-    if session.project.phases:
-        predecessor_options = [None] + [id for id in session.project.phase_order]
-        predecessor_ids = st.multiselect(
-            label=f"Select phases that precede '{phase_name}'",
-            placeholder="Admin",
-            options=predecessor_options,
-            format_func=lambda id: "- None -" if id is None else session.project.phases[id].name,
-            help=F"Select the project phases that directly precede {phase_name}"
+
+    has_constraints = st.checkbox(
+        label="Add predecessor constraints?",
+        help="Select to add dependencies that this phase has on earlier phases.",
+        value=False,
+    )
+
+    constraints = []
+    if has_constraints:
+        constraints = render_constraints_editor(
+            key="add_phase_constraints",
+            title=f"Add one or more predecessor rules for '{phase_name}'.",
+            help_text="Choose the predecessor phase this phase depends on.",
+            constraints=[],
+            predecessor_kind="phase",
+            labels_by_id=build_constraint_target_labels(
+                (phase_id, session.project.phases[phase_id].name)
+                for phase_id in session.project.phase_order
+            ),
         )
-    
-    # if user inputs predecessors, and at least one has an end date (task has been added)
-    # give them info on when the new phase can start at at the earliest
-    if predecessor_ids and session.project.end_date:        
-        earliest_start = max(session.project.phases[id].end_date for id in predecessor_ids)
-        st.info(f"Based on predecessors, the earliest start for '{phase_name}' is **{earliest_start.strftime("%Y-%m-%d %H:%M")}**")
 
     
     if st.button(label=f"Add '{phase_name or 'phase'}' to project", disabled=not phase_name):
         new_phase = Phase(
             name=phase_name,
-            predecessor_ids=predecessor_ids
+            constraints=constraints,
         )
+        try:
+            draft_project = deepcopy(session.project)
+            draft_project.add_phase(new_phase, position=position)
+            draft_project.resolve_schedule()
+        except ValueError as exc:
+            st.error(f"Unable to add phase: {exc}")
+            st.stop()
 
         plan_state.add_phase(phase_id=new_phase.uuid)
         session.project.add_phase(new_phase, position=position)
