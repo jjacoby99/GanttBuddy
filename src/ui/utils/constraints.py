@@ -88,7 +88,7 @@ def validate_constraints(
 
         if constraint.relation_type not in ALLOWED_CONSTRAINT_RELATIONS:
             messages.append(
-                f"Only {', '.join(option.value for option in ALLOWED_CONSTRAINT_RELATIONS)} relations are supported here."
+                f"Only {', '.join(option.value for option in ALLOWED_CONSTRAINT_RELATIONS)} relations are supported in the UI right now."
             )
             continue
 
@@ -177,7 +177,7 @@ def render_constraints_editor(
             "relation_type": st.column_config.SelectboxColumn(
                 label="Constraint Type",
                 options=CONSTRAINT_RELATION_OPTIONS,
-                help="How this item depends on its predecessor.",
+                help="How this item depends on its predecessor. The UI currently supports FS and SS.",
                 required=True,
                 format_func=relation_label,
             ),
