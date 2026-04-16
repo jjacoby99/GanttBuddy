@@ -582,7 +582,7 @@ def render_dependency_graph(project: Project) -> None:
         show_phase_edges=show_phase_edges,
         show_labels=show_labels,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     _render_dependency_summary(project)
 
@@ -594,6 +594,7 @@ def render_dependency_graph(project: Project) -> None:
                     "`SS` = Start-to-Start",
                     "`FF` = Finish-to-Finish",
                     "`SF` = Start-to-Finish",
+                    "The task and phase editors currently author `FS` and `SS` only.",
                     "Dashed arrows connect whole phases.",
                     "Solid arrows connect task-level constraints.",
                 ]
