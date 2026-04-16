@@ -77,7 +77,7 @@ def render_task_add(session: SessionModel, phase: Phase = None):
 
     has_constraints = preds_col.checkbox(
         label=f"Add predecessor constraints?",
-        help="Select to add dependencies that this task has on other tasks. This unlocks powerful scheduling features like critical path analysis and automatic rescheduling when things change.",
+        help="Select to add dependencies that this task has on other tasks in this phase. This unlocks powerful scheduling features like automatic rescheduling when things change.",
         value=False
     )
 
@@ -95,7 +95,7 @@ def render_task_add(session: SessionModel, phase: Phase = None):
         constraints = render_constraints_editor(
             key=f"{phase_selected.uuid}_task_constraints",
             title="Add one or more predecessor rules for this task.",
-            help_text="Choose the predecessor task this task depends on.",
+            help_text="Choose the predecessor task in this phase that this task depends on.",
             constraints=[],
             predecessor_kind="task",
             labels_by_id=available_predecessors,
