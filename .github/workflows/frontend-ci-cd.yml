@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - staging
+      - dev
   workflow_dispatch:
     inputs:
       deploy_ref:
@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       github.event_name == 'push' &&
-      github.ref == 'refs/heads/staging' &&
+      github.ref == 'refs/heads/dev' &&
       vars.STAGING_GCP_PROJECT_ID != '' &&
       vars.STAGING_GCP_REGION != '' &&
       vars.STAGING_ARTIFACT_REGISTRY_REPOSITORY != '' &&
