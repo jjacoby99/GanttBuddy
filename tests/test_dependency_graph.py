@@ -10,7 +10,7 @@ from models.constraint import Constraint, ConstraintRelation
 from models.phase import Phase
 from models.project import Project
 from models.task import Task
-from ui.dependency_graph import build_dependency_graph_data
+from ui.dependency_graph import _project_dependency_snapshot, build_dependency_graph_data
 
 
 def test_dependency_graph_includes_task_and_phase_edges() -> None:
@@ -52,7 +52,7 @@ def test_dependency_graph_includes_task_and_phase_edges() -> None:
     project.add_phase(phase_a)
     project.add_phase(phase_b)
 
-    graph = build_dependency_graph_data(project)
+    graph = build_dependency_graph_data(_project_dependency_snapshot(project))
 
     assert len(graph.bubbles) == 2
     assert {node.kind for node in graph.nodes} == {"phase", "task"}
@@ -75,7 +75,7 @@ def test_dependency_graph_bubble_tracks_task_count() -> None:
     project = Project(name="Bubble Test")
     project.add_phase(phase)
 
-    graph = build_dependency_graph_data(project)
+    graph = build_dependency_graph_data(_project_dependency_snapshot(project))
     bubble = graph.bubbles[0]
 
     assert bubble.y1 > bubble.y0
