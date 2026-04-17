@@ -17,6 +17,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY scripts ./scripts
 COPY src ./src
 
+RUN mkdir -p /app/.streamlit && \
+    chown -R app:app /app
+
 USER app
 
 EXPOSE 8080
