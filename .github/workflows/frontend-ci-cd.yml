@@ -117,7 +117,12 @@ jobs:
           gcloud @args
 
           $serviceUrl = gcloud run services describe "${{ vars.CLOUD_RUN_STAGING_FRONTEND_SERVICE }}" --region "${{ vars.STAGING_GCP_REGION }}" --format "value(status.url)"
-          "service_url=$serviceUrl" >> $env:GITHUB_OUTPUT
+          if ([string]::IsNullOrWhiteSpace($serviceUrl)) {
+            throw "Cloud Run staging service URL was empty after deploy."
+          }
+
+          Write-Host "Staging frontend URL: $serviceUrl"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "service_url=$serviceUrl"
 
       - name: Run staging smoke test
         env:
