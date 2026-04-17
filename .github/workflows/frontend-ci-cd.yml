@@ -115,6 +115,10 @@ jobs:
           }
 
           gcloud @args
+          gcloud beta run services add-iam-policy-binding "${{ vars.CLOUD_RUN_STAGING_FRONTEND_SERVICE }}" `
+            --region "${{ vars.STAGING_GCP_REGION }}" `
+            --member "allUsers" `
+            --role "roles/run.invoker"
 
           $serviceUrl = gcloud run services describe "${{ vars.CLOUD_RUN_STAGING_FRONTEND_SERVICE }}" --region "${{ vars.STAGING_GCP_REGION }}" --format "value(status.url)"
           if ([string]::IsNullOrWhiteSpace($serviceUrl)) {
@@ -268,6 +272,10 @@ jobs:
           }
 
           gcloud @args
+          gcloud beta run services add-iam-policy-binding "${{ vars.CLOUD_RUN_PRODUCTION_FRONTEND_SERVICE }}" `
+            --region "${{ vars.PRODUCTION_GCP_REGION }}" `
+            --member "allUsers" `
+            --role "roles/run.invoker"
 
       - name: Fetch Cloud Run error logs on production failure
         if: ${{ failure() }}
