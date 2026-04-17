@@ -1,0 +1,267 @@
+name: Frontend CI/CD
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - staging
+  workflow_dispatch:
+    inputs:
+      deploy_ref:
+        description: Git ref to deploy to production. Use main or a release tag.
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_ref || github.sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run tests
+        run: python -m pytest tests -q
+
+      - name: Build Cloud Run image
+        run: docker build -t ganttbuddy-frontend:${{ github.sha }} .
+
+  deploy-staging:
+    needs: test
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/staging' &&
+      vars.STAGING_GCP_PROJECT_ID != '' &&
+      vars.STAGING_GCP_REGION != '' &&
+      vars.STAGING_ARTIFACT_REGISTRY_REPOSITORY != '' &&
+      vars.CLOUD_RUN_STAGING_FRONTEND_SERVICE != '' &&
+      vars.CLOUD_RUN_STAGING_FRONTEND_SERVICE_ACCOUNT != '' &&
+      vars.STAGING_GCP_WORKLOAD_IDENTITY_PROVIDER != '' &&
+      vars.STAGING_GCP_WORKLOAD_IDENTITY_SERVICE_ACCOUNT != ''
+
+    env:
+      IMAGE_URI: ${{ vars.STAGING_GCP_REGION }}-docker.pkg.dev/${{ vars.STAGING_GCP_PROJECT_ID }}/${{ vars.STAGING_ARTIFACT_REGISTRY_REPOSITORY }}/ganttbuddy-frontend:${{ github.sha }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_WORKLOAD_IDENTITY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.STAGING_GCP_PROJECT_ID }}
+
+      - name: Configure Docker auth
+        run: gcloud auth configure-docker ${{ vars.STAGING_GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        run: |
+          docker build -t "${IMAGE_URI}" .
+          docker push "${IMAGE_URI}"
+
+      - name: Deploy staging revision
+        id: deploy
+        shell: pwsh
+        env:
+          CLOUD_RUN_STAGING_FRONTEND_ENV_VARS: ${{ secrets.CLOUD_RUN_STAGING_FRONTEND_ENV_VARS }}
+          CLOUD_RUN_STAGING_FRONTEND_SECRETS: ${{ secrets.CLOUD_RUN_STAGING_FRONTEND_SECRETS }}
+        run: |
+          $args = @(
+            "run", "deploy", "${{ vars.CLOUD_RUN_STAGING_FRONTEND_SERVICE }}",
+            "--image", "${env:IMAGE_URI}",
+            "--region", "${{ vars.STAGING_GCP_REGION }}",
+            "--platform", "managed",
+            "--allow-unauthenticated",
+            "--service-account", "${{ vars.CLOUD_RUN_STAGING_FRONTEND_SERVICE_ACCOUNT }}"
+          )
+
+          if ($env:CLOUD_RUN_STAGING_FRONTEND_ENV_VARS) {
+            $envFile = Join-Path $env:RUNNER_TEMP "cloud-run-staging-frontend.env.yaml"
+            Set-Content -Path $envFile -Value $env:CLOUD_RUN_STAGING_FRONTEND_ENV_VARS -NoNewline
+            $args += @("--env-vars-file", $envFile)
+          }
+
+          if ($env:CLOUD_RUN_STAGING_FRONTEND_SECRETS) {
+            $secretMappings = (
+              $env:CLOUD_RUN_STAGING_FRONTEND_SECRETS -split "[`r`n,]+" |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { $_ }
+            ) -join ","
+            $args += @("--update-secrets", $secretMappings)
+          }
+
+          gcloud @args
+
+          $serviceUrl = gcloud run services describe "${{ vars.CLOUD_RUN_STAGING_FRONTEND_SERVICE }}" --region "${{ vars.STAGING_GCP_REGION }}" --format "value(status.url)"
+          "service_url=$serviceUrl" >> $env:GITHUB_OUTPUT
+
+      - name: Run staging smoke test
+        env:
+          STAGING_FRONTEND_URL: ${{ steps.deploy.outputs.service_url }}
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 "$STAGING_FRONTEND_URL" > /tmp/frontend-smoke.html
+          test -s /tmp/frontend-smoke.html
+
+      - name: Fetch Cloud Run error logs on smoke failure
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          gcloud logging read \
+            'resource.type="cloud_run_revision" AND resource.labels.service_name="${{ vars.CLOUD_RUN_STAGING_FRONTEND_SERVICE }}" AND severity>=ERROR' \
+            --project "${{ vars.STAGING_GCP_PROJECT_ID }}" \
+            --limit 20 \
+            --format 'value(timestamp,textPayload,jsonPayload.message,jsonPayload.exception)' || {
+              echo "Cloud Logging fetch failed. Grant roles/logging.viewer to ${{ vars.STAGING_GCP_WORKLOAD_IDENTITY_SERVICE_ACCOUNT }}."
+              true
+            }
+
+  deploy-production:
+    needs: test
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    environment:
+      name: production
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.deploy_ref }}
+
+      - name: Validate production configuration
+        shell: bash
+        env:
+          PRODUCTION_GCP_PROJECT_ID: ${{ vars.PRODUCTION_GCP_PROJECT_ID }}
+          PRODUCTION_GCP_REGION: ${{ vars.PRODUCTION_GCP_REGION }}
+          PRODUCTION_ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.PRODUCTION_ARTIFACT_REGISTRY_REPOSITORY }}
+          CLOUD_RUN_PRODUCTION_FRONTEND_SERVICE: ${{ vars.CLOUD_RUN_PRODUCTION_FRONTEND_SERVICE }}
+          CLOUD_RUN_PRODUCTION_FRONTEND_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_PRODUCTION_FRONTEND_SERVICE_ACCOUNT }}
+          PRODUCTION_GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.PRODUCTION_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          PRODUCTION_GCP_WORKLOAD_IDENTITY_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_WORKLOAD_IDENTITY_SERVICE_ACCOUNT }}
+          CLOUD_RUN_PRODUCTION_FRONTEND_ENV_VARS: ${{ secrets.CLOUD_RUN_PRODUCTION_FRONTEND_ENV_VARS }}
+          CLOUD_RUN_PRODUCTION_FRONTEND_SECRETS: ${{ secrets.CLOUD_RUN_PRODUCTION_FRONTEND_SECRETS }}
+        run: |
+          missing=()
+
+          for name in \
+            PRODUCTION_GCP_PROJECT_ID \
+            PRODUCTION_GCP_REGION \
+            PRODUCTION_ARTIFACT_REGISTRY_REPOSITORY \
+            CLOUD_RUN_PRODUCTION_FRONTEND_SERVICE \
+            CLOUD_RUN_PRODUCTION_FRONTEND_SERVICE_ACCOUNT \
+            PRODUCTION_GCP_WORKLOAD_IDENTITY_PROVIDER \
+            PRODUCTION_GCP_WORKLOAD_IDENTITY_SERVICE_ACCOUNT
+          do
+            if [[ -z "${!name}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          for name in \
+            CLOUD_RUN_PRODUCTION_FRONTEND_ENV_VARS \
+            CLOUD_RUN_PRODUCTION_FRONTEND_SECRETS
+          do
+            if [[ -z "${!name}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing production configuration: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Resolve production image metadata
+        id: metadata
+        shell: bash
+        run: |
+          commit_sha="$(git rev-parse HEAD)"
+          image_uri="${{ vars.PRODUCTION_GCP_REGION }}-docker.pkg.dev/${{ vars.PRODUCTION_GCP_PROJECT_ID }}/${{ vars.PRODUCTION_ARTIFACT_REGISTRY_REPOSITORY }}/ganttbuddy-frontend:prod-${commit_sha}"
+          echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
+          echo "image_uri=$image_uri" >> "$GITHUB_OUTPUT"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_WORKLOAD_IDENTITY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.PRODUCTION_GCP_PROJECT_ID }}
+
+      - name: Configure Docker auth
+        run: gcloud auth configure-docker ${{ vars.PRODUCTION_GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push production image
+        run: |
+          docker build -t "${{ steps.metadata.outputs.image_uri }}" .
+          docker push "${{ steps.metadata.outputs.image_uri }}"
+
+      - name: Deploy production revision
+        shell: pwsh
+        env:
+          CLOUD_RUN_PRODUCTION_FRONTEND_ENV_VARS: ${{ secrets.CLOUD_RUN_PRODUCTION_FRONTEND_ENV_VARS }}
+          CLOUD_RUN_PRODUCTION_FRONTEND_SECRETS: ${{ secrets.CLOUD_RUN_PRODUCTION_FRONTEND_SECRETS }}
+        run: |
+          $args = @(
+            "run", "deploy", "${{ vars.CLOUD_RUN_PRODUCTION_FRONTEND_SERVICE }}",
+            "--image", "${{ steps.metadata.outputs.image_uri }}",
+            "--region", "${{ vars.PRODUCTION_GCP_REGION }}",
+            "--platform", "managed",
+            "--allow-unauthenticated",
+            "--service-account", "${{ vars.CLOUD_RUN_PRODUCTION_FRONTEND_SERVICE_ACCOUNT }}"
+          )
+
+          if ($env:CLOUD_RUN_PRODUCTION_FRONTEND_ENV_VARS) {
+            $envFile = Join-Path $env:RUNNER_TEMP "cloud-run-production-frontend.env.yaml"
+            Set-Content -Path $envFile -Value $env:CLOUD_RUN_PRODUCTION_FRONTEND_ENV_VARS -NoNewline
+            $args += @("--env-vars-file", $envFile)
+          }
+
+          if ($env:CLOUD_RUN_PRODUCTION_FRONTEND_SECRETS) {
+            $secretMappings = (
+              $env:CLOUD_RUN_PRODUCTION_FRONTEND_SECRETS -split "[`r`n,]+" |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { $_ }
+            ) -join ","
+            $args += @("--update-secrets", $secretMappings)
+          }
+
+          gcloud @args
+
+      - name: Fetch Cloud Run error logs on production failure
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          gcloud logging read \
+            'resource.type="cloud_run_revision" AND resource.labels.service_name="${{ vars.CLOUD_RUN_PRODUCTION_FRONTEND_SERVICE }}" AND severity>=ERROR' \
+            --project "${{ vars.PRODUCTION_GCP_PROJECT_ID }}" \
+            --limit 20 \
+            --format 'value(timestamp,textPayload,jsonPayload.message,jsonPayload.exception)' || {
+              echo "Cloud Logging fetch failed. Grant roles/logging.viewer to ${{ vars.PRODUCTION_GCP_WORKLOAD_IDENTITY_SERVICE_ACCOUNT }}."
+              true
+            }
