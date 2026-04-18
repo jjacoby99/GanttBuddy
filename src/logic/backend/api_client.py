@@ -2,7 +2,7 @@ import requests
 import streamlit as st
 import pydantic
 import datetime as dt
-from typing import List
+from typing import Any, List
 from uuid import UUID
 from zoneinfo import ZoneInfo
 import pandas as pd
@@ -221,6 +221,125 @@ def fetch_inching_performance(
         except Exception:
             pass
         raise ValueError(f"Failed to fetch analytics for {project_id}: {e} {body}")
+
+
+def headers_for_organization(headers: dict | None, organization_id: str | UUID | None) -> dict:
+    scoped_headers = dict(headers or {})
+    if organization_id:
+        scoped_headers["X-Organization-Id"] = str(organization_id)
+    return scoped_headers
+
+
+def _request_json(
+    *,
+    method: str,
+    url: str,
+    headers: dict,
+    params: dict[str, Any] | None = None,
+    timeout: int = 30,
+) -> Any:
+    response = requests.request(
+        method=method,
+        url=url,
+        headers=headers,
+        params=params,
+        timeout=timeout,
+    )
+    try:
+        response.raise_for_status()
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Request failed for {url}: {e} {body}")
+    return response.json()
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_organization_dashboard(
+    *,
+    headers: dict,
+    organization_id: str | UUID,
+) -> dict:
+    url = f"{API_BASE}/organizations/{organization_id}/dashboard"
+    return _request_json(method="GET", url=url, headers=headers)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_organization_projects_summary(
+    *,
+    headers: dict,
+    organization_id: str | UUID,
+    status: str = "all",
+    sort: str = "last_activity_at",
+    page: int = 1,
+    page_size: int = 100,
+) -> dict:
+    url = f"{API_BASE}/organizations/{organization_id}/projects/summary"
+    params = {
+        "status": status,
+        "sort": sort,
+        "page": page,
+        "page_size": page_size,
+    }
+    return _request_json(method="GET", url=url, headers=headers, params=params)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_organization_users_summary(
+    *,
+    headers: dict,
+    organization_id: str | UUID,
+    status: str = "all",
+    role: str | None = None,
+    sort: str = "last_login_at",
+    page: int = 1,
+    page_size: int = 100,
+) -> dict:
+    url = f"{API_BASE}/organizations/{organization_id}/users/summary"
+    params: dict[str, Any] = {
+        "status": status,
+        "sort": sort,
+        "page": page,
+        "page_size": page_size,
+    }
+    if role:
+        params["role"] = role
+    return _request_json(method="GET", url=url, headers=headers, params=params)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_organization_user_detail(
+    *,
+    headers: dict,
+    organization_id: str | UUID,
+    user_id: str | UUID,
+) -> dict:
+    url = f"{API_BASE}/organizations/{organization_id}/users/{user_id}"
+    return _request_json(method="GET", url=url, headers=headers)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_organization_activity(
+    *,
+    headers: dict,
+    organization_id: str | UUID,
+    event_type: str | None = None,
+    actor_user_id: str | UUID | None = None,
+    project_id: str | UUID | None = None,
+    limit: int = 25,
+) -> dict:
+    url = f"{API_BASE}/organizations/{organization_id}/activity"
+    params: dict[str, Any] = {"limit": limit}
+    if event_type:
+        params["event_type"] = event_type
+    if actor_user_id:
+        params["actor_user_id"] = str(actor_user_id)
+    if project_id:
+        params["project_id"] = str(project_id)
+    return _request_json(method="GET", url=url, headers=headers, params=params)
 
 
 @st.cache_data
