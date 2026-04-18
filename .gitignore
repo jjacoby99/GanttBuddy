@@ -220,9 +220,7 @@ tests/data/*
 secrets.toml
 
 client_secrets/
-
+*-streamlit-secrets.toml
+*-frontend-env-vars.yaml
+*-frontend-secrets.txt
 ps_vars.txt
-
-staging-frontend-env-vars.yaml
-staging-frontend-secrets.txt
-staging-streamlit-secrets.toml

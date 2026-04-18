@@ -95,7 +95,7 @@ jobs:
             "--image", "${env:IMAGE_URI}",
             "--region", "${{ vars.STAGING_GCP_REGION }}",
             "--platform", "managed",
-            "--allow-unauthenticated",
+            "--no-invoker-iam-check",
             "--service-account", "${{ vars.CLOUD_RUN_STAGING_FRONTEND_SERVICE_ACCOUNT }}"
           )
 
@@ -247,7 +247,7 @@ jobs:
             "--image", "${{ steps.metadata.outputs.image_uri }}",
             "--region", "${{ vars.PRODUCTION_GCP_REGION }}",
             "--platform", "managed",
-            "--allow-unauthenticated",
+            "--no-invoker-iam-check",
             "--service-account", "${{ vars.CLOUD_RUN_PRODUCTION_FRONTEND_SERVICE_ACCOUNT }}"
           )
 
