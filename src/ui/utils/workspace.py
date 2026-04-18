@@ -4,8 +4,8 @@ from ui.settings_view import render_settings_view
 from ui.compact_buttons import use_compact_buttons
 from ui.edit_project import render_edit_project
 
-from logic.backend.login import get_current_user, reset_auth
-from logic.backend.api_client import save_project
+from logic.backend.api_client import get_current_user, save_project
+from logic.backend.login import reset_auth
 
 import time
 

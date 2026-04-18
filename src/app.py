@@ -1,8 +1,9 @@
 import streamlit as st
 
 from logic.app_navigation import PageDefinition, build_navigation_sections, login_page_definition
+from logic.backend.api_client import get_current_user
 from logic.backend.guards import is_admin
-from logic.backend.login import get_current_user, is_logged_in, logout
+from logic.backend.login import is_logged_in, logout
 from logic.state import initialize_session_state
 
 

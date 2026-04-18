@@ -25,6 +25,7 @@ class ProjectSummary:
 
 from logic.backend.api_client import fetch_project_snapshot
 from logic.backend.import_project import snapshot_to_project
+from logic.backend.users import get_user
 
 def open_project(project_id: str) -> None:
 
@@ -91,7 +92,6 @@ def _severity_emoji(sev: str) -> str:
         "info": "ℹ️",
     }.get(sev, "ℹ️")
 
-from logic.backend.login import get_current_user
 from logic.backend.project_list import get_projects
 from logic.backend.activity_items import get_attention_items, count_activities
 from logic.backend.events import get_events
@@ -104,11 +104,13 @@ import datetime as dt
 # Page
 # -----------------------------
 def main() -> None:
+    user_tz = ZoneInfo(st.context.timezone)
+
     st.set_page_config(page_title="GanttBuddy • Home", layout="wide")
 
     # Placeholder data (replace with backend calls)
     headers = st.session_state.get("auth_headers", {})
-    user = get_current_user(headers)
+    user = get_user(headers, timezone=user_tz)
     last_proj = get_projects(headers, n_proj=1,include_closed=True)
 
     pid = ""
@@ -125,14 +127,24 @@ def main() -> None:
         left, right = st.columns([7, 3], vertical_alignment="center")
 
         with left:
-            st.markdown(
-                f"## Welcome back, **{user.get('name', '')}**",
+            last_login = user.last_login_at.strftime("%d/%m/%Y, %H:%M") if user.last_login_at else "N/A"
+            primary_org = next(
+                (
+                    membership.organization.name
+                    for membership in user.organizations
+                    if membership.is_active and membership.organization is not None
+                ),
+                "BTA Consulting",
             )
-            st.caption(f"{user.get('org', "BTA Consulting")}")
-            st.caption(f"Last login: {user.get('last_login', dt.datetime.now().strftime("%d/%m/%Y, %H:%M"))}")
+            
+            st.markdown(
+                f"## Welcome back, **{user.name}**",
+            )
+            st.caption(primary_org)
+            st.caption(f"Last login: {last_login}")
             role_row = st.container()
             with role_row:
-                for r in user.get("roles", []):
+                for r in user.roles:
                     _badge(r.get("name", ""))
 
         with right:

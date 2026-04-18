@@ -1,5 +1,8 @@
 import streamlit as st
-from logic.backend.login import get_current_user
+
+from logic.backend.api_client import get_current_user
+
+
 def require_login():
     if not st.session_state.get("auth", {}).get("is_active", False):
         st.error("Please sign in.")
@@ -9,7 +12,7 @@ def is_admin() -> bool:
     if not "auth" in st.session_state:
         try:
             roles = get_current_user(
-                headers=st.session_state.get("auth_headers", {})
+                auth_headers=st.session_state.get("auth_headers", {})
             )
             st.session_state["auth"] = roles
         except Exception as e:

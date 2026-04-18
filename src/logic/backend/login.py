@@ -4,6 +4,7 @@ import os
 import requests
 import streamlit as st
 
+from logic.backend.api_client import get_current_user
 from logic.backend.config import get_backend_environment_config
 
 CONFIG = get_backend_environment_config()
@@ -27,14 +28,6 @@ def exchange_oidc_token(id_token: str) -> str:
             detail = response.text
         raise RuntimeError(f"OIDC exchange failed ({response.status_code}): {detail}")
     return response.json()["access_token"]
-
-
-@st.cache_data
-def get_current_user(auth_headers: dict) -> dict:
-    response = requests.get(f"{API_BASE}/auth/me", headers=auth_headers, timeout=10)
-    if response.status_code != 200:
-        raise RuntimeError(f"Failed to get current user: {response.text}")
-    return response.json()
 
 
 def set_auth(token: str) -> None:

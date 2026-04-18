@@ -22,6 +22,14 @@ from models.todo import TodoIn, TodoUpsertRow
 
 API_BASE = get_backend_environment_config().api_base_url
 
+
+@st.cache_data
+def get_current_user(auth_headers: dict) -> dict:
+    response = requests.get(f"{API_BASE}/auth/me", headers=auth_headers, timeout=10)
+    if response.status_code != 200:
+        raise RuntimeError(f"Failed to get current user: {response.text}")
+    return response.json()
+
 @st.cache_data
 def fetch_project_snapshot(project_id: str, headers) -> dict:
     url = f"{API_BASE}/projects/{project_id}/snapshot"
