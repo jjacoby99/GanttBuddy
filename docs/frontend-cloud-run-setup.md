@@ -266,9 +266,14 @@ gh variable set STAGING_GCP_WORKLOAD_IDENTITY_SERVICE_ACCOUNT --body $DEPLOYER_S
 ### 8. Set GitHub secrets
 
 ```powershell
-gh secret set CLOUD_RUN_STAGING_FRONTEND_ENV_VARS --body (Get-Content .\staging-frontend-env-vars.yaml -Raw)
-gh secret set CLOUD_RUN_STAGING_FRONTEND_SECRETS --body (Get-Content .\staging-frontend-secrets.txt -Raw)
+Get-Content .\staging-frontend-env-vars.yaml -Raw |
+  gh secret set CLOUD_RUN_STAGING_FRONTEND_ENV_VARS
+
+Get-Content .\staging-frontend-secrets.txt -Raw |
+  gh secret set CLOUD_RUN_STAGING_FRONTEND_SECRETS
 ```
+
+This pipe form ended up being the most reliable PowerShell pattern for uploading multiline GitHub secret content from local files.
 
 ### 9. Make the frontend browser-accessible
 
@@ -301,6 +306,13 @@ These parts were not fully automated:
 4. Publish a new Secret Manager version
 5. Redeploy the frontend
 6. Keep the backend `OIDC_CLIENT_ID` aligned with the frontend Google client ID
+
+If you need to update a backend repo secret from a local file, use the same pipe pattern. For example:
+
+```powershell
+Get-Content .\staging-backend-env-vars.yaml -Raw |
+  gh secret set CLOUD_RUN_STAGING_ENV_VARS --repo jjacoby99/ganttbuddy-api
+```
 
 ## Production Checklist
 
