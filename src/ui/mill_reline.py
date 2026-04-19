@@ -431,6 +431,8 @@ def render_mill_reline_inputs():
 
     with tabs[3]:
         headers = st.session_state.get("auth_headers",{})
+        site_tz = None
+        crews = []
         try:
             site = fetch_site(headers=headers, site_id=meta.site_id)
             site_tz = site.get("timezone", None)
@@ -464,10 +466,18 @@ def render_mill_reline_inputs():
         ):
             project = builder.build(inputs=candidate)
             try:
+                project.site_id = meta.site_id
+
+                if site_tz:
+                    project.timezone = ZoneInfo(str(site_tz))
+
                 shift_assigmnents = ShiftAssignment.from_df(df=edited_df, project_id=project.uuid)
                 project.shift_assignments = shift_assigmnents
                 
                 shift_def.project_id = project.uuid # didn't have project id at original time of calling, update now.
+                if site_tz:
+                    shift_def.timezone = ZoneInfo(str(site_tz))
+                project.timezone = shift_def.timezone
                 project.shift_definition = shift_def
             except Exception as e:
                 st.error(f"Error updating project schedule: {e}")

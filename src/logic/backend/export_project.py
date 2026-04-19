@@ -49,6 +49,19 @@ def _working_days_to_mask(working_days: List[bool]) -> int:
 from models.project_metadata import RelineMetadata
 from models.project import Project
 
+def _normalized_reline_metadata(
+    project: Project,
+    metadata: Optional[RelineMetadata],
+) -> Optional[dict[str, Any]]:
+    if metadata is None:
+        return None
+
+    normalized = metadata
+    if project.site_id and metadata.site_id != project.site_id:
+        normalized = metadata.model_copy(update={"site_id": project.site_id})
+
+    return normalized.model_dump(mode="json")
+
 def project_to_import_payload(project: Project, metadata: Optional[RelineMetadata] = None) -> Dict[str, Any]:
     """
     Convert in-memory Streamlit Project object into JSON payload for POST /projects/import.
@@ -95,7 +108,7 @@ def project_to_import_payload(project: Project, metadata: Optional[RelineMetadat
         "settings": None,
         "phases": [],
         "tasks": [],
-        "metadata": metadata.model_dump(mode="json") if metadata is not None else None, #new 
+        "metadata": _normalized_reline_metadata(project, metadata),
         "shift_definition": None,
         "shift_assignments": None,
     }
