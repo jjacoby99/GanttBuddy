@@ -50,6 +50,55 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Get-GcloudCommandPath {
+    $cmd = Get-Command gcloud.cmd -ErrorAction SilentlyContinue
+    if ($cmd) {
+        return $cmd.Source
+    }
+
+    $defaultCmd = Join-Path $env:LOCALAPPDATA "Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"
+    if (Test-Path $defaultCmd) {
+        return $defaultCmd
+    }
+
+    throw "Unable to locate gcloud.cmd. Ensure the Google Cloud SDK is installed and on PATH."
+}
+
+$GcloudCmdPath = Get-GcloudCommandPath
+
+function Invoke-GcloudCapture {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    $stdoutPath = [System.IO.Path]::GetTempFileName()
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+
+    try {
+        $process = Start-Process `
+            -FilePath $GcloudCmdPath `
+            -ArgumentList $Arguments `
+            -NoNewWindow `
+            -Wait `
+            -PassThru `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+
+        $stdout = if (Test-Path $stdoutPath) { Get-Content $stdoutPath -Raw } else { "" }
+        $stderr = if (Test-Path $stderrPath) { Get-Content $stderrPath -Raw } else { "" }
+        $combined = @($stdout, $stderr) | Where-Object { $_ } 
+
+        return [pscustomobject]@{
+            Output = $combined
+            ExitCode = $process.ExitCode
+            Text = ($combined -join [Environment]::NewLine)
+        }
+    } finally {
+        Remove-Item $stdoutPath, $stderrPath -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-Step {
     param(
         [Parameter(Mandatory = $true)]
@@ -69,10 +118,14 @@ function Ensure-Secret {
         [string]$Name
     )
 
-    $null = gcloud secrets describe $Name --project $ProjectId 2>$null
-    if ($LASTEXITCODE -eq 0) {
+    $result = Invoke-GcloudCapture -Arguments @("secrets", "describe", $Name, "--project", $ProjectId)
+    if ($result.ExitCode -eq 0) {
         Write-Host "Secret '$Name' already exists."
         return
+    }
+
+    if ($result.Text -notmatch "NOT_FOUND") {
+        throw "Failed checking secret '$Name': $($result.Text)"
     }
 
     gcloud secrets create $Name --replication-policy automatic --project $ProjectId
@@ -85,10 +138,14 @@ function Ensure-ServiceAccount {
     )
 
     $email = "$Name@$ProjectId.iam.gserviceaccount.com"
-    $null = gcloud iam service-accounts describe $email --project $ProjectId 2>$null
-    if ($LASTEXITCODE -eq 0) {
+    $result = Invoke-GcloudCapture -Arguments @("iam", "service-accounts", "describe", $email, "--project", $ProjectId)
+    if ($result.ExitCode -eq 0) {
         Write-Host "Service account '$email' already exists."
         return $email
+    }
+
+    if ($result.Text -notmatch "NOT_FOUND") {
+        throw "Failed checking service account '$email': $($result.Text)"
     }
 
     gcloud iam service-accounts create $Name --display-name $DisplayName --project $ProjectId
@@ -143,14 +200,20 @@ Invoke-Step -Message "Allowing deployer to act as runtime service account" -Acti
 }
 
 Invoke-Step -Message "Ensuring GitHub workload identity provider exists" -Action {
-    $null = gcloud iam workload-identity-pools providers describe $ProviderId `
-        --location global `
-        --workload-identity-pool $PoolId `
-        --project $ProjectId 2>$null
+    $result = Invoke-GcloudCapture -Arguments @(
+        "iam", "workload-identity-pools", "providers", "describe", $ProviderId,
+        "--location", "global",
+        "--workload-identity-pool", $PoolId,
+        "--project", $ProjectId
+    )
 
-    if ($LASTEXITCODE -eq 0) {
+    if ($result.ExitCode -eq 0) {
         Write-Host "Workload identity provider '$ProviderId' already exists."
     } else {
+        if ($result.Text -notmatch "NOT_FOUND") {
+            throw "Failed checking workload identity provider '$ProviderId': $($result.Text)"
+        }
+
         gcloud iam workload-identity-pools providers create-oidc $ProviderId `
             --location global `
             --workload-identity-pool $PoolId `
@@ -210,8 +273,8 @@ if ($CreateGithubSecrets) {
     }
 
     Invoke-Step -Message "Creating GitHub Actions secrets" -Action {
-        gh secret set "CLOUD_RUN_${GithubEnvironmentPrefix}_FRONTEND_ENV_VARS" --body (Get-Content $envVarFile -Raw)
-        gh secret set "CLOUD_RUN_${GithubEnvironmentPrefix}_FRONTEND_SECRETS" --body (Get-Content $secretMapFile -Raw)
+        Get-Content $envVarFile -Raw | gh secret set "CLOUD_RUN_${GithubEnvironmentPrefix}_FRONTEND_ENV_VARS"
+        Get-Content $secretMapFile -Raw | gh secret set "CLOUD_RUN_${GithubEnvironmentPrefix}_FRONTEND_SECRETS"
     }
 }
 
