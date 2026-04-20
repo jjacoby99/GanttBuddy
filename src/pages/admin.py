@@ -15,12 +15,18 @@ from logic.backend.api_client import (
     fetch_organization_user_detail,
     fetch_organization_users_summary,
     headers_for_organization,
+    update_organization_user_role,
 )
 from logic.backend.guards import require_admin
 from logic.backend.users import get_user
 from logic.backend.utils.parse_datetime import parse_backend_utc
 
 ADMIN_ROLES = {"ORG_OWNER", "ORG_ADMIN"}
+ORG_ROLE_OPTIONS = ["MEMBER", "PROJECT_MANAGER", "ORG_ADMIN"]
+ORG_ROLE_ASSIGNMENT_LIMITS = {
+    "ORG_OWNER": {"MEMBER", "PROJECT_MANAGER", "ORG_ADMIN"},
+    "ORG_ADMIN": {"MEMBER", "PROJECT_MANAGER"},
+}
 USER_STATUS_LABELS = {
     "active": "Active",
     "inactive": "Inactive",
@@ -39,6 +45,25 @@ PROJECT_HEALTH_COLORS = {
     "Dormant": "#7c3aed",
     "Closed": "#475467",
 }
+
+
+def _clear_admin_caches() -> None:
+    fetch_organization_dashboard.clear()
+    fetch_organization_projects_summary.clear()
+    fetch_organization_users_summary.clear()
+    fetch_organization_user_detail.clear()
+    fetch_organization_activity.clear()
+
+
+def _assignable_org_roles(actor_role: str) -> list[str]:
+    allowed = ORG_ROLE_ASSIGNMENT_LIMITS.get(actor_role, set())
+    return [role for role in ORG_ROLE_OPTIONS if role in allowed]
+
+
+def _can_manage_org_role(actor_role: str, target_role: str | None) -> bool:
+    if not target_role:
+        return False
+    return target_role in ORG_ROLE_ASSIGNMENT_LIMITS.get(actor_role, set())
 
 
 def _page_css() -> None:
@@ -498,6 +523,8 @@ def _render_users_tab(
     organization_id: str,
     scoped_headers: dict,
     timezone: ZoneInfo,
+    actor_role: str,
+    current_user_id: str,
 ) -> None:
     st.subheader("Users")
     if users_df.empty:
@@ -629,6 +656,8 @@ def _render_users_tab(
         user_id=selected_user["user_id"],
     )
     user = detail["user"]
+    selected_user_role = str(user.get("role") or "")
+    assignable_roles = _assignable_org_roles(actor_role)
 
     st.markdown("##### User detail")
     detail_left, detail_right = st.columns([1.2, 1])
@@ -650,6 +679,44 @@ def _render_users_tab(
         activity_items = detail.get("recent_activity", [])
         st.markdown("###### Recent activity")
         _render_activity_feed(activity_items[:8], timezone)
+
+        st.markdown("###### Role access")
+        st.caption(f"Your assignment ceiling for this org is based on your role: {actor_role}.")
+        if str(selected_user["user_id"]) == str(current_user_id):
+            st.info("Your own org role can’t be changed from this panel.")
+        elif not assignable_roles:
+            st.info("Your current role does not allow organization role changes.")
+        elif not _can_manage_org_role(actor_role, selected_user_role):
+            st.info(f"This user currently has `{selected_user_role}` access, which you can’t modify from your role.")
+        else:
+            default_role = selected_user_role if selected_user_role in assignable_roles else assignable_roles[0]
+            target_role = st.selectbox(
+                "Assign org role",
+                options=assignable_roles,
+                index=assignable_roles.index(default_role),
+                key=f"assign_org_role_{selected_user['user_id']}",
+                help="Role changes follow the backend ceiling rules and cannot assign ORG_OWNER from normal admin actions.",
+            )
+            if st.button(
+                "Update org role",
+                key=f"update_org_role_{selected_user['user_id']}",
+                type="primary",
+                width="stretch",
+                disabled=target_role == selected_user_role,
+            ):
+                try:
+                    update_organization_user_role(
+                        headers=scoped_headers,
+                        organization_id=organization_id,
+                        user_id=selected_user["user_id"],
+                        role=target_role,
+                    )
+                except Exception as exc:
+                    st.error(f"Unable to update org role: {exc}")
+                else:
+                    _clear_admin_caches()
+                    st.success(f"Updated {selected_user['name']} to {target_role}.")
+                    st.rerun()
 
     memberships_col, projects_col = st.columns(2)
     with memberships_col:
@@ -725,11 +792,7 @@ def main() -> None:
         st.caption("Project and user rollups update against the selected organization context.")
 
     if refresh:
-        fetch_organization_dashboard.clear()
-        fetch_organization_projects_summary.clear()
-        fetch_organization_users_summary.clear()
-        fetch_organization_user_detail.clear()
-        fetch_organization_activity.clear()
+        _clear_admin_caches()
 
     scoped_headers = headers_for_organization(base_headers, selected_org_id.organization_id)
     organization_id = selected_org_id.organization_id
@@ -893,7 +956,7 @@ def main() -> None:
     with projects_tab:
         _render_projects_tab(projects_df, timezone)
     with users_tab:
-        _render_users_tab(users_df, organization_id, scoped_headers, timezone)
+        _render_users_tab(users_df, organization_id, scoped_headers, timezone, selected_org_id.role, user.id)
 
 
 if __name__ == "__main__":
