@@ -25,11 +25,12 @@ class ProjectSummary:
 
 from logic.backend.api_client import fetch_project_snapshot
 from logic.backend.import_project import snapshot_to_project
+from logic.backend.project_permissions import resolve_project_access, store_project_access
 from logic.backend.users import get_user
 
 def open_project(project_id: str) -> None:
-
     st.session_state["selected_project_id"] = project_id
+    projects = get_projects(st.session_state.get("auth_headers", {}), include_closed=True)
     try:
         snap = fetch_project_snapshot(
             project_id=st.session_state.get("selected_project_id"), 
@@ -41,6 +42,14 @@ def open_project(project_id: str) -> None:
 
     project, metadata = snapshot_to_project(snap)
     st.session_state.session.project = project
+    store_project_access(
+        resolve_project_access(
+            headers=st.session_state.get("auth_headers", {}),
+            project_id=project_id,
+            timezone=ZoneInfo(st.context.timezone),
+            project_record=projects.get(project_id),
+        )
+    )
     if project.project_type == ProjectType.MILL_RELINE and metadata is not None:
         st.session_state["reline_metadata"] = metadata 
     
