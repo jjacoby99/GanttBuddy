@@ -6,6 +6,7 @@ from ui.render_plan import render_plan
 from ui.closeout import render_closeout
 
 from ui.utils.workspace import render_workspace_buttons
+from logic.backend.project_permissions import project_is_read_only
 
 render_workspace_buttons()
 
@@ -38,7 +39,8 @@ if not st.session_state.session.project.closed:
     close_button = st.button(
         label=":material/task_alt: Closeout Project",
         help="Initiate project closeout process. Closed projects no longer show up on feed & home pages.",
-        type="primary"
+        type="primary",
+        disabled=project_is_read_only(),
     ) 
 
     if close_button:
