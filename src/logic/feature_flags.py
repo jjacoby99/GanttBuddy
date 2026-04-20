@@ -34,4 +34,4 @@ def signals_enabled() -> bool:
     if secret_value is not None:
         return secret_value
 
-    return False
+    return True
