@@ -13,6 +13,7 @@ from models.plan_state import PlanState
 from logic.backend.guards import require_login
 from logic.backend.api_client import fetch_project_snapshot
 from logic.backend.import_project import snapshot_to_project
+from logic.backend.project_permissions import resolve_project_access, store_project_access
 from logic.backend.project_list import get_projects
 
 from logic.backend.utils.parse_datetime import parse_backend_utc
@@ -68,12 +69,21 @@ def _ensure_state():
 
 def load_project_into_session(project_id: str):
     st.session_state["selected_project_id"] = project_id
+    projects = get_projects(st.session_state.auth_headers, include_closed=True)
     proj_snapshot = fetch_project_snapshot(
         project_id=project_id,
         headers=st.session_state.auth_headers,
     )
     project, metadata = snapshot_to_project(proj_snapshot)
     st.session_state.session.project = project
+    store_project_access(
+        resolve_project_access(
+            headers=st.session_state.auth_headers,
+            project_id=project_id,
+            timezone=ZoneInfo(st.context.timezone),
+            project_record=projects.get(project_id),
+        )
+    )
     if project.project_type == ProjectType.MILL_RELINE and metadata is not None:
         st.session_state["reline_metadata"] = metadata 
     st.session_state.plan_state = PlanState(project_id=project_id)
