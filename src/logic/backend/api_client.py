@@ -48,6 +48,12 @@ def fetch_projects(headers, include_closed: bool = False) -> dict:
     r.raise_for_status()
     return r.json()
 
+
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_project_members(*, headers: dict, project_id: str | UUID) -> Any:
+    url = f"{API_BASE}/projects/{project_id}/members"
+    return _request_json(method="GET", url=url, headers=headers)
+
 def save_project(project: Project, headers) -> str:
     metadata = st.session_state.get("reline_metadata", None)
     payload = project_to_import_payload(project, metadata=metadata)
@@ -340,6 +346,27 @@ def fetch_organization_activity(
     if project_id:
         params["project_id"] = str(project_id)
     return _request_json(method="GET", url=url, headers=headers, params=params)
+
+
+def update_organization_user_role(
+    *,
+    headers: dict,
+    organization_id: str | UUID,
+    user_id: str | UUID,
+    role: str,
+) -> dict:
+    url = f"{API_BASE}/organizations/{organization_id}/users/{user_id}/role"
+    response = requests.patch(url, headers=headers, json={"role": role}, timeout=30)
+    try:
+        response.raise_for_status()
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to update organization role: {e} {body}")
+    return response.json()
 
 
 @st.cache_data
