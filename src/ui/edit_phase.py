@@ -3,10 +3,15 @@ from copy import deepcopy
 from models.phase import Phase
 from models.session import SessionModel
 from models.plan_state import PlanState
+from logic.backend.project_permissions import project_is_read_only
 from ui.utils.constraints import build_constraint_target_labels, render_constraints_editor
 
 @st.dialog(f"Edit Phase")
 def render_phase_edit(session: SessionModel, phase: Phase, plan_state: PlanState):
+    if project_is_read_only():
+        st.info("This project is read-only, so phases cannot be edited.")
+        return
+
     proj = session.project
 
     if not phase:
@@ -38,7 +43,7 @@ def render_phase_edit(session: SessionModel, phase: Phase, plan_state: PlanState
         )
     
     with st.container(horizontal=True):
-        if st.button(label="Save"):
+        if st.button(label="Save", disabled=project_is_read_only()):
             try:
                 draft_project = deepcopy(session.project)
                 draft_phase = draft_project.phases[phase.uuid]
@@ -56,7 +61,7 @@ def render_phase_edit(session: SessionModel, phase: Phase, plan_state: PlanState
         
         st.space("stretch")
 
-        if st.button("Delete"):
+        if st.button("Delete", disabled=project_is_read_only()):
             session.project.delete_phase(phase)
             plan_state.remove_phase(phase.uuid)
             st.rerun()

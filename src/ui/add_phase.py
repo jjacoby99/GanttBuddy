@@ -3,6 +3,7 @@ from copy import deepcopy
 from models.phase import Phase
 from models.session import SessionModel
 from models.plan_state import PlanState
+from logic.backend.project_permissions import project_is_read_only
 from ui.utils.constraints import build_constraint_target_labels, render_constraints_editor
 
 import time
@@ -10,6 +11,10 @@ from datetime import datetime
 
 @st.dialog(f"Add a new phase to your project.")
 def render_add_phase(session: SessionModel, plan_state: PlanState, position: int | None = None):
+    if project_is_read_only():
+        st.info("This project is read-only, so phases cannot be added.")
+        return
+
     phase_name = st.text_input(
         label="Name",
         placeholder="Construction",
@@ -40,7 +45,7 @@ def render_add_phase(session: SessionModel, plan_state: PlanState, position: int
         )
 
     
-    if st.button(label=f"Add '{phase_name or 'phase'}' to project", disabled=not phase_name):
+    if st.button(label=f"Add '{phase_name or 'phase'}' to project", disabled=project_is_read_only() or not phase_name):
         new_phase = Phase(
             name=phase_name,
             constraints=constraints,

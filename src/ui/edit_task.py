@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timedelta
 
 from logic.gantt_builder import build_timeline, build_gantt_df # need to clear cache when task updated.
+from logic.backend.project_permissions import project_is_read_only
 
 def is_timezone_aware(dt):
     """Check if a datetime object is timezone aware."""
@@ -24,6 +25,10 @@ def _snapshot_task_schedule(session: SessionModel) -> dict[str, tuple[datetime, 
 
 @st.dialog(f"Edit Task")
 def render_task_edit(session, phase: Phase, task: Task):
+    if project_is_read_only():
+        st.info("This project is read-only, so tasks cannot be edited.")
+        return
+
     phases = session.project.phases
 
     if not phases:
@@ -221,7 +226,7 @@ def render_task_edit(session, phase: Phase, task: Task):
         key=f"task_note_input"
     )
     c1, c2, c3 = st.columns(3)
-    if c1.button(label=f"Update", disabled=not edited_task_name, type='primary'):
+    if c1.button(label=f"Update", disabled=project_is_read_only() or not edited_task_name, type='primary'):
         schedule_before = _snapshot_task_schedule(session)
         new_task = Task(
             name=edited_task_name, 
@@ -281,7 +286,7 @@ def render_task_edit(session, phase: Phase, task: Task):
     if c2.button('Cancel'):
         st.rerun()
 
-    if c3.button('Delete'):
+    if c3.button('Delete', disabled=project_is_read_only()):
         name = task.name
         predecessors_had = phase.delete_task(task)
         session.project.resolve_schedule()
