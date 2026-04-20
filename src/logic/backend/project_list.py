@@ -53,6 +53,10 @@ def get_projects(headers: dict, n_proj: int=-1, include_closed: bool = False) ->
             "planned_start": start_dt if start else None,
             "planned_finish": end_dt if start else None,
             "timezone_name": tz_str,
+            "created_by_user_id": proj.get("created_by_user_id"),
+            "can_view": proj.get("can_view"),
+            "can_edit": proj.get("can_edit"),
+            "can_manage_members": proj.get("can_manage_members"),
         }
     
     return to_return
