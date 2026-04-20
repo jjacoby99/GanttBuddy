@@ -1,4 +1,5 @@
 import streamlit as st
+from zoneinfo import ZoneInfo
 
 from models.project import Project, ProjectType
 from models.plan_state import PlanState
@@ -6,6 +7,7 @@ from models.plan_state import PlanState
 from logic.backend.project_list import get_projects
 from logic.backend.api_client import fetch_project_snapshot
 from logic.backend.import_project import snapshot_to_project
+from logic.backend.project_permissions import resolve_project_access, store_project_access
 
 @st.dialog(f":material/open_in_browser: Load Saved Project")
 def render_load_project() -> Project:
@@ -67,6 +69,14 @@ def render_load_project() -> Project:
     
     proj, metadata = snapshot_to_project(proj_snapshot)
     st.session_state.session.project = proj
+    store_project_access(
+        resolve_project_access(
+            headers=st.session_state.auth_headers,
+            project_id=selected_project_id,
+            timezone=ZoneInfo(st.context.timezone),
+            project_record=projects[selected_project_id],
+        )
+    )
 
     if metadata and proj.project_type == ProjectType.MILL_RELINE: 
         st.session_state["reline_metadata"] = metadata
