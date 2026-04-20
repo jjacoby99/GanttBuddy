@@ -2,6 +2,7 @@ import streamlit as st
 from zoneinfo import ZoneInfo
 
 from models.project import Project
+from models.project_access import ProjectAccess
 from logic.backend.sites.fetch_sites import get_sites
 from models.site import SiteIn
 from models.project_type import ProjectType, project_type_to_dict
@@ -75,6 +76,13 @@ def create_project():
     
     if st.button("Create", icon=":material/add:", type='primary'):
         st.session_state.session.project = new_project
+        st.session_state["project_access"] = ProjectAccess(
+            project_id=new_project.uuid,
+            can_view=True,
+            can_edit=True,
+            can_manage_members=True,
+            source="local_project",
+        )
         st.info(f"✅ New project created!")
         st.rerun()
         return
