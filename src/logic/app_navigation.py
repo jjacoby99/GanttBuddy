@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from logic.feature_flags import signals_enabled
+
 
 @dataclass(frozen=True)
 class PageDefinition:
@@ -15,6 +17,19 @@ def login_page_definition() -> PageDefinition:
 
 
 def build_navigation_sections(*, is_admin: bool) -> dict[str, list[PageDefinition]]:
+    workspace_pages = [
+        PageDefinition("pages/plan.py", "Plan", ":material/view_timeline:"),
+        PageDefinition("pages/execute.py", "Execute", ":material/construction:"),
+    ]
+    if signals_enabled():
+        workspace_pages.append(PageDefinition("pages/signals.py", "Signals", ":material/sensors:"))
+    workspace_pages.extend(
+        [
+            PageDefinition("pages/analyze.py", "Delays", ":material/timer:"),
+            PageDefinition("pages/analytics.py", "Analytics", ":material/query_stats:"),
+        ]
+    )
+
     sections = {
         "Home": [
             PageDefinition("pages/home.py", "Home", ":material/home:"),
@@ -27,13 +42,7 @@ def build_navigation_sections(*, is_admin: bool) -> dict[str, list[PageDefinitio
             PageDefinition("pages/feed.py", "Feed", ":material/view_list:"),
             PageDefinition("pages/build.py", "Build", ":material/build:"),
         ],
-        "Workspace": [
-            PageDefinition("pages/plan.py", "Plan", ":material/view_timeline:"),
-            PageDefinition("pages/execute.py", "Execute", ":material/construction:"),
-            PageDefinition("pages/signals.py", "Signals", ":material/sensors:"),
-            PageDefinition("pages/analyze.py", "Delays", ":material/timer:"),
-            PageDefinition("pages/analytics.py", "Analytics", ":material/query_stats:"),
-        ],
+        "Workspace": workspace_pages,
         "Manage": [
             PageDefinition("pages/manage.py", "Manage", ":material/manage_accounts:"),
         ],
