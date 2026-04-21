@@ -28,6 +28,11 @@ from logic.backend.utils.parse_datetime import parse_backend_utc
 from models.organization import OrganizationMembership
 from models.user import User
 from ui.todo_overview import todo_panel_css
+from ui.utils.admin_display import (
+    project_role_badge_html,
+    project_role_label,
+    render_project_status_card,
+)
 
 ADMIN_ROLES = {"ORG_OWNER", "ORG_ADMIN"}
 ORG_ROLE_OPTIONS = ["MEMBER", "PROJECT_MANAGER", "ORG_ADMIN"]
@@ -65,6 +70,11 @@ class AdminContext:
     membership: OrganizationMembership
     organization_id: str
     stale_days: int
+
+
+def _membership_label(membership: OrganizationMembership) -> str:
+    org_name = membership.organization.name if membership.organization else membership.organization_id
+    return f"{org_name} ({membership.role})"
 
 
 def _clear_admin_caches() -> None:
@@ -130,14 +140,14 @@ def _page_css() -> None:
         }
         .admin-hero-stat-label {
             font-size: 0.8rem;
-            color: #bae6fd;
+            color: #0369a1;
             margin-bottom: 0.25rem;
             font-weight: 700;
         }
         .admin-hero-stat-value {
             font-size: 1.35rem;
             font-weight: 800;
-            color: #e0f2fe;
+            color: #101828;
         }
         .admin-card {
             border-radius: 18px;
@@ -479,91 +489,6 @@ def _render_spacer(height_class: str = "admin-spacer-sm") -> None:
     st.markdown(f'<div class="{height_class}"></div>', unsafe_allow_html=True)
 
 
-def _project_role_label(role: str | None) -> str:
-    normalized = str(role or "").upper()
-    return {
-        "VIEWER": "Viewer",
-        "EDITOR": "Editor",
-        "PROJECT_ADMIN": "Admin",
-    }.get(normalized, normalized.replace("_", " ").title() or "Unknown")
-
-
-def _project_role_badge_html(role: str | None) -> str:
-    normalized = str(role or "").upper()
-    role_class = {
-        "VIEWER": "role-viewer",
-        "EDITOR": "role-editor",
-        "PROJECT_ADMIN": "role-admin",
-    }.get(normalized, "role-viewer")
-    icon = {
-        "VIEWER": "◌",
-        "EDITOR": "✎",
-        "PROJECT_ADMIN": "★",
-    }.get(normalized, "◌")
-    label = _project_role_label(normalized)
-    return f'<span class="admin-role-badge {role_class}"><span>{icon}</span><span>{label}</span></span>'
-
-
-def _render_project_status_card(state_label: str) -> None:
-    state_class = "is-closed" if str(state_label).lower() == "closed" else "is-open"
-    icon = "●" if state_class == "is-open" else "■"
-    st.markdown(
-        f"""
-        <div class="admin-signal-card">
-          <div class="admin-signal-label">Project state</div>
-          <div class="admin-signal-badge {state_class}">
-            <span>{icon}</span>
-            <span>{state_label}</span>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def _project_role_badge_html(role: str | None) -> str:
-    normalized = str(role or "").upper()
-    role_class = {
-        "VIEWER": "role-viewer",
-        "EDITOR": "role-editor",
-        "PROJECT_ADMIN": "role-admin",
-    }.get(normalized, "role-viewer")
-    label = _project_role_label(normalized)
-    return f'<span class="admin-role-badge {role_class}">{label}</span>'
-
-
-def _render_project_status_card(state_label: str) -> None:
-    state_class = "is-closed" if str(state_label).lower() == "closed" else "is-open"
-    icon = "•" if state_class == "is-open" else "■"
-    st.markdown(
-        f"""
-        <div class="admin-signal-card">
-          <div class="admin-signal-label">Project state</div>
-          <div class="admin-signal-badge {state_class}">
-            <span>{icon}</span>
-            <span>{state_label}</span>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def _render_project_status_card(state_label: str) -> None:
-    state_class = "is-closed" if str(state_label).lower() == "closed" else "is-open"
-    st.markdown(
-        f"""
-        <div class="admin-signal-card">
-          <div class="admin-signal-label">Project state</div>
-          <div class="admin-signal-badge {state_class}">
-            <span>{escape(str(state_label))}</span>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def _render_completion_card(progress_pct: float) -> None:
     bounded = max(0.0, min(progress_pct, 100.0))
     st.markdown(
@@ -603,7 +528,7 @@ def _render_members_table(members_df: pd.DataFrame) -> None:
     rows: list[str] = []
     display_df = members_df.sort_values(["is_owner", "name"], ascending=[False, True]).copy()
     for _, row in display_df.iterrows():
-        role_html = _project_role_badge_html(row.get("project_role"))
+        role_html = project_role_badge_html(row.get("project_role"))
         name = escape(str(row.get("name") or "-"))
         email = escape(str(row.get("email") or "-"))
         owner_flag = '<span class="admin-flag is-owner">Owner</span>' if bool(row.get("is_owner")) else ""
@@ -1020,7 +945,7 @@ def _render_project_membership_editor(
     with summary_left:
         _render_project_owner_card(owner_name, owner_email)
     with summary_middle:
-        _render_project_status_card(project_row.get("state_label", "Open"))
+        render_project_status_card(project_row.get("state_label", "Open"))
     with summary_right:
         _render_completion_card(float(project_row.get("progress_pct", 0.0)))
 
@@ -1048,7 +973,7 @@ def _render_project_membership_editor(
                 options=PROJECT_ROLE_OPTIONS,
                 index=PROJECT_ROLE_OPTIONS.index(current_role) if current_role in PROJECT_ROLE_OPTIONS else 0,
                 key=f"admin_member_role_{project_id}_{selected_member['user_id']}",
-                format_func=_project_role_label,
+                format_func=project_role_label,
             )
             action_left, action_right = st.columns(2)
             with action_left:
@@ -1070,7 +995,7 @@ def _render_project_membership_editor(
                         st.error(f"Unable to update project role: {exc}")
                     else:
                         _clear_admin_caches()
-                        st.success(f"Updated {selected_member['name']} to {_project_role_label(target_role)}.")
+                        st.success(f"Updated {selected_member['name']} to {project_role_label(target_role)}.")
                         st.rerun()
             with action_right:
                 remove_disabled = bool(selected_member["is_owner"])
@@ -1119,7 +1044,7 @@ def _render_project_membership_editor(
                 options=PROJECT_ROLE_OPTIONS,
                 index=0,
                 key=f"admin_member_add_role_{project_id}",
-                format_func=_project_role_label,
+                format_func=project_role_label,
             )
             if st.button(
                 "Add member",
@@ -1138,7 +1063,7 @@ def _render_project_membership_editor(
                     st.error(f"Unable to add project member: {exc}")
                 else:
                     _clear_admin_caches()
-                    st.success(f"Added {selected_candidate['name']} as {_project_role_label(add_role)}.")
+                    st.success(f"Added {selected_candidate['name']} as {project_role_label(add_role)}.")
                     st.rerun()
 
     _render_spacer()
@@ -1406,7 +1331,16 @@ def get_admin_context(*, show_stale_days: bool = True) -> AdminContext:
     admin_memberships = [membership for membership in memberships if membership.role in ADMIN_ROLES]
     org_options = admin_memberships or memberships
 
-    selected_org = org_options[0]
+    default_org_id = st.session_state.get("admin_org_id")
+    valid_org_ids = {membership.organization_id for membership in org_options}
+    if default_org_id not in valid_org_ids:
+        default_org_id = org_options[0].organization_id
+        st.session_state["admin_org_id"] = default_org_id
+
+    selected_org = next(
+        (membership for membership in org_options if membership.organization_id == default_org_id),
+        org_options[0],
+    )
     stale_days = 14
 
     return AdminContext(
@@ -1420,8 +1354,27 @@ def get_admin_context(*, show_stale_days: bool = True) -> AdminContext:
     )
 
 
+def _render_admin_overview_settings(org_options: list[OrganizationMembership], selected_org_id: str) -> None:
+    with st.popover("Settings", icon=":material/settings:"):
+        selected_org = st.selectbox(
+            "Organization",
+            options=org_options,
+            index=next(
+                (index for index, membership in enumerate(org_options) if membership.organization_id == selected_org_id),
+                0,
+            ),
+            format_func=_membership_label,
+            key="admin_overview_org_select",
+        )
+        if selected_org.organization_id != selected_org_id:
+            st.session_state["admin_org_id"] = selected_org.organization_id
+            st.rerun()
+
+
 def render_admin_overview() -> None:
     ctx = get_admin_context(show_stale_days=True)
+    memberships = [membership for membership in ctx.user.organizations if membership.is_active]
+    org_options = [membership for membership in memberships if membership.role in ADMIN_ROLES] or memberships
 
     try:
         dashboard = fetch_organization_dashboard(headers=ctx.scoped_headers, organization_id=ctx.organization_id)
@@ -1462,19 +1415,23 @@ def render_admin_overview() -> None:
         else 0.0
     )
 
-    st.markdown(
-        f"""
-        <div class="admin-shell">
-          <div class="admin-eyebrow">Organization Admin Overview</div>
-          <div class="admin-hero-title">{organization.get("name", "Organization overview")}</div>
-          <div class="admin-hero-copy">
-            Monitor adoption, project momentum, and follow-up opportunities across the organization.
-            Snapshot captured {as_of}.
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    hero_left, hero_right = st.columns([8.5, 1.5], vertical_alignment="top")
+    with hero_left:
+        st.markdown(
+            f"""
+            <div class="admin-shell">
+              <div class="admin-eyebrow">Organization Admin Overview</div>
+              <div class="admin-hero-title">{organization.get("name", "Organization overview")}</div>
+              <div class="admin-hero-copy">
+                Monitor adoption, project momentum, and follow-up opportunities across the organization.
+                Snapshot captured {as_of}.
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with hero_right:
+        _render_admin_overview_settings(org_options, ctx.organization_id)
 
     _render_spacer("admin-spacer-md")
     hero_stats = st.columns(3)
@@ -1653,4 +1610,3 @@ def render_admin_users() -> None:
         actor_role=ctx.membership.role,
         current_user_id=ctx.user.id,
     )
-
