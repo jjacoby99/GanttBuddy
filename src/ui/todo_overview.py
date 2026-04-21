@@ -160,10 +160,21 @@ def todo_dataframe(items: list[dict[str, Any]], timezone: ZoneInfo, valid_projec
 
     return pd.DataFrame(rows)
 
+def _goto_todo_page() -> None:
+    st.switch_page("pages/todo.py")
+
+def render_todo_page_button() -> None:
+    to_todo = st.button(f":material/assignment: My todos", type="secondary")
+    if to_todo:
+        _goto_todo_page()
 
 def render_todo_overview_panel(todos_df: pd.DataFrame, project_name_by_id: dict[str, str]) -> None:
     if todos_df.empty:
-        st.info("No project-linked todos are active for you in this organization yet.")
+        container = st.container(horizontal=True)
+        container.info(":material/info: No project-linked todos are active for you yet.")
+        container.space("stretch")
+        with container:
+            render_todo_page_button()
         return
 
     todos_df = todos_df.copy()
