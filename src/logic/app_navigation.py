@@ -50,7 +50,9 @@ def build_navigation_sections(*, is_admin: bool) -> dict[str, list[PageDefinitio
 
     if is_admin:
         sections["Admin"] = [
-            PageDefinition("pages/admin.py", "Admin", ":material/admin_panel_settings:")
+            PageDefinition("pages/admin.py", "Overview", ":material/admin_panel_settings:"),
+            PageDefinition("pages/admin_projects.py", "Projects", ":material/folder_open:"),
+            PageDefinition("pages/admin_users.py", "Users", ":material/group:"),
         ]
 
     return sections
