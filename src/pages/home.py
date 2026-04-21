@@ -24,10 +24,11 @@ class ProjectSummary:
     role: str
 
 
-from logic.backend.api_client import fetch_project_snapshot
+from logic.backend.api_client import fetch_project_snapshot, fetch_todos
 from logic.backend.import_project import snapshot_to_project
 from logic.backend.project_permissions import resolve_project_access, store_project_access
 from logic.backend.users import get_user
+from ui.admin_console import _render_todo_overview_panel, _todo_dataframe, inject_todo_panel_css
 
 def open_project(project_id: str) -> None:
     st.session_state["selected_project_id"] = project_id
@@ -117,6 +118,7 @@ def main() -> None:
     user_tz = ZoneInfo(st.context.timezone)
 
     st.set_page_config(page_title="GanttBuddy • Home", layout="wide")
+    inject_todo_panel_css()
 
     require_login()
 
@@ -124,6 +126,7 @@ def main() -> None:
     headers = st.session_state.get("auth_headers", {})
     user = get_user(headers, timezone=user_tz)
     last_proj = get_projects(headers, n_proj=1,include_closed=True)
+    all_projects = get_projects(headers, include_closed=True)
 
     pid = ""
     if last_proj:
@@ -131,6 +134,7 @@ def main() -> None:
 
     needs = get_attention_items(headers, timezone=ZoneInfo(st.context.timezone))
     activity = get_events(headers, n_events=5)
+    todos_payload = fetch_todos(headers=headers)
     kpis = count_activities(needs)
 
     # ---------- Header strip ----------
@@ -211,7 +215,7 @@ def main() -> None:
     st.write("")
 
     # ---------- Needs attention + Activity summary ----------
-    left_col, right_col = st.columns([6, 4], gap="large")
+    left_col, right_col = st.columns([5.6, 4.4], gap="large")
 
     # Needs attention
     with left_col:
@@ -239,6 +243,16 @@ def main() -> None:
     # Activity summary
     with right_col:
         st.subheader("Activity summary")
+
+        project_ids = {str(project_id) for project_id in all_projects.keys()}
+        project_name_by_id = {
+            str(project_id): str(project_meta.get("name") or "Project")
+            for project_id, project_meta in all_projects.items()
+        }
+        todos_df = _todo_dataframe(todos_payload or [], user_tz, project_ids)
+        _render_todo_overview_panel(todos_df, project_name_by_id)
+
+        st.write("")
 
         # KPI row
         kpi_box = st.container(border=True)
