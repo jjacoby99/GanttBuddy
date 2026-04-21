@@ -28,7 +28,7 @@ from logic.backend.api_client import fetch_project_snapshot, fetch_todos
 from logic.backend.import_project import snapshot_to_project
 from logic.backend.project_permissions import resolve_project_access, store_project_access
 from logic.backend.users import get_user
-from ui.admin_console import _render_todo_overview_panel, _todo_dataframe, inject_todo_panel_css
+from ui.todo_overview import inject_todo_panel_css, render_todo_overview_panel, todo_dataframe
 
 def open_project(project_id: str) -> None:
     st.session_state["selected_project_id"] = project_id
@@ -215,11 +215,25 @@ def main() -> None:
     st.write("")
 
     # ---------- Needs attention + Activity summary ----------
-    left_col, right_col = st.columns([5.6, 4.4], gap="large")
+    left_col, right_col = st.columns([5.6, 4.8], gap="medium")
 
     # Needs attention
     with left_col:
-        st.subheader("Needs attention")
+        with st.container(horizontal=True):
+            st.subheader("Needs attention")
+            
+            st.space("stretch")
+
+            
+            with st.popover("KPIs"):
+                m1, m2 = st.columns(2)
+                with m1:
+                    st.metric("Late tasks", kpis.get("late_tasks", 0))
+                    st.metric("Awaiting actuals", kpis.get("awaiting_actuals", 0))
+                with m2:
+                    st.metric("Due soon (48h)", kpis.get("due_soon_tasks", 0))
+                    st.metric("Updates today", kpis.get("updates_today", 0))
+        
         na = st.container(border=True)
         with na:
             if not needs:
@@ -242,30 +256,18 @@ def main() -> None:
                                 
     # Activity summary
     with right_col:
-        st.subheader("Activity summary")
+        st.subheader("PM Tasks")
 
         project_ids = {str(project_id) for project_id in all_projects.keys()}
         project_name_by_id = {
             str(project_id): str(project_meta.get("name") or "Project")
             for project_id, project_meta in all_projects.items()
         }
-        todos_df = _todo_dataframe(todos_payload or [], user_tz, project_ids)
-        _render_todo_overview_panel(todos_df, project_name_by_id)
+        todos_df = todo_dataframe(todos_payload or [], user_tz, project_ids)
+        with st.container(border=True):
+            render_todo_overview_panel(todos_df, project_name_by_id)
 
-        st.write("")
-
-        # KPI row
-        kpi_box = st.container(border=True)
-        with kpi_box:
-            m1, m2 = st.columns(2)
-            with m1:
-                st.metric("Late tasks", kpis.get("late_tasks", 0))
-                st.metric("Awaiting actuals", kpis.get("awaiting_actuals", 0))
-            with m2:
-                st.metric("Due soon (48h)", kpis.get("due_soon_tasks", 0))
-                st.metric("Updates today", kpis.get("updates_today", 0))
-
-        st.write("")
+        st.write("")        
 
         # Mini feed
         feed_box = st.container(border=True)
