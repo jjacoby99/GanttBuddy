@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
+from html import escape
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -213,6 +214,7 @@ def _page_css() -> None:
                 linear-gradient(135deg, #eff6ff 0%, #ecfeff 100%);
             border: 1px solid rgba(56, 189, 248, 0.22);
             box-shadow: 0 10px 26px rgba(14, 165, 233, 0.08);
+            min-height: 148px;
         }
         .admin-owner-eyebrow {
             font-size: 0.74rem;
@@ -233,12 +235,25 @@ def _page_css() -> None:
             color: #475467;
             font-size: 0.92rem;
         }
+        .admin-owner-note {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin-top: 0.75rem;
+            padding: 0.36rem 0.68rem;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            color: #075985;
+            background: rgba(186, 230, 253, 0.75);
+        }
         .admin-signal-card {
             border-radius: 18px;
             padding: 0.95rem 1rem;
             border: 1px solid rgba(15, 23, 42, 0.08);
             background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98));
             box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+            min-height: 148px;
         }
         .admin-signal-label {
             font-size: 0.76rem;
@@ -284,27 +299,123 @@ def _page_css() -> None:
             border-radius: 999px;
             background: linear-gradient(90deg, #0ea5e9 0%, #22c55e 100%);
         }
-        .admin-members-table {
-            width: 100%;
-            border-collapse: collapse;
+        .admin-role-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.42rem;
+            padding: 0.34rem 0.64rem;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 800;
+            line-height: 1;
         }
-        .admin-members-table th {
-            text-align: left;
-            font-size: 0.76rem;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: #667085;
-            padding-bottom: 0.6rem;
+        .admin-role-badge.role-viewer {
+            color: #0f766e;
+            background: #ccfbf1;
         }
-        .admin-members-table td {
-            padding: 0.7rem 0;
-            border-top: 1px solid rgba(15, 23, 42, 0.08);
-            vertical-align: middle;
-            color: #101828;
+        .admin-role-badge.role-editor {
+            color: #1d4ed8;
+            background: #dbeafe;
+        }
+        .admin-role-badge.role-admin {
+            color: #7c2d12;
+            background: #ffedd5;
+        }
+        .admin-members-panel-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 0.9rem;
+        }
+        .admin-members-summary {
+            color: #475467;
             font-size: 0.92rem;
+            line-height: 1.45;
         }
-        .admin-members-table tr:first-child td {
-            border-top: 1px solid rgba(15, 23, 42, 0.08);
+        .admin-member-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2.1rem;
+            height: 2.1rem;
+            padding: 0 0.7rem;
+            border-radius: 999px;
+            background: #e0f2fe;
+            color: #075985;
+            font-weight: 800;
+        }
+        .admin-members-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.7rem;
+        }
+        .admin-member-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1.5fr) auto auto;
+            gap: 0.8rem;
+            align-items: center;
+            padding: 0.9rem 1rem;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+        }
+        .admin-member-identity {
+            min-width: 0;
+        }
+        .admin-member-name-line {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.18rem;
+        }
+        .admin-member-name {
+            font-size: 0.98rem;
+            font-weight: 800;
+            color: #101828;
+        }
+        .admin-member-email {
+            color: #667085;
+            font-size: 0.9rem;
+            overflow-wrap: anywhere;
+        }
+        .admin-member-flags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            justify-content: flex-end;
+        }
+        .admin-flag {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.32rem 0.62rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        .admin-flag.is-owner {
+            background: #ede9fe;
+            color: #5b21b6;
+        }
+        .admin-flag.is-yes {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .admin-flag.is-no {
+            background: #f3f4f6;
+            color: #475467;
+        }
+        @media (max-width: 980px) {
+            .admin-member-row {
+                grid-template-columns: 1fr;
+                align-items: flex-start;
+            }
+            .admin-member-flags {
+                justify-content: flex-start;
+            }
         }
         .admin-muted {
             color: #667085;
@@ -410,6 +521,49 @@ def _render_project_status_card(state_label: str) -> None:
     )
 
 
+def _project_role_badge_html(role: str | None) -> str:
+    normalized = str(role or "").upper()
+    role_class = {
+        "VIEWER": "role-viewer",
+        "EDITOR": "role-editor",
+        "PROJECT_ADMIN": "role-admin",
+    }.get(normalized, "role-viewer")
+    label = _project_role_label(normalized)
+    return f'<span class="admin-role-badge {role_class}">{label}</span>'
+
+
+def _render_project_status_card(state_label: str) -> None:
+    state_class = "is-closed" if str(state_label).lower() == "closed" else "is-open"
+    icon = "•" if state_class == "is-open" else "■"
+    st.markdown(
+        f"""
+        <div class="admin-signal-card">
+          <div class="admin-signal-label">Project state</div>
+          <div class="admin-signal-badge {state_class}">
+            <span>{icon}</span>
+            <span>{state_label}</span>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_project_status_card(state_label: str) -> None:
+    state_class = "is-closed" if str(state_label).lower() == "closed" else "is-open"
+    st.markdown(
+        f"""
+        <div class="admin-signal-card">
+          <div class="admin-signal-label">Project state</div>
+          <div class="admin-signal-badge {state_class}">
+            <span>{escape(str(state_label))}</span>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_completion_card(progress_pct: float) -> None:
     bounded = max(0.0, min(progress_pct, 100.0))
     st.markdown(
@@ -432,8 +586,9 @@ def _render_project_owner_card(owner_name: str, owner_email: str | None = None) 
         f"""
         <div class="admin-owner-card">
           <div class="admin-owner-eyebrow">Project owner</div>
-          <div class="admin-owner-name">{owner_name}</div>
-          <div class="admin-owner-sub">{subtitle}</div>
+          <div class="admin-owner-name">{escape(owner_name)}</div>
+          <div class="admin-owner-sub">{escape(subtitle)}</div>
+          <div class="admin-owner-note">Protected membership</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -449,37 +604,43 @@ def _render_members_table(members_df: pd.DataFrame) -> None:
     display_df = members_df.sort_values(["is_owner", "name"], ascending=[False, True]).copy()
     for _, row in display_df.iterrows():
         role_html = _project_role_badge_html(row.get("project_role"))
-        can_edit = "Yes" if bool(row.get("can_edit")) else "No"
+        name = escape(str(row.get("name") or "-"))
+        email = escape(str(row.get("email") or "-"))
+        owner_flag = '<span class="admin-flag is-owner">Owner</span>' if bool(row.get("is_owner")) else ""
+        can_edit_flag = (
+            '<span class="admin-flag is-yes">Can edit</span>'
+            if bool(row.get("can_edit"))
+            else '<span class="admin-flag is-no">Read only</span>'
+        )
         rows.append(
-            f"""
-            <tr>
-              <td>{row.get("name") or "-"}</td>
-              <td class="admin-muted">{row.get("email") or "-"}</td>
-              <td>{role_html}</td>
-              <td>{can_edit}</td>
-            </tr>
-            """
+            (
+                f'<div class="admin-member-row">'
+                f'<div class="admin-member-identity">'
+                f'<div class="admin-member-name-line">'
+                f'<div class="admin-member-name">{name}</div>'
+                f"{owner_flag}"
+                f"</div>"
+                f'<div class="admin-member-email">{email}</div>'
+                f"</div>"
+                f"<div>{role_html}</div>"
+                f'<div class="admin-member-flags">{can_edit_flag}</div>'
+                f"</div>"
+            )
         )
 
     st.markdown(
-        f"""
-        <div class="admin-panel">
-          <div class="admin-signal-label">Current members</div>
-          <table class="admin-members-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Project role</th>
-                <th>Can edit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {''.join(rows)}
-            </tbody>
-          </table>
-        </div>
-        """,
+        (
+            f'<div class="admin-panel">'
+            f'<div class="admin-members-panel-head">'
+            f"<div>"
+            f'<div class="admin-signal-label">Current members</div>'
+            f'<div class="admin-members-summary">Protected owners stay pinned at the top so access changes are easier to scan.</div>'
+            f"</div>"
+            f'<div class="admin-member-count">{len(display_df)}</div>'
+            f"</div>"
+            f'<div class="admin-members-list">{"".join(rows)}</div>'
+            f"</div>"
+        ),
         unsafe_allow_html=True,
     )
 
@@ -851,20 +1012,19 @@ def _render_project_membership_editor(
 
     members_df = _members_dataframe(members_payload.get("items", []), owner_user_id)
 
-    summary_left, summary_right, summary_third, summary_fourth = st.columns(4)
+    owner_name = project_row.get("created_by_name") or "Unknown"
+    owner_record = members_df[members_df["is_owner"]].copy() if not members_df.empty else pd.DataFrame()
+    owner_email = owner_record.iloc[0].get("email") if not owner_record.empty else None
+
+    summary_left, summary_middle, summary_right = st.columns([1.3, 0.9, 1])
     with summary_left:
+        _render_project_owner_card(owner_name, owner_email)
+    with summary_middle:
         _render_project_status_card(project_row.get("state_label", "Open"))
     with summary_right:
-        st.metric("Members", int(project_row.get("members_count", 0)))
-    with summary_third:
-        st.metric("Tasks", int(project_row.get("task_count", 0)))
-    with summary_fourth:
         _render_completion_card(float(project_row.get("progress_pct", 0.0)))
 
-    owner_name = project_row.get("created_by_name") or "Unknown"
-    _render_spacer()
-    _render_project_owner_card(owner_name)
-
+    st.space("small")
     members_col, edit_col, add_col = st.columns([1.25, 1, 1])
 
     with members_col:
