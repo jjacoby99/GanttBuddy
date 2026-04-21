@@ -18,6 +18,9 @@ def render_login():
         with st.container(width="content"):
             st.subheader("Sign in")
             st.caption("Use your organization identity provider to continue.")
+            login_message = st.session_state.pop("login_message", None)
+            if login_message:
+                st.info(login_message)
 
             with st.container(horizontal_alignment="center", vertical_alignment="center"):
                 render_oidc_login_button()

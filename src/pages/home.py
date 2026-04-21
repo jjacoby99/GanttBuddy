@@ -10,6 +10,7 @@ from models.project import ProjectType
 import streamlit as st
 
 from models.plan_state import PlanState
+from logic.backend.guards import require_login
 
 # -----------------------------
 # Placeholder models / data
@@ -116,6 +117,8 @@ def main() -> None:
     user_tz = ZoneInfo(st.context.timezone)
 
     st.set_page_config(page_title="GanttBuddy • Home", layout="wide")
+
+    require_login()
 
     # Placeholder data (replace with backend calls)
     headers = st.session_state.get("auth_headers", {})
