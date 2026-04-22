@@ -22,10 +22,12 @@ from logic.backend.api_client import (
     update_organization_user_role,
     upsert_project_member,
 )
+from logic.backend.project_members import get_project_members
 from logic.backend.guards import require_admin
 from logic.backend.users import get_user
 from logic.backend.utils.parse_datetime import parse_backend_utc
 from models.organization import OrganizationMembership
+from models.project_member import ProjectMember
 from models.user import User
 from ui.todo_overview import todo_panel_css
 from ui.utils.admin_display import (
@@ -882,21 +884,20 @@ def _render_projects_rollup(filtered: pd.DataFrame) -> None:
     st.dataframe(project_view, width="stretch", hide_index=True)
 
 
-def _members_dataframe(items: list[dict[str, Any]], owner_user_id: str | None) -> pd.DataFrame:
+def _members_dataframe(items: list[ProjectMember], owner_user_id: str | None) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for item in items or []:
-        permissions = item.get("permissions", {}) or {}
-        user_id = str(item.get("user_id"))
+        user_id = str(item.user_id)
         rows.append(
             {
                 "user_id": user_id,
-                "name": item.get("name"),
-                "email": item.get("email"),
-                "organization_role": item.get("organization_role"),
-                "project_role": item.get("role"),
-                "added_at": item.get("created_at"),
-                "can_edit": bool(permissions.get("can_edit")),
-                "can_manage_members": bool(permissions.get("can_manage_members")),
+                "name": item.name,
+                "email": item.email,
+                "organization_role": item.organization_role,
+                "project_role": item.role,
+                "added_at": item.created_at,
+                "can_edit": bool(item.permissions.can_edit),
+                "can_manage_members": bool(item.permissions.can_manage_members),
                 "is_owner": user_id == str(owner_user_id),
             }
         )
@@ -930,12 +931,12 @@ def _render_project_membership_editor(
     owner_user_id = str(project_row.get("created_by_user_id") or "")
 
     try:
-        members_payload = fetch_project_members(headers=scoped_headers, project_id=project_id)
+        members_payload = get_project_members(headers=scoped_headers, project_id=project_id)
     except Exception as exc:
         st.error(f"Unable to load project members: {exc}")
         return
 
-    members_df = _members_dataframe(members_payload.get("items", []), owner_user_id)
+    members_df = _members_dataframe(members_payload.items, owner_user_id)
 
     owner_name = project_row.get("created_by_name") or "Unknown"
     owner_record = members_df[members_df["is_owner"]].copy() if not members_df.empty else pd.DataFrame()
