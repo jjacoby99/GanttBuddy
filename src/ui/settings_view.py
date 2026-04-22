@@ -1,11 +1,15 @@
 import streamlit as st
 from models.project_settings import ProjectSettings
 from models.session import SessionModel
+from logic.backend.project_permissions import project_is_read_only
 
 @st.dialog(f"Project Settings")
 def render_settings_view(session: SessionModel):
     if not session.project:
         st.warning("No project loaded.")
+        return
+    if project_is_read_only():
+        st.info("This project is read-only, so settings can only be viewed right now.")
         return
     
     settings = session.project.settings
@@ -72,7 +76,7 @@ def render_settings_view(session: SessionModel):
         help="Choose whether task durations are measured in hours or days."
     )
 
-    submitted = st.button("Save Settings")
+    submitted = st.button("Save Settings", disabled=project_is_read_only())
     if submitted:
         settings.work_all_day = work_all_day
         settings.work_start_time = work_start

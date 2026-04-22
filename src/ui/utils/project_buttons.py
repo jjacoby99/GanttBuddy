@@ -6,6 +6,7 @@ import datetime as dt
 from models.project import Project
 from models.project_type import ProjectType
 from models.plan_state import PlanState
+from logic.backend.project_permissions import project_is_read_only
 
 
 from ui.add_phase import render_add_phase
@@ -17,12 +18,13 @@ from ui.project_metadata import render_reline_metadata_form
 
 def render_add_buttons(session):
     plan_state = st.session_state.get("plan_state", None)
+    read_only = project_is_read_only()
 
     with st.container(horizontal=True):
         if st.button(":material/add_circle: Task", 
                      key="add_task", 
                      help=f"Add a task to {session.project.name}",
-                     disabled= False if session.project.phases else True,
+                     disabled=read_only or not session.project.phases,
                      type="primary",
                      ):
             render_task_add(session)
@@ -32,7 +34,8 @@ def render_add_buttons(session):
         if st.button(":material/add_circle: Phase", 
                      key="add_phase", 
                      help=f"Add a phase to {session.project.name}",
-                     type="primary"
+                     type="primary",
+                     disabled=read_only,
                      ):
             render_add_phase(session, plan_state=plan_state)
             st.session_state.ui.show_add_phase = False
@@ -41,6 +44,7 @@ def render_add_buttons(session):
 def render_project_buttons(session):
     if session.project is None:
         return
+    read_only = project_is_read_only()
     
     st.divider()
     st.subheader("Build")
@@ -55,7 +59,8 @@ def render_project_buttons(session):
             edit_reline_info = st.button(
                 label=":material/tune: Reline Info", 
                 help="Specify reline information", 
-                key="edit_reline_metadata"
+                key="edit_reline_metadata",
+                disabled=read_only,
             )
             
             if edit_reline_info:

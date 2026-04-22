@@ -6,9 +6,13 @@ from models.phase import Phase
 from models.task import Task
 
 from models.project_type import ProjectType
+from logic.backend.project_permissions import project_is_read_only
 
 @st.dialog("Edit Project")
 def render_edit_project(session: SessionModel):
+    if project_is_read_only():
+        st.info("This project is read-only, so project details cannot be changed right now.")
+        return
 
     project = session.project
 
@@ -22,7 +26,7 @@ def render_edit_project(session: SessionModel):
         format_func=lambda s: s.name.replace("_"," ").capitalize()
     )
 
-    if st.button("Save Changes"):
+    if st.button("Save Changes", disabled=project_is_read_only()):
         project.name = new_name
         project.description = description
         project.project_type = type

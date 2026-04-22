@@ -5,12 +5,17 @@ from models.task import Task
 from models.phase import Phase
 from models.session import SessionModel
 from models.constraint import Constraint, earliest_start_from_constraint
+from logic.backend.project_permissions import project_is_read_only
 from ui.utils.constraints import build_constraint_target_labels, render_constraints_editor
 from ui.utils.timezones import from_datetime_input_value, to_datetime_input_value
 import time
 
 @st.dialog("Add a new task")
 def render_task_add(session: SessionModel, phase: Phase = None):
+    if project_is_read_only():
+        st.info("This project is read-only, so tasks cannot be added.")
+        return
+
     proj = session.project if session.project else None
     if not proj:
         return
@@ -202,7 +207,7 @@ def render_task_add(session: SessionModel, phase: Phase = None):
         key=f"task_note_input"
     )
 
-    if st.button(label=f"Add", disabled=not task_name, type='primary'):
+    if st.button(label=f"Add", disabled=project_is_read_only() or not task_name, type='primary'):
         new_task = Task(
             name=task_name, 
             start_date=planned_start_dt if task_type else actual_start_dt, # may need to be null, but will cause problems 

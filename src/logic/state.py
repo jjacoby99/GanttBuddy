@@ -3,6 +3,7 @@ from models.session import SessionModel
 from models.ui_state import UIState
 from models.gantt_state import GanttState
 from models.plan_state import PlanState
+from models.project_access import ProjectAccess
 def initialize_session_state():
     if "access_token" not in st.session_state:
         st.session_state["access_token"] = None
@@ -22,6 +23,8 @@ def initialize_session_state():
         st.session_state.gantt_state = GanttState()
     if "plan_state" not in st.session_state:
         st.session_state.plan_state = PlanState()
+    if "project_access" not in st.session_state:
+        st.session_state["project_access"] = ProjectAccess()
 
 
 def state_initialized() -> bool:

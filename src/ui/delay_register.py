@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from logic.backend.delays import get_delays
 from logic.backend.api_client import save_delays
+from logic.backend.project_permissions import project_is_read_only
 from models.delay import DelayType, DelayEditorRow, DELAY_BADGE
 from models.project import Project
 
@@ -102,6 +103,8 @@ def write_delay_info(delay: DelayEditorRow, project: Project):
 
 
 def render_pending_confirmations(*, project_id: str | UUID, timezone: ZoneInfo) -> None:
+    if project_is_read_only():
+        return
     pending = st.session_state.get(PENDING_KEY)
     if not pending:
         return
@@ -137,6 +140,7 @@ def render_pending_confirmations(*, project_id: str | UUID, timezone: ZoneInfo) 
         st.rerun()
 
 def render_delay_register():
+    read_only = project_is_read_only()
     
     with st.container(horizontal=True):
         st.subheader("Delay Register")
@@ -164,6 +168,8 @@ def render_delay_register():
 
     # You can put this above or below the form. If you hate it at the top, move it below.
     render_pending_confirmations(project_id=project_id, timezone=timezone)
+    if read_only:
+        st.info("This project is read-only, so delay updates are disabled.")
 
     rows_last_saved: list[DelayEditorRow] = st.session_state[BASE_ROWS_KEY]
     df_source = st.session_state[SOURCE_DF_KEY]
@@ -183,7 +189,7 @@ def render_delay_register():
             key=_editor_key(),
             hide_index=True,
             width="content",
-            disabled=pending,
+            disabled=read_only or pending,
             column_order=["description", "delay_type", "duration_minutes", "start_dt", "end_dt", "_select"],
             column_config={
                 "description": st.column_config.TextColumn(
@@ -252,7 +258,7 @@ def render_delay_register():
             label=":material/sync: Update Delays",
             help="Sync delays for the project.",
             type="primary",
-            disabled=pending,
+            disabled=read_only or pending,
         )
 
     if diff["removed"] and update:

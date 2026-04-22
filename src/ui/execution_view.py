@@ -6,6 +6,7 @@ from models.project import Project
 from models.phase import Phase
 from models.task import Task
 
+from logic.backend.project_permissions import project_is_read_only
 from ui.utils.phase_controls import prev_execution_phase, next_execution_phase
 
 def get_current_execution_task_index(project: Project) -> tuple[int, int]:
@@ -100,6 +101,9 @@ def _render_timestamp_input(task: Task) -> ManualInputState:
 def render_execution_view(session: SessionModel):
     st.subheader("Execution View")
     st.caption("Fill in progress as your project progresses.")
+    if project_is_read_only():
+        st.info("This project is read-only, so execution updates are disabled.")
+        return
     
     
     if not session.project.phases:
@@ -136,7 +140,7 @@ def render_execution_view(session: SessionModel):
             case "Timestamp":
                 state = _render_timestamp_input(task)
 
-        submitted = st.button(":material/event_available: Update Progress", type="primary")
+        submitted = st.button(":material/event_available: Update Progress", type="primary", disabled=project_is_read_only())
         if submitted:
             task.actual_start = state.actual_start
             task.actual_end = state.actual_end

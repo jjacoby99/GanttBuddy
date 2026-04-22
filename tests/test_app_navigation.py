@@ -33,4 +33,9 @@ def test_navigation_sections_add_admin_page_for_admin_users() -> None:
     sections = build_navigation_sections(is_admin=True)
 
     assert "Admin" in sections
-    assert [page.path for page in sections["Admin"]] == ["pages/admin.py"]
+    assert [page.path for page in sections["Admin"]] == [
+        "pages/admin.py",
+        "pages/admin_projects.py",
+        "pages/admin_users.py",
+    ]
+    assert [page.title for page in sections["Admin"]] == ["Overview", "Projects", "Users"]

@@ -1,9 +1,11 @@
 import streamlit as st
+from zoneinfo import ZoneInfo
 
 from logic.backend.guards import require_login
 from logic.backend.project_list import get_projects
 from logic.backend.api_client import fetch_project_snapshot
 from logic.backend.import_project import snapshot_to_project
+from logic.backend.project_permissions import resolve_project_access, store_project_access
 
 from models.session import SessionModel
 from models.project import Project, ProjectType
@@ -56,6 +58,14 @@ def render_select_project(projects: dict):
     
     project, metadata = snapshot_to_project(proj_snapshot)
     st.session_state.session.project = project
+    store_project_access(
+        resolve_project_access(
+            headers=st.session_state.auth_headers,
+            project_id=selected_project_id,
+            timezone=ZoneInfo(st.context.timezone),
+            project_record=projects[selected_project_id],
+        )
+    )
     if project.project_type == ProjectType.MILL_RELINE and metadata is not None:
         st.session_state["reline_metadata"] = metadata 
         

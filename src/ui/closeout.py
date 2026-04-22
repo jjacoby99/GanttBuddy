@@ -6,9 +6,14 @@ from models.project import Project
 from models.session import SessionModel
 
 from logic.backend.api_client import closeout_project, fetch_attention_tasks # to clear cache
+from logic.backend.project_permissions import project_is_read_only
 
 @st.dialog("Project Closeout")
 def render_closeout(session: SessionModel):
+    if project_is_read_only():
+        st.info("This project is read-only, so closeout is unavailable.")
+        return
+
     st.info(f":material/info: A project should only be closed when it has been completed.")
 
     total_tasks = session.project.total_tasks
@@ -46,7 +51,8 @@ def render_closeout(session: SessionModel):
     closeout = c1.button(
         label=":material/task_alt: Complete closeout",
         help="Mark project as closed. You can change this later.",
-        type="primary"
+        type="primary",
+        disabled=project_is_read_only(),
     )
 
     cancel = c3.button(

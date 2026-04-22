@@ -4,6 +4,7 @@ import pandas as pd
 from models.session import SessionModel
 
 from logic.constraint_inference import infer_missing_project_constraints
+from logic.backend.project_permissions import project_is_read_only
 from ui.tasks_view import render_tasks_table
 from ui.utils.project_info import render_project_info
 
@@ -36,6 +37,7 @@ def render_constraint_inference_controls(session: SessionModel) -> None:
             type="primary",
             width="stretch",
             key="infer_missing_constraints",
+            disabled=project_is_read_only(),
         ):
             report = infer_missing_project_constraints(session.project, apply=True)
             st.session_state["plan_constraint_inference_report"] = report

@@ -60,6 +60,7 @@ def reset_auth() -> None:
     st.session_state["auth_headers"] = None
     st.session_state["auth"] = {}
     st.session_state["backend_auth_ready"] = False
+    st.session_state["project_access"] = None
 
 
 def logout() -> None:
