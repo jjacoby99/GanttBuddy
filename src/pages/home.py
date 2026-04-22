@@ -200,7 +200,7 @@ def main() -> None:
                     st.switch_page("pages/plan.py")
         with c2:
             st.markdown("### 📄 Import")
-            st.caption("Bring in an Excel schedule and start working immediately.")
+            st.caption("Bring in a schedule from Excel.")
             if st.button(":material/upload_file: Import from Excel", width="stretch"):
                 go_to_excel_import()
 
