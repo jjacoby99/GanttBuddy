@@ -30,6 +30,7 @@ def _members_payload() -> dict:
                     "can_view": True,
                     "can_edit": True,
                     "can_manage_members": True,
+                    "can_delete": True,
                 },
             },
             {
@@ -46,6 +47,7 @@ def _members_payload() -> dict:
                     "can_view": True,
                     "can_edit": True,
                     "can_manage_members": True,
+                    "can_delete": True,
                 },
             },
         ],
@@ -62,6 +64,7 @@ def test_project_members_payload_promotes_nested_permissions() -> None:
     assert member.permissions.can_view is True
     assert member.permissions.can_edit is True
     assert member.permissions.can_manage_members is True
+    assert member.permissions.can_delete is True
 
 
 def test_resolve_project_access_uses_member_permissions_over_project_record(monkeypatch) -> None:
@@ -80,11 +83,12 @@ def test_resolve_project_access_uses_member_permissions_over_project_record(monk
         headers={"Authorization": "Bearer test"},
         project_id="d9e16863-fbb9-4000-8d05-71a5d576f076",
         timezone=ZoneInfo("America/Vancouver"),
-        project_record={"can_view": True, "can_edit": False, "can_manage_members": False},
+        project_record={"can_view": True, "can_edit": False, "can_manage_members": False, "can_delete": False},
     )
 
     assert access.source == "project_members"
     assert access.can_view is True
     assert access.can_edit is True
     assert access.can_manage_members is True
+    assert access.can_delete is True
     assert access.is_read_only is False

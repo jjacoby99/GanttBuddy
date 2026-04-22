@@ -9,6 +9,7 @@ class ProjectAccess:
     can_view: bool = True
     can_edit: bool = True
     can_manage_members: bool = False
+    can_delete: bool = False
     source: str | None = None
 
     @property

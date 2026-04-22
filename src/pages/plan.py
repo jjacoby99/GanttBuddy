@@ -4,6 +4,7 @@ from ui.plot import render_gantt, render_task_details
 from ui.dependency_graph import render_dependency_graph
 from ui.render_plan import render_plan
 from ui.closeout import render_closeout
+from ui.project_delete import render_project_delete_action
 
 from ui.utils.workspace import render_workspace_buttons
 from logic.backend.project_permissions import project_is_read_only
@@ -35,13 +36,19 @@ elif selected_view == "Dependencies":
     render_dependency_graph(st.session_state.session.project)
 
 
-if not st.session_state.session.project.closed:
-    close_button = st.button(
-        label=":material/task_alt: Closeout Project",
-        help="Initiate project closeout process. Closed projects no longer show up on feed & home pages.",
-        type="primary",
-        disabled=project_is_read_only(),
-    ) 
+st.divider()
+with st.container(horizontal=True):
+    st.space("stretch")
 
-    if close_button:
-        render_closeout(session=st.session_state.session)
+    if not st.session_state.session.project.closed:
+        close_button = st.button(
+            label=":material/task_alt: Closeout Project",
+            help="Initiate project closeout process. Closed projects no longer show up on feed & home pages.",
+            type="primary",
+            disabled=project_is_read_only(),
+        )
+
+        if close_button:
+            render_closeout(session=st.session_state.session)
+
+    render_project_delete_action(session=st.session_state.session)

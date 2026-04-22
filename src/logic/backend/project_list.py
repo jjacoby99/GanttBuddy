@@ -57,6 +57,7 @@ def get_projects(headers: dict, n_proj: int=-1, include_closed: bool = False) ->
             "can_view": proj.get("can_view"),
             "can_edit": proj.get("can_edit"),
             "can_manage_members": proj.get("can_manage_members"),
+            "can_delete": proj.get("can_delete"),
         }
     
     return to_return

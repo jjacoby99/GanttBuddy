@@ -12,6 +12,7 @@ class ProjectMemberPermissions(BaseModel):
     can_view: bool = True
     can_edit: bool = False
     can_manage_members: bool = False
+    can_delete: bool = False
 
 
 class ProjectMember(BaseModel):
@@ -41,6 +42,7 @@ class ProjectMember(BaseModel):
             "can_view": permissions.get("can_view", value.get("can_view", True)),
             "can_edit": permissions.get("can_edit", value.get("can_edit", False)),
             "can_manage_members": permissions.get("can_manage_members", value.get("can_manage_members", False)),
+            "can_delete": permissions.get("can_delete", value.get("can_delete", False)),
         }
         return normalized
 

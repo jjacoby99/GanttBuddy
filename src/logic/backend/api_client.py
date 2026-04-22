@@ -55,6 +55,12 @@ def fetch_project_members(*, headers: dict, project_id: str | UUID) -> Any:
     return _request_json(method="GET", url=url, headers=headers)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_project_delete_impact(*, headers: dict, project_id: str | UUID) -> Any:
+    url = f"{API_BASE}/projects/{project_id}/delete-impact"
+    return _request_json(method="GET", url=url, headers=headers)
+
+
 def upsert_project_member(
     *,
     headers: dict,
@@ -95,6 +101,35 @@ def delete_project_member(
             pass
         raise ValueError(f"Failed to delete project member: {e} {body}")
     fetch_project_members.clear()
+
+
+def delete_project(
+    *,
+    headers: dict,
+    project_id: str | UUID,
+    delete_todos: bool,
+) -> None:
+    url = f"{API_BASE}/projects/{project_id}"
+    response = requests.delete(
+        url,
+        headers=headers,
+        json={"delete_todos": delete_todos},
+        timeout=30,
+    )
+    try:
+        response.raise_for_status()
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to delete project: {e} {body}")
+
+    fetch_project_delete_impact.clear()
+    fetch_project_members.clear()
+    fetch_project_snapshot.clear()
+    fetch_projects.clear()
 
 def save_project(project: Project, headers) -> str:
     metadata = st.session_state.get("reline_metadata", None)

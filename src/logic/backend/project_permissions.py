@@ -27,7 +27,7 @@ def _access_from_project_record(project_id: str, project_record: dict[str, Any] 
     if not project_record:
         return None
 
-    has_any_flag = any(flag in project_record for flag in ("can_view", "can_edit", "can_manage_members"))
+    has_any_flag = any(flag in project_record for flag in ("can_view", "can_edit", "can_manage_members", "can_delete"))
     if not has_any_flag:
         return None
 
@@ -36,6 +36,7 @@ def _access_from_project_record(project_id: str, project_record: dict[str, Any] 
         can_view=_coerce_bool(project_record.get("can_view"), True),
         can_edit=_coerce_bool(project_record.get("can_edit"), False),
         can_manage_members=_coerce_bool(project_record.get("can_manage_members"), False),
+        can_delete=_coerce_bool(project_record.get("can_delete"), False),
         source="project_list",
     )
 
@@ -54,6 +55,7 @@ def _access_from_members_payload(
         can_view=_coerce_bool(member.permissions.can_view, True),
         can_edit=_coerce_bool(member.permissions.can_edit, False),
         can_manage_members=_coerce_bool(member.permissions.can_manage_members, False),
+        can_delete=_coerce_bool(member.permissions.can_delete, False),
         source="project_members",
     )
 
@@ -84,6 +86,7 @@ def resolve_project_access(
         can_view=True,
         can_edit=False,
         can_manage_members=False,
+        can_delete=False,
         source="deny_default",
     )
 
@@ -105,6 +108,11 @@ def current_project_access() -> ProjectAccess:
 def project_is_read_only() -> bool:
     project_id = st.session_state.get("selected_project_id")
     return bool(project_id and current_project_access().is_read_only)
+
+
+def project_can_delete() -> bool:
+    project_id = st.session_state.get("selected_project_id")
+    return bool(project_id and current_project_access().can_delete)
 
 
 def read_only_project_message() -> str:
