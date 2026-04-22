@@ -209,3 +209,18 @@ __marimo__/
 
 # macOS
 .DS_Store
+
+# user projects
+projects/
+
+#excel files
+*.csv
+tests/data/*
+
+secrets.toml
+
+client_secrets/
+*-streamlit-secrets.toml
+*-frontend-env-vars.yaml
+*-frontend-secrets.txt
+ps_vars.txt
