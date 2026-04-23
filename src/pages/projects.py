@@ -10,11 +10,11 @@ from logic.backend.project_permissions import resolve_project_access, store_proj
 from models.session import SessionModel
 from models.project import Project, ProjectType
 from models.plan_state import PlanState
+from ui.utils.page_header import render_registered_page_header
 
 
 
 def render_select_project(projects: dict):
-    st.subheader('Load a Project')
     with st.container(width="content", horizontal_alignment="center", vertical_alignment="center"):
         selected_project_id = st.selectbox(
             label="Project",
@@ -79,6 +79,10 @@ def render_select_project(projects: dict):
 def render_project_explorer():
     require_login()
     projects = get_projects(st.session_state.get("auth_headers", {}))
+    render_registered_page_header(
+        "projects",
+        chips=[f"{len(projects)} available project{'s' if len(projects) != 1 else ''}"],
+    )
     if len(projects) < 1:
         st.info(f":material/info: No accessible projects.")
 
