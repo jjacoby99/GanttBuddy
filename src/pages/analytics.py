@@ -16,6 +16,7 @@ from ui.utils.phase_delay_plot import generate_phase_delay_plot
 from ui.create_project import create_project
 from ui.load_project import render_load_project
 from logic.backend.utils.parse_datetime import parse_backend_utc
+from ui.utils.page_header import render_registered_page_header
 
 # -------------------------
 # Config
@@ -509,8 +510,11 @@ def fetch_dashboard(project_id: str, date_from: Optional[date], date_to: Optiona
 
 def main():
     _card_css()
-
-    st.title("Analytics")
+    project = st.session_state.session.project
+    render_registered_page_header(
+        "analytics",
+        chips=[project.name] if project is not None else ["Project required"],
+    )
     if st.session_state.session.project is None:
         st.info(f":material/info: load a project to view available analytics.")
 
