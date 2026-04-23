@@ -1,11 +1,13 @@
 import streamlit as st
 
 from logic.backend.login import render_oidc_login_button
+from ui.utils.page_header import render_registered_page_header
 
 from PIL import Image
 from pathlib import Path
 
 def render_login():
+    render_registered_page_header("login", chips=["Organization SSO"])
     with st.container(horizontal_alignment="center", vertical_alignment="center"):
         with st.container(horizontal=True):
             gb_path = Path(__file__).parent.parent.resolve() / "assets" / "ganttbuddy.png"
