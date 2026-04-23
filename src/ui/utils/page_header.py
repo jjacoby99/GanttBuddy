@@ -370,9 +370,6 @@ def _inject_page_header_css() -> None:
         }
 
         .gb-page-stats__label {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.45rem;
             margin: 0;
             color: var(--gb-stat-accent, #64748b);
             font-size: 0.78rem;
@@ -381,22 +378,25 @@ def _inject_page_header_css() -> None:
             text-transform: uppercase;
         }
 
-        .gb-page-stats__label::before {
-            content: "";
-            width: 0.58rem;
-            height: 0.58rem;
-            border-radius: 999px;
-            background: var(--gb-stat-dot, var(--gb-stat-accent, #64748b));
-            box-shadow: 0 0 0 0.22rem color-mix(in srgb, var(--gb-stat-dot, var(--gb-stat-accent, #64748b)) 18%, transparent);
-            flex-shrink: 0;
-        }
-
         .gb-page-stats__value {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
             margin: 0.35rem 0 0;
             color: var(--gb-stat-value, #0f172a);
             font-size: 1.5rem;
             line-height: 1;
             font-weight: 800;
+        }
+
+        .gb-page-stats__value::before {
+            content: "";
+            width: 0.62rem;
+            height: 0.62rem;
+            border-radius: 999px;
+            background: var(--gb-stat-dot, var(--gb-stat-accent, #64748b));
+            box-shadow: 0 0 0 0.24rem color-mix(in srgb, var(--gb-stat-dot, var(--gb-stat-accent, #64748b)) 18%, transparent);
+            flex-shrink: 0;
         }
 
         .gb-page-stats__sub {

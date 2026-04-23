@@ -257,37 +257,42 @@ def _render_filters(
     task_name_map: dict[str | None, str],
     project_options: dict[str, str | None],
     project_name_map: dict[str | None, str],
-) -> list[dict]:
-    with st.container(border=True):
-        st.caption("Filter the queue")
-        f1, f2, f3, f4 = st.columns([2.3, 1.1, 1.4, 2.2])
-        status_options = [status.value for status in TaskStatus]
-        status_filter = f1.pills(
+) -> tuple[list[dict], list[str]]:
+    status_options = [status.value for status in TaskStatus]
+    status_filter = status_options
+    priority_limit = 5
+    project_filter = "All projects"
+    search = ""
+    linkage_filter = "All"
+
+    with st.popover("Filters", icon=":material/tune:"):
+        status_filter = st.pills(
             "Status",
             options=status_options,
             selection_mode="multi",
             default=status_options,
             format_func=_status_text,
         )
-        priority_filter = f2.multiselect(
-            "Priority",
-            options=[0, 1, 2, 3, 4, 5],
-            default=[0, 1, 2, 3, 4, 5],
-            format_func=lambda value: f"{value} - {PRIORITY_STYLES[value][0]}",
+        priority_limit = st.slider(
+            "Priority threshold",
+            min_value=0,
+            max_value=5,
+            value=5,
+            format="%d",
+            help="Show todos with priority less than or equal to this value.",
         )
-        project_filter = f3.selectbox(
+        project_filter = st.selectbox(
             "Project",
             options=list(project_options.keys()),
             index=0,
         )
-        search = f4.text_input("Search", placeholder="Name, description, project, or linked task")
-        f5, _ = st.columns([1.1, 3.9])
-        linkage_filter = f5.segmented_control(
+        linkage_filter = st.segmented_control(
             "Linked Task",
             options=["All", "Linked", "Unlinked"],
             default="All",
             selection_mode="single",
         )
+        search = st.text_input("Search", placeholder="Name, description, project, or linked task")
 
     filtered = []
     needle = search.strip().lower()
@@ -295,7 +300,7 @@ def _render_filters(
     for row in rows:
         if row["status"] not in status_filter:
             continue
-        if row["priority"] not in priority_filter:
+        if int(row["priority"]) > int(priority_limit):
             continue
         if selected_project_id is not None and row.get("project_id") != selected_project_id:
             continue
@@ -317,7 +322,19 @@ def _render_filters(
             continue
         filtered.append(row)
 
-    return filtered
+    filter_summary: list[str] = []
+    if len(status_filter) != len(status_options):
+        filter_summary.append(f"{len(status_filter)} status selected")
+    if int(priority_limit) < 5:
+        filter_summary.append(f"Priority <= {priority_limit}")
+    if selected_project_id is not None:
+        filter_summary.append(project_filter)
+    if linkage_filter != "All":
+        filter_summary.append(linkage_filter)
+    if needle:
+        filter_summary.append(f"Search: {search.strip()}")
+
+    return filtered, filter_summary
 
 
 def _render_empty_state() -> None:
@@ -676,6 +693,24 @@ def render_todo_list() -> None:
             color: #0f172a !important;
             font-weight: 700 !important;
         }
+        .todo-toolbar__meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.55rem;
+            align-items: center;
+        }
+        .todo-toolbar__chip {
+            display: inline-flex;
+            align-items: center;
+            min-height: 32px;
+            padding: 0.38rem 0.7rem;
+            border-radius: 999px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: linear-gradient(145deg, rgba(255,255,255,0.96), rgba(248,250,252,0.94));
+            color: #475569;
+            font-size: 0.82rem;
+            line-height: 1;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -738,20 +773,25 @@ def render_todo_list() -> None:
             accent_soft="rgba(15, 118, 110, 0.12)",
         )
 
-    toolbar_left, toolbar_right = st.columns([1, 1])
-    if toolbar_left.button(":material/add_task: Add Todo", type="primary"):
+    toolbar_action, toolbar_filter, toolbar_meta = st.columns([1.1, 0.9, 3], vertical_alignment="center")
+    with toolbar_action:
+        add_todo = st.button(":material/add_task: Add Todo", type="primary", use_container_width=True)
+    with toolbar_filter:
+        filtered_rows, filter_summary = _render_filters(rows, task_name_map, project_options, project_name_map)
+    with toolbar_meta:
+        summary_markup = "".join(
+            f'<span class="todo-toolbar__chip">{item}</span>'
+            for item in (filter_summary or ["All todos"])
+        )
+        st.markdown(f'<div class="todo-toolbar__meta">{summary_markup}</div>', unsafe_allow_html=True)
+
+    if add_todo:
         new_row = _blank_todo(project.uuid if project is not None else None)
         rows.append(new_row)
         _set_rows(rows)
         st.session_state[EDITING_TODO_KEY] = new_row["_client_id"]
         st.rerun()
-    if toolbar_right.button(":material/refresh: Reload From API", use_container_width=True):
-        _load_todos()
-        st.rerun()
-    
-    with st.container():
-        filtered_rows = _render_filters(rows, task_name_map, project_options, project_name_map)
-    
+
     if not filtered_rows:
         _render_empty_state()
     else:

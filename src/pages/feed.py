@@ -165,6 +165,7 @@ def apply_filters(events: list[EventIn], filters: dict[str, Any]) -> list[EventI
     else:
         min_dt = datetime.min
 
+    min_dt = min_dt.replace(tzinfo=ZoneInfo(st.context.timezone))
     out: list[EventIn] = []
     for e in events:
         if e.ts < min_dt:
@@ -265,7 +266,7 @@ def render_event_card(e: EventIn, projects: dict, unread: bool = False):
             st.code(json.dumps(e.payload, indent=2, default=str), language="json")
 
 
-def render_activity_stream(projects: dict, events: list[EventIn], unread: bool = False):
+def render_activity_stream(projects: dict, events: list[EventIn], unread: bool = False, timezone: ZoneInfo = ZoneInfo("America/Vancouver")):
     if not events:
         st.info("No activity yet.")
         return
@@ -319,10 +320,10 @@ def render_project_pulse(projects: dict, events: list[EventIn]):
 
 def render_feed():
     _ensure_state()
-
+    tz = ZoneInfo(st.context.timezone)
     headers = st.session_state.get("auth_headers", {})
     projects = get_projects(headers=headers)
-    events = get_events(headers=headers, n_events=50)
+    events = get_events(headers=headers, n_events=50, timezone=tz)
     render_registered_page_header(
         "feed",
         chips=[
@@ -340,11 +341,11 @@ def render_feed():
         tab = st.tabs(["Activity", "Unread"])[0:2]
 
         with tab[0]:
-            render_activity_stream(projects, filtered)
+            render_activity_stream(projects, filtered, timezone=tz)
 
         with tab[1]:
             unread = [e for e in filtered if e.id not in st.session_state.feed_read_event_ids]
-            render_activity_stream(projects, unread, unread=True)
+            render_activity_stream(projects, unread, unread=True, timezone=tz)
 
     with right:
         render_project_pulse(projects, events)
