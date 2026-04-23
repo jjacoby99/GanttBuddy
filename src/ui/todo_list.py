@@ -50,6 +50,81 @@ PRIORITY_STYLES = {
     5: ("Backlog", "#94a3b8"),
 }
 
+PRIORITY_THRESHOLD_LABELS = {
+    0: "Critical",
+    1: "High",
+    2: "Pressing",
+    3: "Moderate",
+    4: "Low",
+    5: "All",
+}
+
+FILTER_CHIP_STYLES = {
+    "status": {
+        "accent": "#7c3aed",
+        "surface": "rgba(237, 233, 254, 0.88)",
+        "border": "rgba(139, 92, 246, 0.22)",
+    },
+    "priority": {
+        "accent": "#b45309",
+        "surface": "rgba(254, 243, 199, 0.88)",
+        "border": "rgba(245, 158, 11, 0.24)",
+    },
+    "project": {
+        "accent": "#1d4ed8",
+        "surface": "rgba(219, 234, 254, 0.86)",
+        "border": "rgba(59, 130, 246, 0.24)",
+    },
+    "linkage": {
+        "accent": "#0f766e",
+        "surface": "rgba(204, 251, 241, 0.9)",
+        "border": "rgba(20, 184, 166, 0.22)",
+    },
+    "search": {
+        "accent": "#be185d",
+        "surface": "rgba(252, 231, 243, 0.9)",
+        "border": "rgba(236, 72, 153, 0.22)",
+    },
+    "default": {
+        "accent": "#475569",
+        "surface": "rgba(248, 250, 252, 0.96)",
+        "border": "rgba(15, 23, 42, 0.08)",
+    },
+}
+
+PRIORITY_FILTER_CHIP_STYLES = {
+    0: {
+        "accent": "#b91c1c",
+        "surface": "rgba(254, 226, 226, 0.9)",
+        "border": "rgba(239, 68, 68, 0.24)",
+    },
+    1: {
+        "accent": "#c2410c",
+        "surface": "rgba(255, 237, 213, 0.92)",
+        "border": "rgba(249, 115, 22, 0.24)",
+    },
+    2: {
+        "accent": "#b45309",
+        "surface": "rgba(254, 243, 199, 0.9)",
+        "border": "rgba(245, 158, 11, 0.24)",
+    },
+    3: {
+        "accent": "#1d4ed8",
+        "surface": "rgba(219, 234, 254, 0.88)",
+        "border": "rgba(59, 130, 246, 0.24)",
+    },
+    4: {
+        "accent": "#0f766e",
+        "surface": "rgba(204, 251, 241, 0.9)",
+        "border": "rgba(20, 184, 166, 0.22)",
+    },
+    5: {
+        "accent": "#475569",
+        "surface": "rgba(248, 250, 252, 0.96)",
+        "border": "rgba(15, 23, 42, 0.08)",
+    },
+}
+
 
 def _default_timezone() -> ZoneInfo:
     try:
@@ -160,6 +235,16 @@ def _task_options(project) -> tuple[dict[str, str | None], dict[str | None, str]
 
 def _priority_badge(priority: int) -> str:
     return PRIORITY_STYLES[int(priority)][0]
+
+
+def _priority_threshold_text(value: int) -> str:
+    return PRIORITY_THRESHOLD_LABELS.get(int(value), "All")
+
+
+def _filter_chip_style(kind: str, *, priority_limit: int | None = None) -> dict[str, str]:
+    if kind == "priority" and priority_limit is not None:
+        return PRIORITY_FILTER_CHIP_STYLES.get(int(priority_limit), FILTER_CHIP_STYLES["priority"])
+    return FILTER_CHIP_STYLES.get(kind, FILTER_CHIP_STYLES["default"])
 
 
 def _status_metric_label(status: str) -> str:
@@ -281,6 +366,7 @@ def _render_filters(
             format="%d",
             help="Show todos with priority less than or equal to this value.",
         )
+        st.caption(f"Showing priorities up to: {_priority_threshold_text(priority_limit)}")
         project_filter = st.selectbox(
             "Project",
             options=list(project_options.keys()),
@@ -322,17 +408,22 @@ def _render_filters(
             continue
         filtered.append(row)
 
-    filter_summary: list[str] = []
+    filter_summary: list[dict[str, str | int]] = []
     if len(status_filter) != len(status_options):
-        filter_summary.append(f"{len(status_filter)} status selected")
-    if int(priority_limit) < 5:
-        filter_summary.append(f"Priority <= {priority_limit}")
+        filter_summary.append({"label": f"{len(status_filter)} status selected", "kind": "status"})
+    filter_summary.append(
+        {
+            "label": f"Priority: {_priority_threshold_text(priority_limit)}",
+            "kind": "priority",
+            "priority_limit": int(priority_limit),
+        }
+    )
     if selected_project_id is not None:
-        filter_summary.append(project_filter)
+        filter_summary.append({"label": project_filter, "kind": "project"})
     if linkage_filter != "All":
-        filter_summary.append(linkage_filter)
+        filter_summary.append({"label": linkage_filter, "kind": "linkage"})
     if needle:
-        filter_summary.append(f"Search: {search.strip()}")
+        filter_summary.append({"label": f"Search: {search.strip()}", "kind": "search"})
 
     return filtered, filter_summary
 
@@ -699,17 +790,27 @@ def render_todo_list() -> None:
             gap: 0.55rem;
             align-items: center;
         }
+        .todo-toolbar__label {
+            margin: 0 0 0.45rem;
+            color: #64748b;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
         .todo-toolbar__chip {
             display: inline-flex;
             align-items: center;
             min-height: 32px;
             padding: 0.38rem 0.7rem;
             border-radius: 999px;
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            background: linear-gradient(145deg, rgba(255,255,255,0.96), rgba(248,250,252,0.94));
-            color: #475569;
+            border: 1px solid var(--todo-chip-border, rgba(15, 23, 42, 0.08));
+            background: linear-gradient(145deg, var(--todo-chip-surface, rgba(255,255,255,0.96)), rgba(255,255,255,0.94));
+            color: var(--todo-chip-accent, #475569);
             font-size: 0.82rem;
+            font-weight: 700;
             line-height: 1;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
         }
         </style>
         """,
@@ -780,10 +881,34 @@ def render_todo_list() -> None:
         filtered_rows, filter_summary = _render_filters(rows, task_name_map, project_options, project_name_map)
     with toolbar_meta:
         summary_markup = "".join(
-            f'<span class="todo-toolbar__chip">{item}</span>'
-            for item in (filter_summary or ["All todos"])
+            (
+                lambda style, label: (
+                    f'<span class="todo-toolbar__chip" '
+                    f'style="--todo-chip-accent: {style["accent"]}; '
+                    f'--todo-chip-surface: {style["surface"]}; '
+                    f'--todo-chip-border: {style["border"]};">'
+                    f"{label}</span>"
+                )
+            )(
+                _filter_chip_style(
+                    str(item.get("kind", "default")),
+                    priority_limit=(
+                        int(item["priority_limit"])
+                        if item.get("priority_limit") is not None
+                        else None
+                    ),
+                ),
+                str(item.get("label", "")),
+            )
+            for item in (filter_summary or [{"label": "All todos", "kind": "default"}])
         )
-        st.markdown(f'<div class="todo-toolbar__meta">{summary_markup}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <p class="todo-toolbar__label">Applied Filters</p>
+            <div class="todo-toolbar__meta">{summary_markup}</div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     if add_todo:
         new_row = _blank_todo(project.uuid if project is not None else None)
