@@ -35,6 +35,7 @@ from ui.utils.admin_display import (
     project_role_label,
     render_project_status_card,
 )
+from ui.utils.page_header import render_registered_page_header
 
 ADMIN_ROLES = {"ORG_OWNER", "ORG_ADMIN"}
 ORG_ROLE_OPTIONS = ["MEMBER", "PROJECT_MANAGER", "ORG_ADMIN"]
@@ -785,15 +786,13 @@ def _render_activity_feed(items: list[dict[str, Any]], timezone: ZoneInfo) -> No
 
 
 def _render_section_header(org_name: str, eyebrow: str, title: str, copy: str) -> None:
-    st.markdown(
-        f"""
-        <div class="admin-shell">
-          <div class="admin-eyebrow">{eyebrow}</div>
-          <div class="admin-hero-title">{title}</div>
-          <div class="admin-hero-copy">{copy} Organization: {org_name}.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    preset_key = "admin_projects" if eyebrow == "Admin Projects" else "admin_users"
+    render_registered_page_header(
+        preset_key,
+        title=title,
+        description=copy,
+        chips=[org_name],
+        palette="navy",
     )
 
 
@@ -1418,18 +1417,18 @@ def render_admin_overview() -> None:
 
     hero_left, hero_right = st.columns([8.5, 1.5], vertical_alignment="top")
     with hero_left:
-        st.markdown(
-            f"""
-            <div class="admin-shell">
-              <div class="admin-eyebrow">Organization Admin Overview</div>
-              <div class="admin-hero-title">{organization.get("name", "Organization overview")}</div>
-              <div class="admin-hero-copy">
-                Monitor adoption, project momentum, and follow-up opportunities across the organization.
-                Snapshot captured {as_of}.
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        render_registered_page_header(
+            "admin_overview",
+            title=organization.get("name", "Organization overview"),
+            description=(
+                "Monitor adoption, project momentum, and follow-up opportunities across the organization. "
+                f"Snapshot captured {as_of}."
+            ),
+            chips=[
+                project_role_label(ctx.membership.role),
+                f"As of {as_of}",
+            ],
+            palette="navy",
         )
     with hero_right:
         _render_admin_overview_settings(org_options, ctx.organization_id)
