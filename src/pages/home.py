@@ -29,6 +29,7 @@ from logic.backend.import_project import snapshot_to_project
 from logic.backend.project_permissions import resolve_project_access, store_project_access
 from logic.backend.users import get_user
 from ui.todo_overview import inject_todo_panel_css, render_todo_overview_panel, todo_dataframe
+from ui.utils.page_header import render_page_aside, render_registered_page_header
 
 def open_project(project_id: str) -> None:
     st.session_state["selected_project_id"] = project_id
@@ -65,26 +66,6 @@ def go_to_projects_feed() -> None:
 
 
 
-# -----------------------------
-# Small UI helpers
-# -----------------------------
-def _badge(text: str) -> None:
-    st.markdown(
-        f"""
-        <span style="
-          display:inline-block;
-          padding: 0.15rem 0.55rem;
-          margin-right: 0.35rem;
-          border: 1px solid rgba(49,51,63,0.2);
-          border-radius: 999px;
-          font-size: 0.85rem;
-          background: rgba(49,51,63,0.04);
-        ">{text}</span>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def _severity_chip(sev: str) -> str:
     # Keep it simple and readable; you can theme later.
     return {
@@ -114,6 +95,18 @@ import datetime as dt
 # -----------------------------
 # Page
 # -----------------------------
+def _fmt_home_dt(value: dt.datetime | None) -> str:
+    if value is None:
+        return "Not available"
+    return value.strftime("%b %d, %Y at %I:%M %p")
+
+
+def _fmt_home_window(start: dt.datetime | None, end: dt.datetime | None) -> str:
+    if start is None or end is None:
+        return "No planned duration available"
+    return f"{start.strftime('%b %d, %I:%M %p')} to {end.strftime('%b %d, %I:%M %p')}"
+
+
 def main() -> None:
     user_tz = ZoneInfo(st.context.timezone)
 
@@ -136,55 +129,59 @@ def main() -> None:
     activity = get_events(headers, n_events=5)
     todos_payload = fetch_todos(headers=headers)
     kpis = count_activities(needs)
+    active_orgs = [membership for membership in user.organizations if membership.is_active]
+    primary_org = next(
+        (
+            membership.organization.name
+            for membership in active_orgs
+            if membership.organization is not None
+        ),
+        "BTA Consulting",
+    )
+    role_labels = [r.get("name", "") for r in user.roles if r.get("name")]
+    header_chips = [
+        primary_org,
+        f"Last login {_fmt_home_dt(user.last_login_at)}",
+        f"{len(needs)} attention item{'s' if len(needs) != 1 else ''}",
+        f"{len(todos_payload or [])} PM todo{'s' if len(todos_payload or []) != 1 else ''}",
+    ] + role_labels[:3]
 
-    # ---------- Header strip ----------
-    header = st.container(border=True)
-    with header:
-        left, right = st.columns([7, 3], vertical_alignment="center")
+    hero_col, aside_col = st.columns([1.95, 1.05], gap="medium", vertical_alignment="top")
+    with hero_col:
+        render_registered_page_header(
+            "home",
+            title=f"Welcome back, {user.name}",
+            description="Start from your current project signals, recent activity, and PM follow-ups.",
+            chips=header_chips,
+        )
 
-        with left:
-            last_login = user.last_login_at.strftime("%d/%m/%Y, %H:%M") if user.last_login_at else "N/A"
-            primary_org = next(
-                (
-                    membership.organization.name
-                    for membership in user.organizations
-                    if membership.is_active and membership.organization is not None
-                ),
-                "BTA Consulting",
+    with aside_col:
+        if last_proj:
+            last_project = last_proj[pid]
+            render_page_aside(
+                eyebrow="Pick up where you left off",
+                title=last_project.get("name", "Recent project"),
+                body="Jump back into the most recently updated project in your workspace.",
+                chips=[
+                    _fmt_home_window(last_project.get("planned_start"), last_project.get("planned_finish")),
+                    f"Last updated {_fmt_home_dt(last_project.get('updated'))}",
+                ],
+                accent="#0f766e",
+                accent_soft="rgba(15, 118, 110, 0.12)",
             )
-            
-            st.markdown(
-                f"## Welcome back, **{user.name}**",
+            if st.button("Open last project", width="stretch", type="primary"):
+                open_project(pid)
+        else:
+            render_page_aside(
+                eyebrow="Pick up where you left off",
+                title="No recent project yet",
+                body="Browse your projects or start a new one to make this shortcut useful.",
+                chips=["Browse projects", "Create from scratch"],
+                accent="#334155",
+                accent_soft="rgba(51, 65, 85, 0.12)",
             )
-            st.caption(primary_org)
-            st.caption(f"Last login: {last_login}")
-            role_row = st.container()
-            with role_row:
-                for r in user.roles:
-                    _badge(r.get("name", ""))
-
-        with right:
-            st.markdown("#### Pick Up Where You Left Off")
-            if last_proj:
-                ps = last_proj[pid].get("planned_start", None)
-                if ps is not None:
-                    ps = ps.strftime("%d/%m/%Y, %H:%M")
-                
-                pe = last_proj[pid].get("planned_finish", None)
-                if pe is not None:
-                    pe = pe.strftime("%d/%m/%Y, %H:%M")
-
-                st.caption(f"**{last_proj[pid].get('name', '')}**")
-                st.caption(f"**Planned Duration**: {ps} -> {pe}")
-                st.caption(f"**Last updated**: {last_proj[pid].get("updated").strftime("%d/%m/%Y, %H:%M")}")
-                if st.button("Open last project", width="stretch", type="primary"):
-                    open_project(pid)
-            else:
-                st.caption("No recent project found.")
-                if st.button("Browse", width="stretch"):
-                    render_load_project()
-
-    st.write("")
+            if st.button("Browse", width="stretch"):
+                render_load_project()
 
     # ---------- Quick actions ----------
     st.subheader("Quick actions")
