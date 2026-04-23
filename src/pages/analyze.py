@@ -3,6 +3,7 @@ import streamlit as st
 from ui.analyze_view import render_analysis
 from ui.delay_register import render_delay_register
 from ui.delay_breakdown import render_delay_breakdown_charts
+from ui.utils.page_header import render_registered_page_header
 from ui.utils.workspace import render_workspace_buttons
 
 import ui.utils.custom_tabs as ct
@@ -10,11 +11,14 @@ import ui.utils.custom_tabs as ct
 # if this tab is available, we know project has been loaded. No need to check.
 proj = st.session_state.session.project
 if proj is None:
-    st.header(f"Delay Register")
+    render_registered_page_header("analyze")
     st.info(":material/info: Load a project to view & edit delays.")
     st.stop()
 
-st.header(f"{st.session_state.session.project.name} - Delays")
+render_registered_page_header(
+    "analyze",
+    chips=[proj.name, f"{len(proj.phases)} phase{'s' if len(proj.phases) != 1 else ''}"],
+)
 
 delay_register, breakdown, delay_plot = st.tabs(
     [
