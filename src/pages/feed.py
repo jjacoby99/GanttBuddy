@@ -18,6 +18,7 @@ from logic.backend.project_list import get_projects
 
 from logic.backend.utils.parse_datetime import parse_backend_utc
 from logic.backend.events import get_events
+from ui.utils.page_header import render_registered_page_header
 
 
 EVENT_TYPE_LABELS = {
@@ -96,11 +97,6 @@ def is_timezone_aware(dt_object):
     return dt_object.tzinfo is not None and dt_object.tzinfo.utcoffset(dt_object) is not None
 
 
-
-
-def render_feed_header():
-    st.markdown("## Feed")
-    st.caption("Changes and activity across your projects. All timestamps are in project local time.")
 
 
 def render_filters(projects: dict, events: list[EventIn]) -> dict[str, Any]:
@@ -326,11 +322,15 @@ def render_feed():
 
     headers = st.session_state.get("auth_headers", {})
     projects = get_projects(headers=headers)
-    render_feed_header()
-
-    st.markdown("---")
-
     events = get_events(headers=headers, n_events=50)
+    render_registered_page_header(
+        "feed",
+        chips=[
+            f"{len(projects)} project{'s' if len(projects) != 1 else ''}",
+            f"{len(events)} recent event{'s' if len(events) != 1 else ''}",
+            "Project-local timestamps",
+        ],
+    )
     filters = render_filters(projects, events)
     filtered = apply_filters(events, filters)
 
