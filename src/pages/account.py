@@ -10,6 +10,7 @@ from logic.backend.guards import require_login
 from logic.backend.users import get_user
 from models.organization import OrganizationMembership
 from models.user import User
+from ui.utils.page_header import render_registered_page_header
 
 
 def _format_timestamp(value: dt.datetime | None) -> str:
@@ -552,41 +553,18 @@ def main() -> None:
 
     role_count = len(user.roles)
     org_count = len(active_memberships)
-    hero_chips = [f'<span class="account-chip">{_status_label(user.is_active)}</span>']
-
-    if role_count > 0:
-        hero_chips.append(
-            f'<span class="account-chip">{role_count} global role{"s" if role_count != 1 else ""}</span>'
-        )
-
-    if org_count > 1:
-        hero_chips.append(
-            f'<span class="account-chip">{org_count} organization{"s" if org_count != 1 else ""}</span>'
-        )
-
-    if org_count >= 1:
-        hero_chips.append(f'<span class="account-chip">{primary_org_name}</span>')
 
     st.markdown('<div class="account-shell">', unsafe_allow_html=True)
-    st.markdown(
-        dedent(
-            f"""
-            <section class="account-hero">
-                <p class="account-kicker">Account</p>
-                <div class="account-hero-grid">
-                    <div>
-                        <h1 class="account-title">{user.name}</h1>
-                        <p class="account-subtitle">
-                            Signed in as {user.email}.
-                        </p>
-                        <div class="account-chip-row">{"".join(hero_chips)}</div>
-                    </div>
-                    <div class="account-identity">{_initials(user.name)}</div>
-                </div>
-            </section>
-            """
-        ),
-        unsafe_allow_html=True,
+    render_registered_page_header(
+        "account",
+        title=user.name,
+        description=f"Signed in as {user.email}. Review account activity, global roles, and organization access from one place.",
+        chips=[
+            _status_label(user.is_active),
+            f"{role_count} global role{'s' if role_count != 1 else ''}" if role_count > 0 else "",
+            f"{org_count} organization{'s' if org_count != 1 else ''}" if org_count > 1 else "",
+            primary_org_name if org_count >= 1 else "",
+        ],
     )
 
     left_col, right_col = st.columns([1.05, 1.2], gap="large")
