@@ -10,9 +10,14 @@ import datetime as dt
 
 from ui.mill_reline import render_mill_reline_inputs
 from ui.crusher_rebuild import render_crusher_rebuild_inputs
+from ui.utils.page_header import render_registered_page_header
 
 
 def load_from_template():
+    render_registered_page_header(
+        "build",
+        chips=["Mill relines", "Crusher rebuilds"],
+    )
     template_options = [ProjectType.MILL_RELINE, ProjectType.CRUSHER_REBUILD]
     format_dict = {
         ProjectType.MILL_RELINE: "Mill Reline",
