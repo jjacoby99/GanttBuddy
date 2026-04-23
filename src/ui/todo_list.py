@@ -662,8 +662,6 @@ def render_todo_list() -> None:
     rows = _current_rows()
     editing_client_id = st.session_state.get(EDITING_TODO_KEY)
 
-    st.caption("Track actions across projects, filter the queue quickly, and keep PM follow-ups visible in one place.")
-
     st.markdown(
         """
         <style>
