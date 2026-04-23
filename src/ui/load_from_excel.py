@@ -3,6 +3,7 @@ from __future__ import annotations
 import streamlit as st
 
 from logic.load_project import ExcelProjectLoader, ExcelParameters, DataColumn
+from ui.utils.page_header import render_registered_page_header
 
 
 def default_excel_parameters(start_row: int = 8) -> ExcelParameters:
@@ -52,9 +53,9 @@ def _render_project_preview(analysis: dict) -> None:
 
 
 def render_excel_import_page() -> None:
-    st.title("Import from Excel")
-    st.caption(
-        "Review a workbook before import, adjust the start row, and optionally infer typed constraints from planned start and finish formulas."
+    render_registered_page_header(
+        "excel_import",
+        chips=["Workbook preview", "Constraint inference"],
     )
 
     st.session_state.setdefault("excel_import_start_row", 8)
