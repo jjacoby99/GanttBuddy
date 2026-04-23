@@ -1,10 +1,10 @@
 import streamlit as st
 
 from ui.add_crew import add_crew
+from ui.utils.page_header import render_registered_page_header
 
 def render_manage():
-    st.subheader("Manage your operation")
-    st.caption(f"Control your sites, crews, and projects")
+    render_registered_page_header("manage", chips=["Crews", "Sites", "Projects"])
 
     if st.button("Create A Crew"):
         add_crew()
