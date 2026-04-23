@@ -6,8 +6,12 @@ from ui.render_plan import render_plan
 from ui.closeout import render_closeout
 from ui.project_delete import render_project_delete_action
 
+from ui.utils.page_header import render_registered_page_header
 from ui.utils.workspace import render_workspace_buttons
 from logic.backend.project_permissions import project_is_read_only
+
+project = st.session_state.session.project
+render_registered_page_header("plan", chips=[project.name] if project is not None else [])
 
 render_workspace_buttons()
 
