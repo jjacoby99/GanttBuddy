@@ -333,6 +333,66 @@ def _inject_page_header_css() -> None:
             line-height: 1;
         }
 
+        .gb-page-stats {
+            position: relative;
+            overflow: hidden;
+            margin: 0 0 1.1rem;
+            padding: 1.2rem;
+            border-radius: 24px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background:
+                radial-gradient(circle at top right, var(--gb-stats-soft), transparent 30%),
+                linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 100%);
+            box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+        }
+
+        .gb-page-stats__eyebrow {
+            margin: 0 0 0.7rem;
+            color: var(--gb-stats-accent);
+            font-size: 0.76rem;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .gb-page-stats__grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+        }
+
+        .gb-page-stats__item {
+            padding: 0.9rem 0.95rem;
+            border-radius: 18px;
+            background: linear-gradient(145deg, var(--gb-stat-surface, rgba(255, 255, 255, 0.82)), rgba(255,255,255,0.92));
+            border: 1px solid var(--gb-stat-border, rgba(15, 23, 42, 0.07));
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
+        }
+
+        .gb-page-stats__label {
+            margin: 0;
+            color: var(--gb-stat-accent, #64748b);
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .gb-page-stats__value {
+            margin: 0.35rem 0 0;
+            color: var(--gb-stat-value, #0f172a);
+            font-size: 1.5rem;
+            line-height: 1;
+            font-weight: 800;
+        }
+
+        .gb-page-stats__sub {
+            margin: 0.45rem 0 0;
+            color: #64748b;
+            font-size: 0.82rem;
+            line-height: 1.35;
+        }
+
         @media (max-width: 900px) {
             .gb-page-hero {
                 padding: 1.55rem 1.25rem 1.4rem;
@@ -364,7 +424,14 @@ def render_page_header(
         for chip in (chips or [])
         if chip and chip.strip()
     )
-    chips_html = f"<div class='gb-page-hero__chips'>{chip_markup}</div>" if chip_markup else ""
+    content_parts = [
+        f'<p class="gb-page-hero__eyebrow">{escape(eyebrow)}</p>',
+        f'<h1 class="gb-page-hero__title">{escape(title)}</h1>',
+        f'<p class="gb-page-hero__description">{escape(description)}</p>',
+    ]
+    if chip_markup:
+        content_parts.append(f'<div class="gb-page-hero__chips">{chip_markup}</div>')
+    content_html = "".join(content_parts)
     st.markdown(
         f"""
         <section
@@ -380,12 +447,7 @@ def render_page_header(
                 --gb-muted: {theme.muted};
             "
         >
-            <div class="gb-page-hero__content">
-                <p class="gb-page-hero__eyebrow">{escape(eyebrow)}</p>
-                <h1 class="gb-page-hero__title">{escape(title)}</h1>
-                <p class="gb-page-hero__description">{escape(description)}</p>
-                {chips_html}
-            </div>
+            <div class="gb-page-hero__content">{content_html}</div>
         </section>
         """,
         unsafe_allow_html=True,
@@ -426,17 +488,55 @@ def render_page_aside(
         for chip in (chips or [])
         if chip and chip.strip()
     )
-    chips_html = f"<div class='gb-page-aside__chips'>{chip_markup}</div>" if chip_markup else ""
+    content_parts = [
+        f'<p class="gb-page-aside__eyebrow">{escape(eyebrow)}</p>',
+        f'<h2 class="gb-page-aside__title">{escape(title)}</h2>',
+        f'<p class="gb-page-aside__body">{escape(body)}</p>',
+    ]
+    if chip_markup:
+        content_parts.append(f'<div class="gb-page-aside__chips">{chip_markup}</div>')
+    content_html = "".join(content_parts)
     st.markdown(
         f"""
         <section
             class="gb-page-aside"
             style="--gb-aside-accent: {accent}; --gb-aside-soft: {accent_soft};"
+        >{content_html}</section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_page_stats_aside(
+    *,
+    eyebrow: str,
+    stats: list[dict[str, str]],
+    accent: str = "#0f766e",
+    accent_soft: str = "rgba(15, 118, 110, 0.12)",
+) -> None:
+    _inject_page_header_css()
+    items_html = "".join(
+        (
+            '<div class="gb-page-stats__item" '
+            f'style="--gb-stat-accent: {escape(item.get("accent", "#64748b"))}; '
+            f'--gb-stat-surface: {escape(item.get("surface", "rgba(255,255,255,0.82)"))}; '
+            f'--gb-stat-border: {escape(item.get("border", "rgba(15, 23, 42, 0.07)"))}; '
+            f'--gb-stat-value: {escape(item.get("value_color", "#0f172a"))};">'
+            f'<p class="gb-page-stats__label">{escape(item["label"])}</p>'
+            f'<p class="gb-page-stats__value">{escape(item["value"])}</p>'
+            f'<p class="gb-page-stats__sub">{escape(item.get("sub", ""))}</p>'
+            "</div>"
+        )
+        for item in stats
+    )
+    st.markdown(
+        f"""
+        <section
+            class="gb-page-stats"
+            style="--gb-stats-accent: {accent}; --gb-stats-soft: {accent_soft};"
         >
-            <p class="gb-page-aside__eyebrow">{escape(eyebrow)}</p>
-            <h2 class="gb-page-aside__title">{escape(title)}</h2>
-            <p class="gb-page-aside__body">{escape(body)}</p>
-            {chips_html}
+            <p class="gb-page-stats__eyebrow">{escape(eyebrow)}</p>
+            <div class="gb-page-stats__grid">{items_html}</div>
         </section>
         """,
         unsafe_allow_html=True,

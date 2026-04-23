@@ -12,6 +12,7 @@ from logic.backend.todo import get_todos, remove_todo, upsert_todos
 from logic.backend.project_list import get_projects
 from models.task import TaskStatus
 from models.todo import TodoUpsertRow, todo_to_record
+from ui.utils.page_header import render_page_stats_aside, render_registered_page_header
 
 
 BASE_TODOS_KEY = "todos_rows_last_saved"
@@ -360,7 +361,7 @@ def todos_created_in_last_t(rows: list[dict], last_t: dt.timedelta = dt.timedelt
             todos_created_in_last_t.append(row)
     return todos_created_in_last_t
 
-def _render_summary(rows: list[dict]) -> None:
+def todo_summary(rows: list[dict]) -> dict[str, int]:
     created = todos_created_in_last_t(rows, last_t=dt.timedelta(days=7))
     num_created_last_week = len(created)
     total = len(rows)
@@ -373,17 +374,14 @@ def _render_summary(rows: list[dict]) -> None:
 
     blocked = sum(1 for row in rows if row["status"] == TaskStatus.BLOCKED.value)
     high_priority = sum(1 for row in rows if int(row["priority"]) <= 1 and row["status"] != TaskStatus.COMPLETE.value)
-    
-    c1, c2 = st.columns(2)
-    c1.metric("Open Todos", total - completed, f"{num_created_last_week} created this week")
-    c1.space("medium")
-    c1.metric("Open High Priority", high_priority)
-    
-    
-    c2.metric("Completed", completed, f"{num_completed_last_week} this week")
-    c2.space("medium")
-    c2.metric("Blocked", blocked)
-    
+    return {
+        "open": total - completed,
+        "completed": completed,
+        "blocked": blocked,
+        "high_priority": high_priority,
+        "created_last_week": num_created_last_week,
+        "completed_last_week": num_completed_last_week,
+    }
 
 
 def _render_card(
@@ -661,6 +659,7 @@ def render_todo_list() -> None:
         task_options, task_name_map = ({"Unlinked": None}, {None: "Unlinked"})
     rows = _current_rows()
     editing_client_id = st.session_state.get(EDITING_TODO_KEY)
+    summary = todo_summary(rows)
 
     st.markdown(
         """
@@ -683,7 +682,61 @@ def render_todo_list() -> None:
     )
 
     render_pending_confirmation()
-    
+
+    header_col, stats_col = st.columns([1.9, 1.1], gap="medium", vertical_alignment="top")
+    with header_col:
+        render_registered_page_header(
+            "todos",
+            chips=[
+                f"{summary['open']} open",
+                f"{summary['high_priority']} high priority",
+                f"{summary['created_last_week']} created this week",
+            ],
+        )
+    with stats_col:
+        render_page_stats_aside(
+            eyebrow="Snapshot",
+            stats=[
+                {
+                    "label": "Open",
+                    "value": str(summary["open"]),
+                    "sub": f"This week",
+                    "accent": "#1d4ed8",
+                    "surface": "rgba(219, 234, 254, 0.72)",
+                    "border": "rgba(59, 130, 246, 0.24)",
+                    "value_color": "#1e3a8a",
+                },
+                {
+                    "label": "Completed",
+                    "value": str(summary["completed"]),
+                    "sub": f"Finished this week",
+                    "accent": "#15803d",
+                    "surface": "rgba(220, 252, 231, 0.72)",
+                    "border": "rgba(34, 197, 94, 0.24)",
+                    "value_color": "#166534",
+                },
+                {
+                    "label": "High Priority",
+                    "value": str(summary["high_priority"]),
+                    "sub": "Critical items still open",
+                    "accent": "#b45309",
+                    "surface": "rgba(254, 243, 199, 0.82)",
+                    "border": "rgba(245, 158, 11, 0.26)",
+                    "value_color": "#92400e",
+                },
+                {
+                    "label": "Blocked",
+                    "value": str(summary["blocked"]),
+                    "sub": "Items on hold",
+                    "accent": "#b91c1c",
+                    "surface": "rgba(254, 226, 226, 0.78)",
+                    "border": "rgba(239, 68, 68, 0.24)",
+                    "value_color": "#991b1b",
+                },
+            ],
+            accent="#0f766e",
+            accent_soft="rgba(15, 118, 110, 0.12)",
+        )
 
     toolbar_left, toolbar_right = st.columns([1, 1])
     if toolbar_left.button(":material/add_task: Add Todo", type="primary"):
@@ -696,11 +749,7 @@ def render_todo_list() -> None:
         _load_todos()
         st.rerun()
     
-    metrics_col, filter_col = st.columns([1,3])
-    with metrics_col:
-        _render_summary(rows)
-    
-    with filter_col:
+    with st.container():
         filtered_rows = _render_filters(rows, task_name_map, project_options, project_name_map)
     
     if not filtered_rows:
