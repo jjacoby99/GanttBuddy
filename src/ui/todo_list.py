@@ -873,13 +873,14 @@ def render_todo_list() -> None:
             accent="#0f766e",
             accent_soft="rgba(15, 118, 110, 0.12)",
         )
-
-    toolbar_action, toolbar_filter, toolbar_meta = st.columns([1.1, 0.9, 3], vertical_alignment="center")
-    with toolbar_action:
-        add_todo = st.button(":material/add_task: Add Todo", type="primary", use_container_width=True)
-    with toolbar_filter:
-        filtered_rows, filter_summary = _render_filters(rows, task_name_map, project_options, project_name_map)
-    with toolbar_meta:
+    
+    with st.container(horizontal=True):
+        with st.container():
+            add_todo = st.button(":material/add_task: Add Todo", type="primary", width="content")
+            filtered_rows, filter_summary = _render_filters(rows, task_name_map, project_options, project_name_map)
+        
+        st.space("stretch")
+        
         summary_markup = "".join(
             (
                 lambda style, label: (
@@ -951,8 +952,11 @@ def render_todo_list() -> None:
     }
     removed_rows = [row for row in baseline if row.get("id") in removed_ids]
 
+    st.write("")
+
     c1, c2 = st.columns([1.2, 3])
     save_disabled = not has_changes or bool(invalid_names)
+    
     if c1.button(":material/save: Save Todos", type="primary", disabled=save_disabled, use_container_width=True):
         if removed_rows:
             st.session_state[PENDING_TODOS_KEY] = {
