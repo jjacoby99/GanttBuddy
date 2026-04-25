@@ -204,7 +204,7 @@ def _status_chip_theme(status: str | None) -> dict[str, str] | None:
     return {"label": label, "accent": accent, "soft": soft}
 
 
-def _activity_summary(item: Any) -> str:
+def _activity_summary(item: EventIn) -> str:
     payload = item.payload if isinstance(item.payload, dict) else {}
 
     if item.event_type == "PROJECT_UPDATED":
@@ -217,19 +217,85 @@ def _activity_summary(item: Any) -> str:
         return "Workspace created"
     if item.event_type == "PHASE_CREATED":
         position = payload.get("position")
-        name = str(payload.get("phase_name") or "New phase")
+        name = str(item.phase_name or "New phase")
         if isinstance(position, int):
             return f"Phase {position + 1}: {name}"
         return name
     if item.event_type == "TASK_CREATED":
-        return str(item.get("task_name") or "New task")
+        return str(item.task_name or "New task")
     if item.event_type == "TASK_UPDATED":
-        return str(item.get("task_name") or "Task updated")
+        return str(item.task_name or "Task updated")
     if item.event_type == "PROJECT_CLOSED":
         return "Project closeout completed"
 
     fallback = item.message.replace(":material/person:", "").replace("**", "").strip()
     return " ".join(fallback.split())
+
+
+def _activity_headline(item: EventIn) -> str:
+    project_name = item.project_name or "this project"
+    task_name = item.task_name or "a task"
+    phase_name = item.phase_name or "a phase"
+    user_name = item.user_name or "Someone"
+
+    if item.event_type == "PROJECT_CREATED":
+        return f"{user_name} created {project_name}"
+    if item.event_type == "PROJECT_UPDATED":
+        return f"{user_name} updated {project_name}"
+    if item.event_type =="PROJECT_METADATA_UPDATED":
+        return f"{user_name} updated project metadata for {project_name}"
+    if item.event_type == "PROJECT_SETTINGS_CREATED":
+        return f"{user_name} created settings for {project_name}"
+    if item.event_type == "PROJECT_SETTINGS_UPDATED":
+        return f"{user_name} changed settings for {project_name}"
+    if item.event_type == "PHASE_CREATED":
+        return f"{user_name} added phase: {phase_name}"
+    if item.event_type == "TASK_CREATED":
+        return f"{user_name} added task: {task_name}"
+    if item.event_type == "TASK_UPDATED":
+        return f"{user_name} updated task: {task_name}"
+    if item.event_type == "PROJECT_CLOSED":
+        return f"{user_name} closed {project_name}"
+
+    return f"{user_name} recorded activity in {project_name}"
+
+
+def _activity_context_items(item: EventIn) -> list[dict[str, str]]:
+    payload = item.payload if isinstance(item.payload, dict) else {}
+    context_items: list[dict[str, str]] = [
+        {
+            "label": "Project",
+            "value": item.project_name or "Unknown project",
+            "caption": "The schedule this work belongs to.",
+            "tone": "project",
+        }
+    ]
+
+
+    if item.phase_name and not item.is_task_event:
+        context_items.append(
+            {
+                "label": "Phase",
+                "value": item.phase_name,
+                "caption": "The phase this update sits inside.",
+                "tone": "default",
+            }
+        )
+
+    status_theme = _status_chip_theme(payload.get("status"))
+    if status_theme and item.is_task_event:
+        context_items.append(
+            {
+                "label": "Status",
+                "value": status_theme["label"],
+                "caption": "The task state after this activity.",
+                "tone": "status",
+                "accent": status_theme["accent"],
+                "soft": status_theme["soft"],
+            }
+        )
+
+    return context_items
 
 
 def _inject_recent_activity_css() -> None:
@@ -315,7 +381,7 @@ def _inject_recent_activity_css() -> None:
             grid-template-columns: auto 1fr auto;
             gap: 0.8rem;
             align-items: start;
-            padding: 0.88rem 0.92rem;
+            padding: 1rem;
             border-radius: 22px;
             background: rgba(255, 255, 255, 0.88);
             border: 1px solid rgba(148, 163, 184, 0.18);
@@ -344,7 +410,7 @@ def _inject_recent_activity_css() -> None:
         .gb-activity-main {
             min-width: 0;
             display: grid;
-            gap: 0.22rem;
+            gap: 0.65rem;
         }
 
         .gb-activity-meta {
@@ -352,7 +418,6 @@ def _inject_recent_activity_css() -> None:
             flex-wrap: wrap;
             align-items: center;
             gap: 0.45rem;
-            margin-bottom: 0.35rem;
         }
 
         .gb-activity-chip {
@@ -368,26 +433,90 @@ def _inject_recent_activity_css() -> None:
             line-height: 1;
         }
 
-        .gb-activity-chip--project {
-            background: rgba(15, 23, 42, 0.06);
+        .gb-activity-kicker {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+            color: #475569;
+            font-size: 0.76rem;
+            font-weight: 600;
+        }
+
+        .gb-activity-kicker strong {
             color: #0f172a;
         }
 
-        .gb-activity-chip--status {
-            background: var(--status-soft, rgba(71, 85, 105, 0.12));
-            color: var(--status-accent, #475569);
+        .gb-activity-headline {
+            margin: 0;
+            color: #0f172a;
+            font-size: 1rem;
+            line-height: 1.3;
+            font-weight: 700;
         }
 
         .gb-activity-message {
             margin: 0;
-            color: #0f172a;
-            font-size: 0.93rem;
-            line-height: 1.45;
-            font-weight: 600;
+            color: #475569;
+            font-size: 0.88rem;
+            line-height: 1.5;
         }
 
-        .gb-activity-message strong {
-            color: #020617;
+        .gb-activity-context {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.6rem;
+        }
+
+        .gb-activity-fact {
+            padding: 0.72rem 0.8rem;
+            border-radius: 16px;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: linear-gradient(180deg, rgba(248, 250, 252, 0.94), rgba(241, 245, 249, 0.82));
+        }
+
+        .gb-activity-fact--project {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.06), rgba(30, 41, 59, 0.02));
+        }
+
+        .gb-activity-fact--status {
+            background: linear-gradient(
+                135deg,
+                var(--status-soft, rgba(71, 85, 105, 0.12)),
+                rgba(255, 255, 255, 0.92)
+            );
+            border-color: color-mix(in srgb, var(--status-accent, #475569) 18%, white);
+        }
+
+        .gb-activity-fact__label {
+            display: block;
+            margin-bottom: 0.25rem;
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+
+        .gb-activity-fact__value {
+            display: block;
+            color: var(--status-accent, #0f172a);
+            font-size: 0.92rem;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+
+        .gb-activity-fact--project .gb-activity-fact__value,
+        .gb-activity-fact--default .gb-activity-fact__value {
+            color: #0f172a;
+        }
+
+        .gb-activity-fact__caption {
+            display: block;
+            margin-top: 0.3rem;
+            color: #64748b;
+            font-size: 0.76rem;
+            line-height: 1.4;
         }
 
         .gb-activity-side {
@@ -437,6 +566,10 @@ def _inject_recent_activity_css() -> None:
                 align-items: center;
             }
 
+            .gb-activity-context {
+                grid-template-columns: 1fr;
+            }
+
             .gb-activity-time {
                 text-align: left;
             }
@@ -475,30 +608,37 @@ def _render_recent_activity_feed(activity: list[EventIn]) -> None:
     for item in activity:
         visuals = _event_visuals(item.event_type)
         relative_time = _relative_activity_time(item.ts, now)
-        message = escape(item.message)
-        payload = item.payload if isinstance(item.payload, dict) else {}
-        status_theme = _status_chip_theme(payload.get("status"))
-        status_chip = ""
-        if status_theme and item.event_type in {"TASK_CREATED", "TASK_UPDATED"}:
-            status_chip = (
-                f"<span class=\"gb-activity-chip gb-activity-chip--status\" "
-                f"style=\"--status-accent:{status_theme['accent']}; --status-soft:{status_theme['soft']};\">"
-                f"{escape(status_theme['label'])}</span>"
+        headline = escape(_activity_headline(item))
+        context_markup_parts: list[str] = []
+        for context_item in _activity_context_items(item):
+            tone = context_item.get("tone", "default")
+            style = ""
+            if tone == "status":
+                style = (
+                    f' style="--status-accent:{context_item.get("accent", "#475569")};'
+                    f' --status-soft:{context_item.get("soft", "rgba(71, 85, 105, 0.12)")};"'
+                )
+            context_markup_parts.append(
+                f'<div class="gb-activity-fact gb-activity-fact--{escape(tone)}"{style}>'
+                f'<span class="gb-activity-fact__label">{escape(context_item["label"])}</span>'
+                f'<span class="gb-activity-fact__value">{escape(context_item["value"])}</span>'
+                f'</div>'
             )
+        context_markup = "".join(context_markup_parts)
 
         st.markdown(
             (
                 f'<div class="gb-activity-item" style="--activity-accent:{visuals["accent"]}; --activity-soft:{visuals["soft"]};">'
-                f'<div class="gb-activity-avatar">{escape(_activity_actor_initials(item.user_name))}</div>'
+                f'<div class="gb-activity-icon">{visuals["icon"]}</div>'
                 f'<div class="gb-activity-main">'
                 f'<div class="gb-activity-meta">'
                 f'<span class="gb-activity-chip">{escape(visuals["label"])}</span>'
-                f'{status_chip}'
-                f'<span class="gb-activity-chip gb-activity-chip--project">{escape(item.project_name)}</span>'
                 f'</div>'
-                f'<p class="gb-activity-message">{message}</p>'
+                f'<p class="gb-activity-headline">{headline}</p>'
+                f'<div class="gb-activity-context">{context_markup}</div>'
                 f'</div>'
-                f'<div class="gb-activity-side">'  
+                f'<div class="gb-activity-side">'
+                f'<div class="gb-activity-avatar">{escape(_activity_actor_initials(item.user_name))}</div>'
                 f'<div class="gb-activity-time">{escape(relative_time)}</div>'
                 f'</div>'
                 f'</div>'
