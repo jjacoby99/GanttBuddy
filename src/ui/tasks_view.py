@@ -107,7 +107,7 @@ def render_tasks_table(session, plan_ui_state: PlanState):
                             cols[columns.actual_finish].write(t.actual_end.strftime("%Y-%m-%d %H:%M") if not pd.isna(t.actual_end) else "")
 
                         if cols[columns.edit].button(
-                            "Edit",
+                            "",
                             icon=":material/edit:",
                             key=f"edit_{phase.name}_{t.name}_{i}",
                             disabled=read_only,
