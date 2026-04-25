@@ -13,7 +13,9 @@ class EventIn(BaseModel):
     ts: dt.datetime
     project_id: str
     phase_id: Optional[str]
+    phase_name: Optional[str]
     task_id: Optional[str]
+    task_name: Optional[str]
     user_id: str
     user_name: str
     event_type: str
@@ -22,7 +24,6 @@ class EventIn(BaseModel):
 
     def format_event_type(self) -> str:
         return " ".join([part.capitalize() for part in self.event_type.split("_")])
-    
 
     def _format_payload(self) -> str:
         """
@@ -30,31 +31,35 @@ class EventIn(BaseModel):
         """
         person_str = f":material/person: {self.user_name}"
         match self.event_type:
+            case "PROJECT_CREATED":
+                return f"Created project (saved safely)"
+            
             case "PROJECT_UPDATED":
-                return f"{person_str} updated **{len(self.payload["field_changes"])}** project fields."
+                return f"Updated {len(self.payload["field_changes"])} project fields."
             
             case "PROJECT_SETTINGS_UPDATED":
-                return f"{person_str} updated project settings."
+                return f"Updated project settings."
             
             case "PROJECT_CREATED":
-                return f"{person_str} created project (saved safely)"
+                return f"Created project (saved safely)"
             
             case "PHASE_CREATED":
-                return f"{person_str} created phase {self.payload["position"] + 1} - **{self.payload["name"]}**"
+                return f"Created {self.phase_name if self.phase_name else 'Unnamed phase'}"
+            
+            case "PHASE_UPDATED":
+                return f"Updated {self.phase_name if self.phase_name else 'Unnamed phase'}"
             
             case "TASK_CREATED":
-                name, icon, _ = STATUS_BADGES[self.payload.get("status", "NOT_STARTED")]
-                return f"{person_str} created task **{self.payload["name"]}**. Status: {icon} {name}"
+                return f"{self.task_name if self.task_name else 'Unnamed task'}"
             
             case "TASK_UPDATED":
-                name, icon, _ = STATUS_BADGES[self.payload.get("status", "NOT_STARTED")]
-                return f"{person_str} updated task **{self.payload.get("name", "")}**. Status: {icon} {name}"
+                return f"{self.task_name if self.task_name else 'Unnamed task'}"
 
             case "PROJECT_CLOSED":
-                return f"{person_str} completed project closeout"
+                return f"Completed project closeout"
             
             case _:
-                return f"{person_str} updated the project."
+                return f"Updated the project."
 
     @property
     def message(self) -> str:
