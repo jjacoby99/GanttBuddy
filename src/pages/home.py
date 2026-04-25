@@ -312,7 +312,7 @@ def _activity_context_items(item: EventIn) -> list[dict[str, str]]:
             }
         )
 
-    status_theme = _status_chip_theme(payload.get("status"))
+    status_theme = _status_chip_theme(item.get_task_status() if item.is_task_event else None)
     if status_theme and item.is_task_event:
         context_items.append(
             {
