@@ -211,15 +211,21 @@ def _status_chip_theme(status: str | None) -> dict[str, str] | None:
     if not status:
         return None
 
-    label, _icon, tone_name = STATUS_BADGES.get(status, ("Unknown", "", "gray"))
+    label, icon, tone_name = STATUS_BADGES.get(status, ("Unknown", "", "gray"))
     tone_map = {
         "gray": ("#475569", "rgba(71, 85, 105, 0.12)"),
         "blue": ("#2563eb", "rgba(37, 99, 235, 0.12)"),
         "green": ("#15803d", "rgba(21, 128, 61, 0.12)"),
         "red": ("#b91c1c", "rgba(185, 28, 28, 0.12)"),
     }
+    icon_map = {
+        ":material/schedule:": "&#9683;",
+        ":material/autorenew:": "&#8635;",
+        ":material/check_circle:": "&#10003;",
+        ":material/block:": "&#9940;",
+    }
     accent, soft = tone_map.get(tone_name, ("#475569", "rgba(71, 85, 105, 0.12)"))
-    return {"label": label, "accent": accent, "soft": soft}
+    return {"label": label, "icon": icon_map.get(icon, "•"), "accent": accent, "soft": soft}
 
 
 def _activity_summary(item: EventIn) -> str:
@@ -510,6 +516,9 @@ def _inject_recent_activity_css() -> None:
                 rgba(255, 255, 255, 0.92)
             );
             border-color: color-mix(in srgb, var(--status-accent, #475569) 18%, white);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.72),
+                0 10px 22px color-mix(in srgb, var(--status-accent, #475569) 10%, transparent);
         }
 
         .gb-activity-fact__label {
@@ -528,6 +537,31 @@ def _inject_recent_activity_css() -> None:
             font-size: 0.92rem;
             font-weight: 700;
             line-height: 1.3;
+        }
+
+        .gb-activity-fact__status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.35rem 0.62rem;
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--status-accent, #475569) 10%, white);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--status-accent, #475569) 12%, white);
+            width: fit-content;
+        }
+
+        .gb-activity-fact__status-icon {
+            display: inline-grid;
+            place-items: center;
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 999px;
+            background: var(--status-accent, #475569);
+            color: white;
+            font-size: 0.74rem;
+            line-height: 1;
+            font-weight: 900;
+            flex: 0 0 auto;
         }
 
         .gb-activity-fact--project .gb-activity-fact__value,
@@ -642,10 +676,18 @@ def _render_recent_activity_feed(activity: list[EventIn]) -> None:
                     f' style="--status-accent:{context_item.get("accent", "#475569")};'
                     f' --status-soft:{context_item.get("soft", "rgba(71, 85, 105, 0.12)")};"'
                 )
+            value_markup = (
+                f'<span class="gb-activity-fact__value gb-activity-fact__status-badge">'
+                f'<span class="gb-activity-fact__status-icon">{escape(context_item.get("icon", "*"))}</span>'
+                f'<span>{escape(context_item["value"])}</span>'
+                f'</span>'
+                if tone == "status"
+                else f'<span class="gb-activity-fact__value">{escape(context_item["value"])}</span>'
+            )
             context_markup_parts.append(
                 f'<div class="gb-activity-fact gb-activity-fact--{escape(tone)}"{style}>'
                 f'<span class="gb-activity-fact__label">{escape(context_item["label"])}</span>'
-                f'<span class="gb-activity-fact__value">{escape(context_item["value"])}</span>'
+                f'{value_markup}'
                 f'</div>'
             )
         context_markup = "".join(context_markup_parts)
@@ -853,3 +895,6 @@ def main() -> None:
 if __name__ == "__main__":
     main()
  
+
+
+
