@@ -225,7 +225,7 @@ def _status_chip_theme(status: str | None) -> dict[str, str] | None:
         ":material/block:": "&#9940;",
     }
     accent, soft = tone_map.get(tone_name, ("#475569", "rgba(71, 85, 105, 0.12)"))
-    return {"label": label, "icon": icon_map.get(icon, "•"), "accent": accent, "soft": soft}
+    return {"label": label, "icon": icon_map.get(icon, "&#8226;"), "accent": accent, "soft": soft}
 
 
 def _activity_summary(item: EventIn) -> str:
@@ -291,7 +291,6 @@ def _activity_headline(item: EventIn) -> str:
 
 
 def _activity_context_items(item: EventIn) -> list[dict[str, str]]:
-    payload = item.payload if isinstance(item.payload, dict) else {}
     context_items: list[dict[str, str]] = [
         {
             "label": "Project",
@@ -320,6 +319,7 @@ def _activity_context_items(item: EventIn) -> list[dict[str, str]]:
                 "value": status_theme["label"],
                 "caption": "The task state after this activity.",
                 "tone": "status",
+                "icon": status_theme["icon"],
                 "accent": status_theme["accent"],
                 "soft": status_theme["soft"],
             }
@@ -493,16 +493,21 @@ def _inject_recent_activity_css() -> None:
         }
 
         .gb-activity-context {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            display: flex;
+            flex-wrap: wrap;
             gap: 0.6rem;
+            align-items: flex-start;
         }
 
         .gb-activity-fact {
+            display: inline-grid;
+            grid-auto-rows: min-content;
             padding: 0.72rem 0.8rem;
             border-radius: 16px;
             border: 1px solid rgba(148, 163, 184, 0.18);
             background: linear-gradient(180deg, rgba(248, 250, 252, 0.94), rgba(241, 245, 249, 0.82));
+            width: fit-content;
+            max-width: min(100%, 22rem);
         }
 
         .gb-activity-fact--project {
@@ -625,6 +630,7 @@ def _inject_recent_activity_css() -> None:
             }
 
             .gb-activity-context {
+                display: grid;
                 grid-template-columns: 1fr;
             }
 
@@ -678,7 +684,7 @@ def _render_recent_activity_feed(activity: list[EventIn]) -> None:
                 )
             value_markup = (
                 f'<span class="gb-activity-fact__value gb-activity-fact__status-badge">'
-                f'<span class="gb-activity-fact__status-icon">{escape(context_item.get("icon", "*"))}</span>'
+                f'<span class="gb-activity-fact__status-icon">{context_item.get("icon", "&#8226;")}</span>'
                 f'<span>{escape(context_item["value"])}</span>'
                 f'</span>'
                 if tone == "status"
@@ -895,6 +901,3 @@ def main() -> None:
 if __name__ == "__main__":
     main()
  
-
-
-
