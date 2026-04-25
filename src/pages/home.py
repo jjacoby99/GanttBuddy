@@ -8,6 +8,7 @@ from html import escape
 from textwrap import dedent
 from typing import Any, Dict, List, Optional
 from models.project import ProjectType
+from models.event import EventIn
 
 import streamlit as st
 
@@ -216,14 +217,14 @@ def _activity_summary(item: Any) -> str:
         return "Workspace created"
     if item.event_type == "PHASE_CREATED":
         position = payload.get("position")
-        name = str(payload.get("name") or "New phase")
+        name = str(payload.get("phase_name") or "New phase")
         if isinstance(position, int):
             return f"Phase {position + 1}: {name}"
         return name
     if item.event_type == "TASK_CREATED":
-        return str(payload.get("name") or "New task")
+        return str(item.get("task_name") or "New task")
     if item.event_type == "TASK_UPDATED":
-        return str(payload.get("name") or "Task updated")
+        return str(item.get("task_name") or "Task updated")
     if item.event_type == "PROJECT_CLOSED":
         return "Project closeout completed"
 
@@ -446,7 +447,7 @@ def _inject_recent_activity_css() -> None:
     )
 
 
-def _render_recent_activity_feed(activity: list[Any]) -> None:
+def _render_recent_activity_feed(activity: list[EventIn]) -> None:
     now = dt.datetime.now(ZoneInfo(st.context.timezone))
     unique_projects = len({item.project_id for item in activity})
     active_people = len({item.user_id for item in activity})
@@ -458,7 +459,7 @@ def _render_recent_activity_feed(activity: list[Any]) -> None:
             f'<div>'
             f'<p class="gb-activity-feed__eyebrow">Recent Activity</p>'
             f'<h3 class="gb-activity-feed__title">Project pulse across the workspace</h3>'
-            f'<p class="gb-activity-feed__subtitle">New tasks, edits, and closeout moves surfaced with more context.</p>'
+            f'<p class="gb-activity-feed__subtitle">Keep up to date with your team\'s latest activity.</p>'
             f'</div>'
             f'<div class="gb-activity-feed__stats">'
             f'<span class="gb-activity-stat"><strong>{len(activity)}</strong> events</span>'
@@ -470,12 +471,11 @@ def _render_recent_activity_feed(activity: list[Any]) -> None:
         ),
         unsafe_allow_html=True,
     )
-
+    st.write("")
     for item in activity:
         visuals = _event_visuals(item.event_type)
         relative_time = _relative_activity_time(item.ts, now)
-        absolute_time = item.ts.strftime("%b %d, %I:%M %p")
-        message = escape(_activity_summary(item))
+        message = escape(item.message)
         payload = item.payload if isinstance(item.payload, dict) else {}
         status_theme = _status_chip_theme(payload.get("status"))
         status_chip = ""
@@ -489,7 +489,7 @@ def _render_recent_activity_feed(activity: list[Any]) -> None:
         st.markdown(
             (
                 f'<div class="gb-activity-item" style="--activity-accent:{visuals["accent"]}; --activity-soft:{visuals["soft"]};">'
-                f'<div class="gb-activity-icon">{visuals["icon"]}</div>'
+                f'<div class="gb-activity-avatar">{escape(_activity_actor_initials(item.user_name))}</div>'
                 f'<div class="gb-activity-main">'
                 f'<div class="gb-activity-meta">'
                 f'<span class="gb-activity-chip">{escape(visuals["label"])}</span>'
@@ -498,16 +498,17 @@ def _render_recent_activity_feed(activity: list[Any]) -> None:
                 f'</div>'
                 f'<p class="gb-activity-message">{message}</p>'
                 f'</div>'
-                f'<div class="gb-activity-side">'
-                f'<div class="gb-activity-avatar">{escape(_activity_actor_initials(item.user_name))}</div>'
-                f'<div class="gb-activity-time">{escape(relative_time)}<br>{escape(absolute_time)}</div>'
+                f'<div class="gb-activity-side">'  
+                f'<div class="gb-activity-time">{escape(relative_time)}</div>'
                 f'</div>'
                 f'</div>'
             ),
             unsafe_allow_html=True,
         )
+        st.write("")
 
     st.markdown("</div></div>", unsafe_allow_html=True)
+    
 
 
 def main() -> None:
@@ -673,17 +674,16 @@ def main() -> None:
         # Mini feed
         feed_box = st.container(border=True)
         with feed_box:
-            top = st.columns([7, 3], vertical_alignment="center")
-            with top[0]:
-                st.markdown("#### Recent activity")
-            with top[1]:
-                if st.button("View full feed", width="stretch"):
-                    go_to_projects_feed()
-
+            
             if not activity:
                 st.info("No recent activity yet.")
             else:
                 _render_recent_activity_feed(activity)
+
+            with st.container(horizontal=True):
+                st.space("stretch")
+                if st.button("View full feed", width="content", icon=":material/arrow_forward:"):
+                        go_to_projects_feed()
 
 
 if __name__ == "__main__":
