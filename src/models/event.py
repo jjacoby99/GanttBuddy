@@ -72,6 +72,23 @@ class EventIn(BaseModel):
     def is_task_event(self) -> bool:
         return self.event_type in ("TASK_CREATED", "TASK_UPDATED")
 
+    def get_task_status(self) -> Optional[str]:
+        if not self.is_task_event or not self.payload:
+            return None
+        
+        if self.event_type == "TASK_CREATED":
+            status = self.payload.get("status")
+
+            return status if status in STATUS_BADGES else None
+
+        if self.event_type == "TASK_UPDATED":
+            status_changes = self.payload.get("field_changes", {}).get("status", {})
+            
+            new_status = status_changes.get("to", None)
+            return new_status if new_status in STATUS_BADGES else None
+
+        return None
+
     @staticmethod
     def by_project(events: list[EventIn]) -> dict[str, list[EventIn]]:
         """
