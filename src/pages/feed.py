@@ -206,9 +206,9 @@ def group_by_day(events: list[EventIn]) -> dict[date, list[EventIn]]:
 
 def render_event_card(e: EventIn, projects: dict, unread: bool = False):
     is_read = e.id in st.session_state.feed_read_event_ids
-    label = EVENT_TYPE_LABELS.get(e.event_type.lower(), e.event_type)
+    label = e.format_event_type()
     icon = EVENT_TYPE_ICONS.get(e.event_type.lower(), ":material/notifications:")
-    project_name = (projects.get(e.project_id, {}).get("name") or "Unnamed project").split("\n")[0]
+    project_name = e.project_name or projects.get(e.project_id, {}).get("name", "Unnamed project").split("\n")[0]
 
     with st.container(border=True):
         top = st.columns([3, 2, 1, 1])
