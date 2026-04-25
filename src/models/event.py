@@ -68,6 +68,9 @@ class EventIn(BaseModel):
         """
         return self._format_payload()
     
+    @property
+    def is_task_event(self) -> bool:
+        return self.event_type in ("TASK_CREATED", "TASK_UPDATED")
 
     @staticmethod
     def by_project(events: list[EventIn]) -> dict[str, list[EventIn]]:
