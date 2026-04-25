@@ -140,6 +140,18 @@ def _event_visuals(event_type: str) -> dict[str, str]:
             "accent": "#0f766e",
             "soft": "rgba(15, 118, 110, 0.14)",
         },
+        "PROJECT_METADATA_UPDATED": {
+            "icon": "&#128221;",
+            "label": "Metadata updated",
+            "accent": "#4f46e5",
+            "soft": "rgba(79, 70, 229, 0.14)",
+        },
+        "PROJECT_SETTINGS_CREATED": {
+            "icon": "&#9874;",
+            "label": "Settings created",
+            "accent": "#0d9488",
+            "soft": "rgba(13, 148, 136, 0.14)",
+        },
         "PROJECT_SETTINGS_UPDATED": {
             "icon": "&#9881;",
             "label": "Settings changed",
@@ -153,7 +165,7 @@ def _event_visuals(event_type: str) -> dict[str, str]:
             "soft": "rgba(8, 145, 178, 0.14)",
         },
         "TASK_UPDATED": {
-            "icon": "&#9200;",
+            "icon": "&#9998;",
             "label": "Task updated",
             "accent": "#d97706",
             "soft": "rgba(217, 119, 6, 0.14)",
@@ -163,6 +175,12 @@ def _event_visuals(event_type: str) -> dict[str, str]:
             "label": "Phase added",
             "accent": "#9333ea",
             "soft": "rgba(147, 51, 234, 0.14)",
+        },
+        "PHASE_UPDATED": {
+            "icon": "&#129681;",
+            "label": "Phase updated",
+            "accent": "#8b5cf6",
+            "soft": "rgba(139, 92, 246, 0.14)",
         },
         "PROJECT_CLOSED": {
             "icon": "&#10003;",
@@ -211,6 +229,10 @@ def _activity_summary(item: EventIn) -> str:
         field_changes = payload.get("field_changes", [])
         count = len(field_changes) if isinstance(field_changes, list) else 0
         return f"{count} project field{'s' if count != 1 else ''} changed"
+    if item.event_type == "PROJECT_METADATA_UPDATED":
+        return "Project metadata refreshed"
+    if item.event_type == "PROJECT_SETTINGS_CREATED":
+        return "Project settings added"
     if item.event_type == "PROJECT_SETTINGS_UPDATED":
         return "Project settings adjusted"
     if item.event_type == "PROJECT_CREATED":
@@ -221,6 +243,8 @@ def _activity_summary(item: EventIn) -> str:
         if isinstance(position, int):
             return f"Phase {position + 1}: {name}"
         return name
+    if item.event_type == "PHASE_UPDATED":
+        return str(item.phase_name or "Phase updated")
     if item.event_type == "TASK_CREATED":
         return str(item.task_name or "New task")
     if item.event_type == "TASK_UPDATED":
