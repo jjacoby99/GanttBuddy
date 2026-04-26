@@ -491,7 +491,59 @@ def _render_activity_card(
         unread_chip_class = "gb-activity-chip gb-activity-chip--read" if is_read else "gb-activity-chip gb-activity-chip--unread"
         unread_chip_markup = f'<span class="{unread_chip_class}">{escape(unread_label)}</span>'
 
-    
+    if on_open_project or allow_read_toggle:
+        content_col, action_col = st.columns([6.4, 1.0], gap="small")
+        with content_col:
+            st.markdown(
+                (
+                    f'<div class="gb-activity-item{unread_class}" style="--activity-accent:{visuals["accent"]}; --activity-soft:{visuals["soft"]};">'
+                    f'<div class="gb-activity-icon">{visuals["icon"]}</div>'
+                    f'<div class="gb-activity-main">'
+                    f'<div class="gb-activity-meta">'
+                    f'<span class="gb-activity-chip">{escape(visuals["label"])}</span>'
+                    f"{unread_chip_markup}"
+                    f"</div>"
+                    f'<p class="gb-activity-headline">{escape(_headline(item))}</p>'
+                    f'<p class="gb-activity-summary">{escape(_summary(item))}</p>'
+                    f'<div class="gb-activity-context">{context_markup}</div>'
+                    f"</div>"
+                    f'<div class="gb-activity-side">'
+                    f'<div class="gb-activity-avatar">{escape(_actor_initials(item.user_name))}</div>'
+                    f'<div class="gb-activity-time">{escape(_relative_time(item.ts, now))}<br>{escape(item.ts.strftime("%b %d, %I:%M %p"))}</div>'
+                    f"</div>"
+                    f"</div>"
+                ),
+                unsafe_allow_html=True,
+            )
+        with action_col:
+            if on_open_project is not None:
+                if st.button(
+                    "Open",
+                    icon=":material/open_in_new:",
+                    key=f"{card_id}_open",
+                    width="stretch",
+                    type="primary" if not is_read else "secondary",
+                ):
+                    on_open_project(item.project_id)
+                    if "feed_read_event_ids" in st.session_state:
+                        st.session_state.feed_read_event_ids.add(item.id)
+            if allow_read_toggle:
+                button_label = "Mark unread" if is_read else "Mark read"
+                button_icon = ":material/mark_email_unread:" if is_read else ":material/done:"
+                if st.button(
+                    button_label,
+                    icon=button_icon,
+                    key=f"{card_id}_read_toggle",
+                    width="stretch",
+                ):
+                    if "feed_read_event_ids" in st.session_state:
+                        if is_read:
+                            st.session_state.feed_read_event_ids.discard(item.id)
+                        else:
+                            st.session_state.feed_read_event_ids.add(item.id)
+                    st.rerun()
+        return
+
     st.markdown(
         (
             f'<div class="gb-activity-item{unread_class}" style="--activity-accent:{visuals["accent"]}; --activity-soft:{visuals["soft"]};">'
@@ -513,39 +565,6 @@ def _render_activity_card(
         ),
         unsafe_allow_html=True,
     )
-
-    if on_open_project or allow_read_toggle:
-        action_cols = st.columns([1, 1, 4] if on_open_project and allow_read_toggle else [1, 5] if (on_open_project or allow_read_toggle) else [1])
-        action_index = 0
-        if on_open_project is not None:
-            with action_cols[action_index]:
-                if st.button(
-                    "Open",
-                    icon=":material/open_in_new:",
-                    key=f"{card_id}_open",
-                    width="stretch",
-                    type="primary" if not is_read else "secondary",
-                ):
-                    on_open_project(item.project_id)
-                    if "feed_read_event_ids" in st.session_state:
-                        st.session_state.feed_read_event_ids.add(item.id)
-            action_index += 1
-        if allow_read_toggle:
-            with action_cols[action_index]:
-                button_label = "Mark unread" if is_read else "Mark read"
-                button_icon = ":material/mark_email_unread:" if is_read else ":material/done:"
-                if st.button(
-                    button_label,
-                    icon=button_icon,
-                    key=f"{card_id}_read_toggle",
-                    width="stretch",
-                ):
-                    if "feed_read_event_ids" in st.session_state:
-                        if is_read:
-                            st.session_state.feed_read_event_ids.discard(item.id)
-                        else:
-                            st.session_state.feed_read_event_ids.add(item.id)
-                    st.rerun()
 
 
 def _group_events_by_day(events: list[EventIn]) -> dict[dt.date, list[EventIn]]:
