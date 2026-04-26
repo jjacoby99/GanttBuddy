@@ -478,6 +478,9 @@ def todo_summary(rows: list[dict]) -> dict[str, int]:
     num_completed_last_week = len(completed_last_week)
 
     completed = sum(1 for row in rows if row["status"] == TaskStatus.COMPLETE.value)
+    open_last_week = sum(
+        1 for row in created if row["status"] != TaskStatus.COMPLETE.value
+    )
 
 
     blocked = sum(1 for row in rows if row["status"] == TaskStatus.BLOCKED.value)
@@ -485,6 +488,7 @@ def todo_summary(rows: list[dict]) -> dict[str, int]:
     return {
         "open": total - completed,
         "completed": completed,
+        "open_last_week": open_last_week,
         "blocked": blocked,
         "high_priority": high_priority,
         "created_last_week": num_created_last_week,
@@ -835,8 +839,8 @@ def render_todo_list() -> None:
             stats=[
                 {
                     "label": "Open",
-                    "value": str(summary["open"]),
-                    "sub": f"This week",
+                    "value": str(summary["open_last_week"]),
+                    "sub": "Created this week and still open",
                     "accent": "#1d4ed8",
                     "surface": "rgba(219, 234, 254, 0.72)",
                     "border": "rgba(59, 130, 246, 0.24)",
@@ -844,8 +848,8 @@ def render_todo_list() -> None:
                 },
                 {
                     "label": "Completed",
-                    "value": str(summary["completed"]),
-                    "sub": f"Finished this week",
+                    "value": str(summary["completed_last_week"]),
+                    "sub": "Finished this week",
                     "accent": "#15803d",
                     "surface": "rgba(220, 252, 231, 0.72)",
                     "border": "rgba(34, 197, 94, 0.24)",
