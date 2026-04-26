@@ -392,11 +392,10 @@ def render_activity_collection(
     active_people = len({item.user_id for item in events})
     shell_class = "gb-activity-shell gb-activity-shell--feed" if shell_variant == "feed" else "gb-activity-shell"
 
-    st.markdown(f'<div class="{shell_class}">', unsafe_allow_html=True)
-
     if show_custom_header:
         st.markdown(
             (
+                f'<div class="{shell_class}">'
                 f'<div class="gb-activity-header">'
                 f'<div>'
                 f'<p class="gb-activity-eyebrow">{escape(eyebrow)}</p>'
