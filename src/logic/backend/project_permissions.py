@@ -23,20 +23,33 @@ def _coerce_bool(value: Any, default: bool) -> bool:
         if normalized in {"false", "0", "no"}:
             return False
     return bool(value)
-def _access_from_project_record(project_id: str, project_record: dict[str, Any] | None) -> ProjectAccess | None:
+
+
+def _project_record_value(project_record: Any, key: str) -> Any:
+    if project_record is None:
+        return None
+    if isinstance(project_record, dict):
+        return project_record.get(key)
+    return getattr(project_record, key, None)
+
+
+def _access_from_project_record(project_id: str, project_record: Any | None) -> ProjectAccess | None:
     if not project_record:
         return None
 
-    has_any_flag = any(flag in project_record for flag in ("can_view", "can_edit", "can_manage_members", "can_delete"))
+    has_any_flag = any(
+        _project_record_value(project_record, flag) is not None
+        for flag in ("can_view", "can_edit", "can_manage_members", "can_delete")
+    )
     if not has_any_flag:
         return None
 
     return ProjectAccess(
         project_id=project_id,
-        can_view=_coerce_bool(project_record.get("can_view"), True),
-        can_edit=_coerce_bool(project_record.get("can_edit"), False),
-        can_manage_members=_coerce_bool(project_record.get("can_manage_members"), False),
-        can_delete=_coerce_bool(project_record.get("can_delete"), False),
+        can_view=_coerce_bool(_project_record_value(project_record, "can_view"), True),
+        can_edit=_coerce_bool(_project_record_value(project_record, "can_edit"), False),
+        can_manage_members=_coerce_bool(_project_record_value(project_record, "can_manage_members"), False),
+        can_delete=_coerce_bool(_project_record_value(project_record, "can_delete"), False),
         source="project_list",
     )
 
@@ -65,7 +78,7 @@ def resolve_project_access(
     headers: dict,
     project_id: str,
     timezone: ZoneInfo,
-    project_record: dict[str, Any] | None = None,
+    project_record: Any | None = None,
 ) -> ProjectAccess:
     access = _access_from_project_record(project_id, project_record)
 
