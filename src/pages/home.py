@@ -32,6 +32,7 @@ from logic.backend.import_project import snapshot_to_project
 from logic.backend.project_permissions import resolve_project_access, store_project_access
 from logic.backend.users import get_user
 from ui.todo_overview import inject_todo_panel_css, render_todo_overview_panel, todo_dataframe
+from ui.activity_feed import inject_activity_feed_css, render_recent_activity_preview
 from ui.utils.page_header import render_page_aside, render_registered_page_header
 from ui.utils.status_badges import STATUS_BADGES
 
@@ -728,7 +729,7 @@ def main() -> None:
 
     st.set_page_config(page_title="GanttBuddy • Home", layout="wide")
     inject_todo_panel_css()
-    _inject_recent_activity_css()
+    inject_activity_feed_css()
 
     require_login()
 
@@ -884,13 +885,13 @@ def main() -> None:
         st.write("")        
 
         # Mini feed
-        feed_box = st.container(border=True)
+        feed_box = st.container()
         with feed_box:
             
             if not activity:
                 st.info("No recent activity yet.")
             else:
-                _render_recent_activity_feed(activity)
+                render_recent_activity_preview(activity)
 
             with st.container(horizontal=True):
                 st.space("stretch")
