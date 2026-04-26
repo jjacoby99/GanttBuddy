@@ -392,10 +392,11 @@ def render_activity_collection(
     active_people = len({item.user_id for item in events})
     shell_class = "gb-activity-shell gb-activity-shell--feed" if shell_variant == "feed" else "gb-activity-shell"
 
+    st.markdown(f'<div class="{shell_class}">', unsafe_allow_html=True)
+
     if show_custom_header:
         st.markdown(
             (
-                f'<div class="{shell_class}">'
                 f'<div class="gb-activity-header">'
                 f'<div>'
                 f'<p class="gb-activity-eyebrow">{escape(eyebrow)}</p>'
@@ -413,8 +414,9 @@ def render_activity_collection(
         )
 
     if show_day_groups:
+        now = dt.datetime.now(events[0].ts.tzinfo) if events else dt.datetime.now()
         for index, (day, day_events) in enumerate(_group_events_by_day(events).items()):
-            label, meta = _format_day_label(day, len(day_events))
+            label, meta = _format_day_label(day, len(day_events), now=now)
             st.markdown(
                 (
                     '<div class="gb-activity-day">'
@@ -574,8 +576,8 @@ def _group_events_by_day(events: list[EventIn]) -> dict[dt.date, list[EventIn]]:
     return dict(sorted(groups.items(), key=lambda kv: kv[0], reverse=True))
 
 
-def _format_day_label(day: dt.date, count: int) -> tuple[str, str]:
-    today = dt.datetime.now().date()
+def _format_day_label(day: dt.date, count: int, *, now: dt.datetime) -> tuple[str, str]:
+    today = now.date()
     if day == today:
         label = "Today"
     elif day == today - dt.timedelta(days=1):
