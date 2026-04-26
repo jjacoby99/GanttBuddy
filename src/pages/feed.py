@@ -1,65 +1,56 @@
-import streamlit as st
+from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from datetime import datetime, timedelta, date, UTC
-from zoneinfo import ZoneInfo 
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
+from zoneinfo import ZoneInfo
 
-from models.project_type import ProjectType
+import streamlit as st
+
+from logic.backend.api_client import fetch_project_snapshot
+from logic.backend.events import get_events
+from logic.backend.guards import require_login
+from logic.backend.import_project import snapshot_to_project
+from logic.backend.project_list import get_projects
+from logic.backend.project_permissions import resolve_project_access, store_project_access
 from models.event import EventIn
 from models.plan_state import PlanState
-
-from logic.backend.guards import require_login
-from logic.backend.api_client import fetch_project_snapshot
-from logic.backend.import_project import snapshot_to_project
-from logic.backend.project_permissions import resolve_project_access, store_project_access
-from logic.backend.project_list import get_projects
-
-from logic.backend.utils.parse_datetime import parse_backend_utc
-from logic.backend.events import get_events
+from models.project_type import ProjectType
+from ui.activity_feed import inject_activity_feed_css, render_activity_collection
 from ui.utils.page_header import render_registered_page_header
 
 
 EVENT_TYPE_LABELS = {
-    "task_created": "Task created",
-    "task_updated": "Task updated",
-    "task_status_changed": "Status changed",
-    "task_actuals_changed": "Actuals changed",
-    "task_note_changed": "Note changed",
-    "phase_created": "Phase created",
-    "phase_updated": "Phase updated",
-    "project_updated": "Project updated",
+    "PROJECT_CREATED": "Project created",
+    "PROJECT_UPDATED": "Project updated",
+    "PROJECT_SETTINGS_CREATED": "Settings created",
+    "PROJECT_SETTINGS_UPDATED": "Settings updated",
+    "PROJECT_METADATA_UPDATED": "Metadata updated",
+    "PROJECT_SHIFT_DEFINITION_UPDATED": "Shift definition updated",
+    "PROJECT_SHIFT_ASSIGNMENTS_UPDATED": "Shift assignments updated",
+    "PHASE_CREATED": "Phase created",
+    "PHASE_UPDATED": "Phase updated",
+    "PHASE_UNDELETED": "Phase restored",
+    "PHASE_DELETED": "Phase removed",
+    "TASK_CREATED": "Task created",
+    "TASK_UPDATED": "Task updated",
+    "TASK_ACTUALS_UPDATED": "Actuals updated",
+    "TASK_UNDELETED": "Task restored",
+    "TASK_DELETED": "Task removed",
+    "STARTED": "Task started",
+    "FINISHED": "Task finished",
+    "STATUS": "Status changed",
+    "NOTE": "Note added",
+    "EDITED_ACTUALS": "Actuals edited",
+    "PROJECT_CLOSED": "Project closed",
 }
 
-EVENT_TYPE_ICONS = {
-    "task_created": ":material/add_circle:",
-    "task_updated": ":material/edit:",
-    "task_status_changed": ":material/flag:",
-    "task_actuals_changed": ":material/timer:",
-    "task_note_changed": ":material/sticky_note_2:",
-    "phase_created": ":material/view_agenda:",
-    "phase_updated": ":material/view_agenda:",
-    "project_updated": ":material/folder_open:",
-}
+
+def _fmt_dt(value: datetime) -> str:
+    return value.strftime("%Y-%m-%d %H:%M")
 
 
-def _fmt_dt(dt: datetime) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M")
-
-
-def _safe_dt(x: Any) -> datetime:
-    if isinstance(x, datetime):
-        return x
-    if isinstance(x, str):
-        try:
-            return datetime.fromisoformat(x.replace("Z", "+00:00")).replace(tzinfo=None)
-        except Exception:
-            pass
-    return datetime.now()
-
-
-def _ensure_state():
+def _ensure_state() -> None:
     if "feed_read_event_ids" not in st.session_state:
         st.session_state.feed_read_event_ids = set()
     if "feed_saved_filters" not in st.session_state:
@@ -68,7 +59,7 @@ def _ensure_state():
         st.session_state.selected_project_id = None
 
 
-def load_project_into_session(project_id: str):
+def load_project_into_session(project_id: str) -> None:
     st.session_state["selected_project_id"] = project_id
     projects = get_projects(st.session_state.auth_headers, include_closed=True)
     proj_snapshot = fetch_project_snapshot(
@@ -86,21 +77,13 @@ def load_project_into_session(project_id: str):
         )
     )
     if project.project_type == ProjectType.MILL_RELINE and metadata is not None:
-        st.session_state["reline_metadata"] = metadata 
+        st.session_state["reline_metadata"] = metadata
     st.session_state.plan_state = PlanState(project_id=project_id)
     st.switch_page("pages/plan.py")
 
-from datetime import datetime, timezone, timedelta
-
-def is_timezone_aware(dt_object):
-    """Check if a datetime object is timezone-aware (aware) or naive."""
-    return dt_object.tzinfo is not None and dt_object.tzinfo.utcoffset(dt_object) is not None
-
-
-
 
 def render_filters(projects: dict, events: list[EventIn]) -> dict[str, Any]:
-    with st.container(border=True):
+    with st.container():
         cols = st.columns([2, 1, 1, 1])
         with cols[0]:
             q = st.text_input("Search", placeholder="Search project, task, actor, or summary")
@@ -128,13 +111,13 @@ def render_filters(projects: dict, events: list[EventIn]) -> dict[str, Any]:
                 "Event types",
                 options=all_types,
                 default=[],
-                format_func=lambda t: EVENT_TYPE_LABELS.get(t.lower(), t),
+                format_func=lambda event_type: EVENT_TYPE_LABELS.get(event_type, EventIn(event_type=event_type, id="", project_name="", ts=datetime.now(UTC), project_id="", phase_id=None, phase_name=None, task_id=None, task_name=None, user_id="", user_name="", payload=None).format_event_type()),
             )
         with c2[2]:
             st.space("small")
             if st.button("Mark all read", icon=":material/done_all:", width="stretch"):
-                for e in events:
-                    st.session_state.feed_read_event_ids.add(e.id)
+                for event in events:
+                    st.session_state.feed_read_event_ids.add(event.id)
                 st.rerun()
 
     return {
@@ -156,6 +139,7 @@ def apply_filters(events: list[EventIn], filters: dict[str, Any]) -> list[EventI
     type_filter = filters["type_filter"]
 
     now = datetime.now(UTC)
+    min_dt: datetime | None
     if window == "24h":
         min_dt = now - timedelta(hours=24)
     elif window == "7d":
@@ -163,167 +147,101 @@ def apply_filters(events: list[EventIn], filters: dict[str, Any]) -> list[EventI
     elif window == "30d":
         min_dt = now - timedelta(days=30)
     else:
-        min_dt = datetime.min
+        min_dt = None
 
-    min_dt = min_dt.replace(tzinfo=ZoneInfo(st.context.timezone))
+    if min_dt is not None:
+        min_dt = min_dt.astimezone(ZoneInfo(st.context.timezone))
+
     out: list[EventIn] = []
-    for e in events:
-        if e.ts < min_dt:
+    for event in events:
+        if min_dt is not None and event.ts < min_dt:
             continue
-        if project_filter and e.project_id not in project_filter:
+        if project_filter and event.project_id not in project_filter:
             continue
-        if type_filter and e.event_type.lower() not in type_filter:
+        if type_filter and event.event_type not in type_filter:
             continue
-        if unread_only and e.id in st.session_state.feed_read_event_ids:
+        if unread_only and event.id in st.session_state.feed_read_event_ids:
             continue
         if q:
-            hay = " ".join(
+            haystack = " ".join(
                 [
-                    e.user_name,
-                    e.message,
-                    e.event_type,
-                    e.project_id,
-                    e.task_id or "",
-                    json.dumps(e.payload, default=str),
+                    event.user_name,
+                    event.message,
+                    event.event_type,
+                    event.project_name,
+                    event.phase_name or "",
+                    event.task_name or "",
+                    json.dumps(event.payload, default=str),
                 ]
             ).lower()
-            if q not in hay:
+            if q not in haystack:
                 continue
-        out.append(e)
+        out.append(event)
 
-    reverse = sort_dir == "Newest first"
-    out.sort(key=lambda x: x.ts, reverse=reverse)
+    out.sort(key=lambda item: item.ts, reverse=sort_dir == "Newest first")
     return out
 
 
-def group_by_day(events: list[EventIn]) -> dict[date, list[EventIn]]:
-    groups: dict[date, list[EventIn]] = {}
-    for e in events:
-        d = e.ts.date()
-        groups.setdefault(d, []).append(e)
-    return dict(sorted(groups.items(), key=lambda kv: kv[0], reverse=True))
-
-
-def render_event_card(e: EventIn, projects: dict, unread: bool = False):
-    is_read = e.id in st.session_state.feed_read_event_ids
-    label = e.format_event_type()
-    icon = EVENT_TYPE_ICONS.get(e.event_type.lower(), ":material/notifications:")
-    project_name = e.project_name or projects.get(e.project_id, {}).get("name", "Unnamed project").split("\n")[0]
-
-    with st.container(border=True):
-        top = st.columns([3, 2, 1, 1])
-        with top[0]:
-            st.markdown(f"**{label}**")
-            st.caption(e.message)
-        with top[1]:
-            st.markdown(project_name)
-            st.caption(f"{e.user_name}  |  {_fmt_dt(e.ts)}")
-        with top[2]:
-            if is_read:
-                st.caption("Read")
-            else:
-                st.caption("Unread")
-        with top[3]:
-            if st.button(
-                "Load",
-                icon=":material/open_in_new:",
-                type="primary",
-                width="stretch",
-                key=f"feed_load_{e.id}_{"unread" if unread else "read"}",
-            ):
-                try:
-                    load_project_into_session(e.project_id)
-                    st.session_state.feed_read_event_ids.add(e.id)
-                    st.success("Project loaded into workspace session.")
-                except Exception as ex:
-                    st.error(f"Failed to load project. {ex}")
-
-        exp = st.expander("Details", expanded=False)
-        with exp:
-            cols = st.columns([1, 1, 2])
-            with cols[0]:
-                if st.button(
-                    "Mark read",
-                    icon=":material/done:",
-                    width="stretch",
-                    key=f"feed_mark_read_{e.id}_{"unread" if unread else "read"}",
-                    disabled=is_read,
-                ):
-                    st.session_state.feed_read_event_ids.add(e.id)
-                    st.rerun()
-            with cols[1]:
-                if st.button(
-                    "Copy JSON",
-                    icon=":material/content_copy:",
-                    width="stretch",
-                    key=f"feed_copy_{e.id}_{"unread" if unread else "read"}",
-                ):
-                    st.session_state[f"feed_json_{e.id}"] = json.dumps(e.payload, indent=2, default=str)
-                    st.toast("Event JSON stored in session state.")
-            with cols[2]:
-                st.caption("Event payload (placeholder now; later this should reflect task_events.payload).")
-
-            st.code(json.dumps(e.payload, indent=2, default=str), language="json")
-
-
-def render_activity_stream(projects: dict, events: list[EventIn], unread: bool = False, timezone: ZoneInfo = ZoneInfo("America/Vancouver")):
-    if not events:
-        st.info("No activity yet.")
-        return
-
-    groups = group_by_day(events)
-    for d, day_events in groups.items():
-        with st.expander(f"**{d.isoformat()}**"):
-            for e in day_events:
-                render_event_card(e, projects, unread)
-            st.divider()
-
-
-def render_project_pulse(projects: dict, events: list[EventIn]):
+def render_project_pulse(projects: dict, events: list[EventIn]) -> None:
     with st.container(border=True):
         st.markdown("### Project pulse")
-        st.caption("What's moving lately.")
+        st.caption("The busiest projects in the current activity window.")
 
         now = datetime.now(UTC)
-        scored = []
-        for pid, p in projects.items():
-            updated = p.get("updated") or now - timedelta(days=9999)
-            # updated = parse_backend_utc(updated, ZoneInfo(p.get("timezone_name")))
-
-            recent_events = [e for e in events if e.project_id == pid]
+        scored: list[tuple[int, str, datetime]] = []
+        for project_id, project in projects.items():
+            updated = project.get("updated") or now - timedelta(days=9999)
+            recent_events = [event for event in events if event.project_id == project_id]
             score = len(recent_events) * 10 + max(0, int((now - updated).total_seconds() * -1 / 3600))
+            scored.append((score, project_id, updated))
 
-            scored.append((score, pid, updated))
-
-        scored.sort(reverse=True, key=lambda x: x[0])
-        top = scored[:7]
-
-        for _, pid, updated in top:
-            name = (projects.get(pid, {}).get("name") or "Unnamed project").split("\n")[0]
+        scored.sort(reverse=True, key=lambda row: row[0])
+        for _, project_id, updated in scored[:7]:
+            name = (projects.get(project_id, {}).get("name") or "Unnamed project").split("\n")[0]
             st.markdown(f"**{name}**")
             st.caption(f"Last updated: {_fmt_dt(updated)}")
-
             if st.button(
                 "Open",
                 icon=":material/open_in_browser:",
                 width="stretch",
-                key=f"pulse_open_{pid}",
+                key=f"pulse_open_{project_id}",
             ):
                 try:
-                    load_project_into_session(pid)
-                    st.success("Project loaded into workspace session.")
+                    load_project_into_session(project_id)
                 except Exception as ex:
                     st.error(f"Failed to load project. {ex}")
-
             st.divider()
 
 
-def render_feed():
+def _render_feed_lane(events: list[EventIn], *, read_event_ids: set[str], key_prefix: str, title: str, subtitle: str) -> None:
+    if not events:
+        st.info("No events match this view.")
+        return
+
+    render_activity_collection(
+        events,
+        shell_variant="feed",
+        eyebrow="Workspace feed",
+        title=title,
+        subtitle=subtitle,
+        read_event_ids=read_event_ids,
+        show_day_groups=True,
+        card_key_prefix=key_prefix,
+        on_open_project=load_project_into_session,
+        allow_read_toggle=True,
+        show_custom_header=False
+    )
+
+
+def render_feed() -> None:
     _ensure_state()
+    inject_activity_feed_css()
+
     tz = ZoneInfo(st.context.timezone)
     headers = st.session_state.get("auth_headers", {})
     projects = get_projects(headers=headers)
     events = get_events(headers=headers, n_events=50, timezone=tz)
+
     render_registered_page_header(
         "feed",
         chips=[
@@ -332,23 +250,37 @@ def render_feed():
             "Project-local timestamps",
         ],
     )
-    filters = render_filters(projects, events)
+
+    with st.popover("Filters"):
+        filters = render_filters(projects, events)
     filtered = apply_filters(events, filters)
+    unread = [event for event in filtered if event.id not in st.session_state.feed_read_event_ids]
 
     left, right = st.columns([3, 1])
 
     with left:
-        tab = st.tabs(["Activity", "Unread"])[0:2]
+        activity_tab, unread_tab = st.tabs(["Activity", "Unread"])
 
-        with tab[0]:
-            render_activity_stream(projects, filtered, timezone=tz)
+        with activity_tab:
+            _render_feed_lane(
+                filtered,
+                read_event_ids=st.session_state.feed_read_event_ids,
+                key_prefix="feed_activity",
+                title="Everything happening across your workspace",
+                subtitle="Each event explains who acted, what changed, and where it happened.",
+            )
 
-        with tab[1]:
-            unread = [e for e in filtered if e.id not in st.session_state.feed_read_event_ids]
-            render_activity_stream(projects, unread, unread=True, timezone=tz)
+        with unread_tab:
+            _render_feed_lane(
+                unread,
+                read_event_ids=st.session_state.feed_read_event_ids,
+                key_prefix="feed_unread",
+                title="Unread activity that still needs your eyes",
+                subtitle="Use this lane as your triage queue until backend read state is persisted.",
+            )
 
     with right:
-        render_project_pulse(projects, events)
+        render_project_pulse(projects, filtered)
 
         with st.container(border=True):
             st.markdown("### Saved views")
@@ -356,12 +288,14 @@ def render_feed():
             if not st.session_state.feed_saved_filters:
                 st.caption("No saved views yet.")
             else:
-                for i, v in enumerate(st.session_state.feed_saved_filters):
-                    if st.button(v.get("name", f"View {i+1}"), width="stretch", key=f"sv_{i}"):
+                for index, view in enumerate(st.session_state.feed_saved_filters):
+                    if st.button(view.get("name", f"View {index + 1}"), width="stretch", key=f"sv_{index}"):
                         st.toast("Wire this to restore filters later.")
 
             if st.button("Save current view", icon=":material/bookmark_add:", width="stretch"):
-                st.session_state.feed_saved_filters.append({"name": f"View {len(st.session_state.feed_saved_filters)+1}"})
+                st.session_state.feed_saved_filters.append(
+                    {"name": f"View {len(st.session_state.feed_saved_filters) + 1}"}
+                )
                 st.toast("Saved (UI-only).")
 
 
