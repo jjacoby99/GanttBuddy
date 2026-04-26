@@ -69,13 +69,13 @@ HEADER_PALETTES: dict[str, HeaderPalette] = {
         surface_end="#eef0ff",
     ),
     "navy": HeaderPalette(
-        accent="#e0f2fe",
+        accent="#f8fafc",
         accent_soft="rgba(224, 242, 254, 0.16)",
         glow="rgba(56, 189, 248, 0.18)",
         surface_start="#0f172a",
         surface_end="#1e293b",
-        ink="#f8fafc",
-        muted="rgba(248, 250, 252, 0.78)",
+        ink="#ffffff",
+        muted="rgba(248, 250, 252, 0.9)",
     ),
 }
 
@@ -233,17 +233,19 @@ def _inject_page_header_css() -> None:
 
         .gb-page-hero__title {
             margin: 0;
-            color: var(--gb-ink);
+            color: var(--gb-ink) !important;
+            -webkit-text-fill-color: var(--gb-ink);
             font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
             font-size: clamp(2rem, 3.4vw, 3.25rem);
             font-weight: 700;
             line-height: 0.96;
             letter-spacing: -0.04em;
+            text-shadow: 0 1px 1px rgba(15, 23, 42, 0.32);
         }
 
         .gb-page-hero__description {
             margin: 0.85rem 0 0;
-            color: var(--gb-muted);
+            color: var(--gb-muted) !important;
             font-size: 1rem;
             line-height: 1.6;
             max-width: 46rem;
