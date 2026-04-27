@@ -88,6 +88,93 @@ def _inject_project_browser_css() -> None:
                 text-transform: uppercase;
             }
 
+            .gb-project-detail__header {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 1rem;
+            }
+
+            .gb-project-detail__heading {
+                min-width: 0;
+                flex: 1 1 auto;
+            }
+
+            .gb-project-detail__meta-rail {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(9rem, 1fr));
+                gap: 0.45rem;
+                min-width: min(100%, 18rem);
+                flex: 0 0 18rem;
+            }
+
+            .gb-project-detail__meta-chip {
+                display: grid;
+                grid-template-columns: auto 1fr;
+                gap: 0.45rem;
+                align-items: center;
+                padding: 0.38rem 0.52rem;
+                border-radius: 14px;
+                background: rgba(255, 255, 255, 0.9);
+                border: 1px solid rgba(148, 163, 184, 0.16);
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+            }
+
+            .gb-project-detail__meta-chip[data-tone="status"] {
+                background: linear-gradient(180deg, rgba(220, 252, 231, 0.92), rgba(240, 253, 244, 0.98));
+                border-color: rgba(34, 197, 94, 0.2);
+            }
+
+            .gb-project-detail__meta-chip[data-tone="type"] {
+                background: linear-gradient(180deg, rgba(219, 234, 254, 0.92), rgba(239, 246, 255, 0.98));
+                border-color: rgba(59, 130, 246, 0.18);
+            }
+
+            .gb-project-detail__meta-chip[data-tone="access"] {
+                background: linear-gradient(180deg, rgba(254, 243, 199, 0.92), rgba(255, 251, 235, 0.98));
+                border-color: rgba(245, 158, 11, 0.2);
+            }
+
+            .gb-project-detail__meta-chip[data-tone="site"] {
+                background: linear-gradient(180deg, rgba(237, 233, 254, 0.92), rgba(245, 243, 255, 0.98));
+                border-color: rgba(139, 92, 246, 0.18);
+            }
+
+            .gb-project-detail__meta-icon {
+                display: grid;
+                place-items: center;
+                width: 1.35rem;
+                height: 1.35rem;
+                border-radius: 999px;
+                background: var(--chip-icon-bg, rgba(15, 23, 42, 0.06));
+                color: var(--chip-icon-color, #0f172a);
+                font-size: 0.7rem;
+                font-weight: 800;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+            }
+
+            .gb-project-detail__meta-copy {
+                min-width: 0;
+            }
+
+            .gb-project-detail__meta-label {
+                margin: 0;
+                color: #64748b;
+                font-size: 0.54rem;
+                font-weight: 800;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                line-height: 1.05;
+            }
+
+            .gb-project-detail__meta-value {
+                margin: 0.05rem 0 0;
+                color: #0f172a;
+                font-size: 0.7rem;
+                font-weight: 700;
+                line-height: 1.1;
+            }
+
             .gb-project-detail__title {
                 margin: 0;
                 color: #0f172a;
@@ -106,29 +193,136 @@ def _inject_project_browser_css() -> None:
                 max-width: 58rem;
             }
 
-            .gb-project-detail__chips {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.5rem;
-                margin-top: 0.8rem;
+            .gb-project-detail__timeline {
+                position: relative;
+                margin-top: 0.95rem;
+                padding: 1rem 1.05rem 0.95rem;
+                border-radius: 22px;
+                border: 1px solid rgba(14, 116, 144, 0.12);
+                background:
+                    radial-gradient(circle at center, rgba(14, 165, 233, 0.08), transparent 42%),
+                    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(240, 249, 255, 0.88));
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
             }
 
-            .gb-project-detail__chip {
+            .gb-project-detail__timeline-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.8rem;
+                margin-bottom: 0.8rem;
+            }
+
+            .gb-project-detail__timeline-eyebrow {
+                margin: 0;
+                color: #0369a1;
+                font-size: 0.66rem;
+                font-weight: 800;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+            }
+
+            .gb-project-detail__timeline-caption {
+                margin: 0.18rem 0 0;
+                color: #475569;
+                font-size: 0.82rem;
+                line-height: 1.4;
+            }
+
+            .gb-project-detail__timeline-duration {
                 display: inline-flex;
                 align-items: center;
-                gap: 0.35rem;
-                padding: 0.34rem 0.7rem;
+                gap: 0.4rem;
+                padding: 0.42rem 0.78rem;
                 border-radius: 999px;
-                background: rgba(255, 255, 255, 0.84);
-                border: 1px solid rgba(148, 163, 184, 0.18);
+                background: rgba(14, 165, 233, 0.1);
+                border: 1px solid rgba(14, 165, 233, 0.16);
+                color: #075985;
+                font-size: 0.78rem;
+                font-weight: 800;
+                white-space: nowrap;
+            }
+
+            .gb-project-detail__timeline-grid {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+                gap: 0.8rem;
+                align-items: center;
+            }
+
+            .gb-project-detail__timeline-end {
+                min-width: 0;
+            }
+
+            .gb-project-detail__timeline-end.is-right {
+                text-align: right;
+            }
+
+            .gb-project-detail__timeline-label {
+                margin: 0;
+                color: #64748b;
+                font-size: 0.64rem;
+                font-weight: 800;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
+
+            .gb-project-detail__timeline-value {
+                margin: 0.28rem 0 0;
                 color: #0f172a;
-                font-size: 0.76rem;
+                font-size: 0.98rem;
                 font-weight: 700;
+                line-height: 1.25;
+            }
+
+            .gb-project-detail__timeline-support {
+                margin: 0.16rem 0 0;
+                color: #64748b;
+                font-size: 0.76rem;
+                line-height: 1.35;
+            }
+
+            .gb-project-detail__timeline-arrow {
+                position: relative;
+                display: grid;
+                gap: 0.4rem;
+                min-width: 14rem;
+                justify-items: center;
+            }
+
+            .gb-project-detail__timeline-arrow-line {
+                position: relative;
+                width: 100%;
+                height: 0.3rem;
+                border-radius: 999px;
+                background: linear-gradient(90deg, #38bdf8 0%, #0ea5e9 52%, #0284c7 100%);
+                box-shadow: 0 8px 18px rgba(14, 165, 233, 0.18);
+            }
+
+            .gb-project-detail__timeline-arrow-line::after {
+                content: "";
+                position: absolute;
+                right: -0.02rem;
+                top: 50%;
+                width: 0.82rem;
+                height: 0.82rem;
+                border-top: 0.22rem solid #0284c7;
+                border-right: 0.22rem solid #0284c7;
+                transform: translateY(-50%) rotate(45deg);
+                border-radius: 0.08rem;
+            }
+
+            .gb-project-detail__timeline-arrow-note {
+                color: #0369a1;
+                font-size: 0.7rem;
+                font-weight: 700;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
             }
 
             .gb-project-detail__grid {
                 display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
+                grid-template-columns: repeat(2, minmax(0, 1fr));
                 gap: 0.65rem;
                 margin-top: 0.8rem;
             }
@@ -163,8 +357,31 @@ def _inject_project_browser_css() -> None:
             }
 
             @media (max-width: 980px) {
-                .gb-project-detail__grid {
+                .gb-project-detail__header {
+                    display: grid;
+                }
+
+                .gb-project-detail__meta-rail {
                     grid-template-columns: repeat(2, minmax(0, 1fr));
+                    min-width: 0;
+                    flex: 1 1 auto;
+                }
+
+                .gb-project-detail__timeline-grid {
+                    grid-template-columns: 1fr;
+                }
+
+                .gb-project-detail__timeline-end.is-right {
+                    text-align: left;
+                }
+
+                .gb-project-detail__timeline-arrow {
+                    min-width: 0;
+                    width: 100%;
+                }
+
+                .gb-project-detail__grid {
+                    grid-template-columns: 1fr;
                 }
             }
             </style>
@@ -195,6 +412,18 @@ def _fmt_schedule(project: ProjectSummary) -> str:
     )
 
 
+def _fmt_timeline_point(value: dt.datetime | None) -> str:
+    if value is None:
+        return "Not scheduled"
+    return value.strftime("%b %d, %Y")
+
+
+def _fmt_timeline_support(value: dt.datetime | None) -> str:
+    if value is None:
+        return "Waiting for schedule dates"
+    return value.strftime("%I:%M %p")
+
+
 def _fmt_duration(project: ProjectSummary) -> str:
     if project.planned_start is None or project.planned_finish is None:
         return "Pending schedule"
@@ -207,6 +436,106 @@ def _fmt_duration(project: ProjectSummary) -> str:
     if total_days > 0:
         return f"{total_days} day{'s' if total_days != 1 else ''}"
     return f"{int(round(total_hours))} hour{'s' if int(round(total_hours)) != 1 else ''}"
+
+
+def _project_type_display(project: ProjectSummary) -> str:
+    mapping = {
+        "GENERIC": "General schedule",
+        "MILL_RELINE": "Mill reline",
+        "CRUSHER_REBUILD": "Crusher rebuild",
+        "CIVIL": "Civil work",
+    }
+    raw = (project.project_type or "GENERIC").strip().upper()
+    return mapping.get(raw, project.type_label)
+
+
+def _access_display(project: ProjectSummary) -> str:
+    if project.can_edit is True:
+        return "Can edit"
+    if project.can_view is True:
+        return "Read only"
+    return "Not provided"
+
+
+def _meta_chips_markup(project: ProjectSummary) -> str:
+    chips = [
+        {
+            "label": "Status",
+            "value": project.status_label,
+            "tone": "status",
+            "icon": "●",
+            "icon_bg": "rgba(34, 197, 94, 0.16)" if not project.closed else "rgba(249, 115, 22, 0.18)",
+            "icon_color": "#166534" if not project.closed else "#c2410c",
+        },
+        {
+            "label": "Project Type",
+            "value": _project_type_display(project),
+            "tone": "type",
+            "icon": "≈",
+            "icon_bg": "rgba(59, 130, 246, 0.14)",
+            "icon_color": "#1d4ed8",
+        },
+        {
+            "label": "Access",
+            "value": _access_display(project),
+            "tone": "access",
+            "icon": "=",
+            "icon_bg": "rgba(245, 158, 11, 0.16)",
+            "icon_color": "#b45309",
+        },
+        {
+            "label": "Site",
+            "value": project.site_code or "Unassigned",
+            "tone": "site",
+            "icon": "#",
+            "icon_bg": "rgba(139, 92, 246, 0.14)",
+            "icon_color": "#7c3aed",
+        },
+    ]
+    return "".join(
+        (
+            f'<div class="gb-project-detail__meta-chip" data-tone="{chip["tone"]}">'
+            f'<span class="gb-project-detail__meta-icon" '
+            f'style="--chip-icon-bg:{chip["icon_bg"]}; --chip-icon-color:{chip["icon_color"]};">'
+            f'{escape(chip["icon"])}</span>'
+            '<div class="gb-project-detail__meta-copy">'
+            f'<p class="gb-project-detail__meta-label">{escape(chip["label"])}</p>'
+            f'<p class="gb-project-detail__meta-value">{escape(chip["value"])}</p>'
+            "</div></div>"
+        )
+        for chip in chips
+    )
+
+
+def _timeline_markup(project: ProjectSummary) -> str:
+    return "".join(
+        [
+            '<section class="gb-project-detail__timeline">',
+            '<div class="gb-project-detail__timeline-head">',
+            "<div>",
+            '<p class="gb-project-detail__timeline-eyebrow">Project Window</p>',
+            "</div>",
+            f'<span class="gb-project-detail__timeline-duration">{escape(_fmt_duration(project))}</span>',
+            "</div>",
+            '<div class="gb-project-detail__timeline-grid">',
+            '<div class="gb-project-detail__timeline-end">',
+            '<p class="gb-project-detail__timeline-label">Planned Start</p>',
+            f'<p class="gb-project-detail__timeline-value">{escape(_fmt_timeline_point(project.planned_start))}</p>',
+            f'<p class="gb-project-detail__timeline-support">{escape(_fmt_timeline_support(project.planned_start))}</p>',
+            "</div>",
+            '<div class="gb-project-detail__timeline-arrow">',
+            '<span class="gb-project-detail__timeline-arrow-note">Duration Window</span>',
+            '<span class="gb-project-detail__timeline-arrow-line"></span>',
+            "</div>",
+            '<div class="gb-project-detail__timeline-end is-right">',
+            '<p class="gb-project-detail__timeline-label">Planned Finish</p>',
+            f'<p class="gb-project-detail__timeline-value">{escape(_fmt_timeline_point(project.planned_finish))}</p>',
+            f'<p class="gb-project-detail__timeline-support">{escape(_fmt_timeline_support(project.planned_finish))}</p>',
+            "</div>",
+            "</div>",
+            "</section>",
+        ]
+    )
 
 
 def _project_count_chips(projects: dict[str, ProjectSummary], include_closed: bool) -> list[str]:
@@ -251,23 +580,9 @@ def _sort_projects(projects: list[ProjectSummary], sort_mode: str) -> list[Proje
 
 
 def _detail_markup(project: ProjectSummary) -> str:
-    chips = [
-        project.status_label,
-        project.type_label,
-        project.access_label,
-        project.site_code or "No site code",
-    ]
-    chip_markup = "".join(
-        f'<span class="gb-project-detail__chip">{escape(chip)}</span>'
-        for chip in chips
-        if chip
-    )
     facts = [
         ("Created", _fmt_dt(project.created)),
         ("Last updated", _fmt_dt(project.updated)),
-        ("Planned start", _fmt_dt(project.planned_start)),
-        ("Planned finish", _fmt_dt(project.planned_finish)),
-        ("Schedule window", _fmt_duration(project)),
     ]
     fact_markup = "".join(
         (
@@ -279,15 +594,23 @@ def _detail_markup(project: ProjectSummary) -> str:
         for label, value in facts
     )
     description = project.description_text or "No description is available for this project yet."
-    return f"""
-        <section class="gb-project-detail">
-            <p class="gb-project-detail__eyebrow">Project Inspector</p>
-            <h2 class="gb-project-detail__title">{escape(project.name)}</h2>
-            <p class="gb-project-detail__sub">{escape(description)}</p>
-            <div class="gb-project-detail__chips">{chip_markup}</div>
-            <div class="gb-project-detail__grid">{fact_markup}</div>
-        </section>
-    """
+    timeline_markup = _timeline_markup(project)
+    return "".join(
+        [
+            '<section class="gb-project-detail">',
+            '<p class="gb-project-detail__eyebrow">Project Inspector</p>',
+            '<div class="gb-project-detail__header">',
+            '<div class="gb-project-detail__heading">',
+            f'<h2 class="gb-project-detail__title">{escape(project.name)}</h2>',
+            "</div>",
+            f'<div class="gb-project-detail__meta-rail">{_meta_chips_markup(project)}</div>',
+            "</div>",
+            f'<p class="gb-project-detail__sub">{escape(description)}</p>',
+            timeline_markup,
+            f'<div class="gb-project-detail__grid">{fact_markup}</div>',
+            "</section>",
+        ]
+    )
 
 
 def load_project_into_session(selected_project_id: str, project_summary: ProjectSummary) -> None:
@@ -322,12 +645,12 @@ def load_project_into_session(selected_project_id: str, project_summary: Project
 def render_project_browser(*, key_prefix: str, full_page: bool = False) -> str | None:
     _inject_project_browser_css()
 
-    projects = get_projects(st.session_state.auth_headers, include_closed=False)
+    projects = get_projects(st.session_state.auth_headers, include_closed=True)
 
     if full_page:
         render_registered_page_header(
             "projects",
-            chips=_project_count_chips(projects, include_closed=False),
+            chips=_project_count_chips(projects, include_closed=True),
         )
 
     if not projects:
@@ -396,17 +719,18 @@ def render_project_browser(*, key_prefix: str, full_page: bool = False) -> str |
         st.info("Pick a project from the list to inspect it before loading.")
         return None
 
-    inspector_left, inspector_center, inspector_right = st.columns([0.14, 1.72, 0.14], gap="medium")
+    _, inspector_center, _ = st.columns([0.14, 1.72, 0.14], gap="medium")
     with inspector_center:
         st.markdown(_detail_markup(selected_project), unsafe_allow_html=True)
         access_copy = (
-            "You can load this project and make edits in the workspace."
+            ":material/check: You can load this project and make edits in the workspace."
             if selected_project.can_edit is True
-            else "You can load this project, but the workspace may open in read-only mode."
+            else ":material/info: You can load this project, but the workspace may open in read-only mode."
         )
         if selected_project.can_view is False:
-            access_copy = "This project appears in the list, but the API does not report view access."
+            access_copy = ":material/error: This project appears in the list, but the API does not report view access."
 
+        st.write("")
         if st.button(
             "Load project",
             icon=":material/open_in_browser:",
