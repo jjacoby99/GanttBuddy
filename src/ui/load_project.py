@@ -206,10 +206,7 @@ def _inject_project_browser_css() -> None:
             }
 
             .gb-project-detail__timeline-head {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                gap: 0.8rem;
+                display: block;
                 margin-bottom: 0.8rem;
             }
 
@@ -227,20 +224,6 @@ def _inject_project_browser_css() -> None:
                 color: #475569;
                 font-size: 0.82rem;
                 line-height: 1.4;
-            }
-
-            .gb-project-detail__timeline-duration {
-                display: inline-flex;
-                align-items: center;
-                gap: 0.4rem;
-                padding: 0.42rem 0.78rem;
-                border-radius: 999px;
-                background: rgba(14, 165, 233, 0.1);
-                border: 1px solid rgba(14, 165, 233, 0.16);
-                color: #075985;
-                font-size: 0.78rem;
-                font-weight: 800;
-                white-space: nowrap;
             }
 
             .gb-project-detail__timeline-grid {
@@ -515,7 +498,6 @@ def _timeline_markup(project: ProjectSummary) -> str:
             "<div>",
             '<p class="gb-project-detail__timeline-eyebrow">Project Window</p>',
             "</div>",
-            f'<span class="gb-project-detail__timeline-duration">{escape(_fmt_duration(project))}</span>',
             "</div>",
             '<div class="gb-project-detail__timeline-grid">',
             '<div class="gb-project-detail__timeline-end">',
@@ -524,7 +506,7 @@ def _timeline_markup(project: ProjectSummary) -> str:
             f'<p class="gb-project-detail__timeline-support">{escape(_fmt_timeline_support(project.planned_start))}</p>',
             "</div>",
             '<div class="gb-project-detail__timeline-arrow">',
-            '<span class="gb-project-detail__timeline-arrow-note">Duration Window</span>',
+            f'<span class="gb-project-detail__timeline-arrow-note">{escape(_fmt_duration(project))}</span>',
             '<span class="gb-project-detail__timeline-arrow-line"></span>',
             "</div>",
             '<div class="gb-project-detail__timeline-end is-right">',
