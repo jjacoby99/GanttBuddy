@@ -22,13 +22,6 @@ def _inject_project_browser_css() -> None:
         dedent(
             """
             <style>
-            .gb-project-browser-note {
-                margin: 0 0 0.35rem;
-                color: #64748b;
-                font-size: 0.82rem;
-                line-height: 1.5;
-            }
-
             .gb-project-browser-panel {
                 position: relative;
                 overflow: hidden;
@@ -71,45 +64,6 @@ def _inject_project_browser_css() -> None:
                 color: #475569;
                 font-size: 0.88rem;
                 line-height: 1.5;
-            }
-
-            .gb-project-browser-panel__chips {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.45rem;
-                margin-top: 0.8rem;
-            }
-
-            .gb-project-browser-panel__chip {
-                display: inline-flex;
-                align-items: center;
-                gap: 0.35rem;
-                padding: 0.28rem 0.62rem;
-                border-radius: 999px;
-                background: rgba(241, 245, 249, 0.95);
-                border: 1px solid rgba(148, 163, 184, 0.18);
-                color: #334155;
-                font-size: 0.72rem;
-                font-weight: 700;
-                line-height: 1;
-            }
-
-            .gb-project-browser-panel__chip.is-active {
-                background: rgba(220, 252, 231, 0.9);
-                color: #166534;
-                border-color: rgba(34, 197, 94, 0.2);
-            }
-
-            .gb-project-browser-panel__chip.is-closed {
-                background: rgba(255, 237, 213, 0.92);
-                color: #9a3412;
-                border-color: rgba(249, 115, 22, 0.2);
-            }
-
-            .gb-project-browser-panel__chip.is-access {
-                background: rgba(219, 234, 254, 0.9);
-                color: #1d4ed8;
-                border-color: rgba(59, 130, 246, 0.18);
             }
 
             .gb-project-detail {
@@ -296,47 +250,12 @@ def _sort_projects(projects: list[ProjectSummary], sort_mode: str) -> list[Proje
     return sorted(projects, key=lambda item: item.updated, reverse=True)
 
 
-def _selector_panel_markup(projects: list[ProjectSummary], selected_project: ProjectSummary | None) -> str:
-    active_count = sum(not project.closed for project in projects)
-    closed_count = sum(project.closed for project in projects)
-    scheduled_count = sum(project.is_scheduled for project in projects)
-    chips = [
-        (
-            '<span class="gb-project-browser-panel__chip is-active">'
-            f"{active_count} active</span>"
-        ),
-        (
-            '<span class="gb-project-browser-panel__chip is-access">'
-            f"{scheduled_count} scheduled</span>"
-        ),
-        f'<span class="gb-project-browser-panel__chip is-closed">{closed_count} closed</span>',
-    ]
-    if selected_project is not None:
-        chips.append(
-            f'<span class="gb-project-browser-panel__chip">{escape(selected_project.type_label)}</span>'
-        )
-        if selected_project.site_code:
-            chips.append(
-                f'<span class="gb-project-browser-panel__chip">{escape(selected_project.site_code)}</span>'
-            )
-    return f"""
-        <section class="gb-project-browser-panel">
-            <p class="gb-project-browser-panel__eyebrow">Project Selector</p>
-            <h3 class="gb-project-browser-panel__title">Choose a workspace, then inspect it in context.</h3>
-            <p class="gb-project-browser-panel__body">
-                Filter from available projects in your organization.
-            </p>
-            <div class="gb-project-browser-panel__chips">{''.join(chips)}</div>
-        </section>
-    """
-
 def _detail_markup(project: ProjectSummary) -> str:
     chips = [
         project.status_label,
         project.type_label,
         project.access_label,
         project.site_code or "No site code",
-        project.timezone_name,
     ]
     chip_markup = "".join(
         f'<span class="gb-project-detail__chip">{escape(chip)}</span>'
@@ -349,7 +268,6 @@ def _detail_markup(project: ProjectSummary) -> str:
         ("Planned start", _fmt_dt(project.planned_start)),
         ("Planned finish", _fmt_dt(project.planned_finish)),
         ("Schedule window", _fmt_duration(project)),
-        ("Source timezone", project.timezone_name or "Not provided"),
     ]
     fact_markup = "".join(
         (
@@ -404,18 +322,12 @@ def load_project_into_session(selected_project_id: str, project_summary: Project
 def render_project_browser(*, key_prefix: str, full_page: bool = False) -> str | None:
     _inject_project_browser_css()
 
-    include_closed = st.toggle(
-        "Include closed projects",
-        value=False,
-        key=f"{key_prefix}_include_closed",
-        help="Show archived or completed projects alongside active ones.",
-    )
-    projects = get_projects(st.session_state.auth_headers, include_closed=include_closed)
+    projects = get_projects(st.session_state.auth_headers, include_closed=False)
 
     if full_page:
         render_registered_page_header(
             "projects",
-            chips=_project_count_chips(projects, include_closed),
+            chips=_project_count_chips(projects, include_closed=False),
         )
 
     if not projects:
@@ -423,8 +335,8 @@ def render_project_browser(*, key_prefix: str, full_page: bool = False) -> str |
 
     top_left, top_right = st.columns([0.9, 1.1], gap="large", vertical_alignment="top")
     with top_left:
-        with st.container():
-            st.markdown('<div class="gb-project-browser-stack">', unsafe_allow_html=True)
+        st.space("small")
+        with st.popover(f"Filter Projects", icon=":material/filter_list:"):
             query = st.text_input(
                 "Search projects",
                 value="",
@@ -441,7 +353,6 @@ def render_project_browser(*, key_prefix: str, full_page: bool = False) -> str |
                 options=["All shown", "Active only", "Closed only"],
                 key=f"{key_prefix}_status_scope",
             )
-            st.markdown("</div>", unsafe_allow_html=True)
 
     filtered_projects = [project for project in projects.values() if project.matches_query(query)]
     if status_scope == "Active only":
@@ -458,10 +369,6 @@ def render_project_browser(*, key_prefix: str, full_page: bool = False) -> str |
     selected_project = projects.get(selected_id) if selected_id else None
 
     if not filtered_projects:
-        st.markdown(
-            f'<p class="gb-project-browser-note">Showing 0 projects from the backend list.</p>',
-            unsafe_allow_html=True,
-        )
         st.info("No projects match the current filters.")
         return None
 
@@ -472,12 +379,6 @@ def render_project_browser(*, key_prefix: str, full_page: bool = False) -> str |
     selected_project = next((project for project in filtered_projects if project.id == selected_id), None)
 
     with top_right:
-        st.markdown(
-            f'<p class="gb-project-browser-note">Showing {len(filtered_projects)} '
-            f'project{"s" if len(filtered_projects) != 1 else ""} from the backend list.</p>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(_selector_panel_markup(filtered_projects, selected_project), unsafe_allow_html=True)
         selected_id = st.selectbox(
             "Project",
             options=project_options,
@@ -498,31 +399,23 @@ def render_project_browser(*, key_prefix: str, full_page: bool = False) -> str |
     inspector_left, inspector_center, inspector_right = st.columns([0.14, 1.72, 0.14], gap="medium")
     with inspector_center:
         st.markdown(_detail_markup(selected_project), unsafe_allow_html=True)
-        action_col, schedule_col = st.columns([0.9, 1.5], gap="medium", vertical_alignment="top")
-        with action_col:
-            access_copy = (
-                "You can load this project and make edits in the workspace."
-                if selected_project.can_edit is True
-                else "You can load this project, but the workspace may open in read-only mode."
-            )
-            if selected_project.can_view is False:
-                access_copy = "This project appears in the list, but the API does not report view access."
+        access_copy = (
+            "You can load this project and make edits in the workspace."
+            if selected_project.can_edit is True
+            else "You can load this project, but the workspace may open in read-only mode."
+        )
+        if selected_project.can_view is False:
+            access_copy = "This project appears in the list, but the API does not report view access."
 
-            st.markdown('<div class="gb-project-actions">', unsafe_allow_html=True)
-            if st.button(
-                "Load project",
-                icon=":material/open_in_browser:",
-                type="primary",
-                width="stretch",
-                key=f"{key_prefix}_load",
-            ):
-                st.markdown("</div>", unsafe_allow_html=True)
-                return selected_project.id
-            st.markdown("</div>", unsafe_allow_html=True)
-            st.info(access_copy)
-        with schedule_col:
-            st.caption("Planned schedule")
-            st.write(_fmt_schedule(selected_project))
+        if st.button(
+            "Load project",
+            icon=":material/open_in_browser:",
+            type="primary",
+            width="content",
+            key=f"{key_prefix}_load",
+        ):
+            return selected_project.id
+        st.info(access_copy)
 
     return None
 
