@@ -5,6 +5,22 @@ from typing import Optional
 from models.project_metadata import RelineMetadata
 
 from logic.backend.api_client import fetch_sites, fetch_mills, fetch_site
+from ui.add_site import add_site
+
+
+FIELD_LABELS = {
+    "site_id": "Site",
+    "site_name": "Site",
+    "mill_id": "Mill",
+    "mill_name": "Mill",
+    "vendor": "Vendor",
+    "liner_system": "Liner System",
+    "campaign_id": "Campaign ID",
+    "scope": "Scope",
+    "liner_type": "Liner Type",
+    "supervisor": "Supervisor",
+    "notes": "Notes",
+}
 
 def render_reline_metadata_inputs(
     existing: Optional[RelineMetadata] = None,
@@ -44,6 +60,8 @@ def render_reline_metadata_inputs(
     options = list(site_ids.keys())
     if not options:
         st.warning("No sites are available yet. Create a site in the backend before configuring mill reline inputs.")
+        if st.button(":material/add_location: Create a site", key=f"{key_prefix}_create_site"):
+            add_site()
         return existing
 
     selected_site_index = 0
@@ -169,12 +187,17 @@ def render_reline_metadata_inputs(
             st.rerun()
         return model
     except ValidationError as e:
-        # Make errors readable in UI
         st.error("Fix the highlighted issues and save again.")
+        missing_or_invalid_fields: list[str] = []
         for err in e.errors():
-            loc = ".".join(str(x) for x in err.get("loc", []))
-            msg = err.get("msg", "Invalid value")
-            st.caption(f"- {loc}: {msg}")
+            loc = err.get("loc", [])
+            field_name = str(loc[-1]) if loc else ""
+            label = FIELD_LABELS.get(field_name, "Required field")
+            if label not in missing_or_invalid_fields:
+                missing_or_invalid_fields.append(label)
+
+        for label in missing_or_invalid_fields:
+            st.caption(f"- {label}")
         if require_submit:
             st.session_state[state_key] = None
             st.session_state["reline_dialog_open"] = False

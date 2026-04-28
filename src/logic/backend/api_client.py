@@ -17,6 +17,7 @@ from logic.backend.export_project import project_to_import_payload
 from models.project import Project
 from models.crew import CrewOut
 from models.delay import DelayType
+from models.site import SiteOut
 from models.todo import TodoIn, TodoUpsertRow
 
 
@@ -255,6 +256,23 @@ def post_new_crew(headers: dict, crew: CrewOut) -> dict:
         except Exception:
             pass
         raise ValueError(f"Failed to post new crew: {e} {body}")
+
+
+def add_site(headers: dict, site: SiteOut) -> dict:
+    url = f"{API_BASE}/sites"
+
+    try:
+        response = requests.post(url, json=site.model_dump(mode="json"), headers=headers, timeout=30)
+        response.raise_for_status()
+        fetch_sites.clear()
+        return response.json()
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to create site: {e} {body}")
     
 
 @st.cache_data

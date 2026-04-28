@@ -18,3 +18,10 @@ class SiteIn(BaseModel):
             Maps sites by their ID to the SiteIn object.
         """
         return {site.id: site for site in sites}
+    
+
+class SiteOut(BaseModel):
+    code: str
+    name: str
+    timezone: str
+    is_active: bool

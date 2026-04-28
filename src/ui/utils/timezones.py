@@ -3,6 +3,32 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo, available_timezones
 
+COMMON_TIMEZONE_NAMES = [
+    "UTC",
+    "America/Vancouver",
+    "America/Edmonton",
+    "America/Winnipeg",
+    "America/Toronto",
+    "America/Halifax",
+    "America/St_Johns",
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Phoenix",
+    "America/Los_Angeles",
+    "America/Anchorage",
+    "Pacific/Honolulu",
+    "Europe/London",
+    "Europe/Paris",
+    "Europe/Berlin",
+    "Asia/Dubai",
+    "Asia/Singapore",
+    "Asia/Tokyo",
+    "Australia/Perth",
+    "Australia/Sydney",
+    "Pacific/Auckland",
+]
+
 def _fmt_utc_offset(td: timedelta) -> str:
     total_minutes = int(td.total_seconds() // 60)
     sign = "+" if total_minutes >= 0 else "-"
@@ -41,6 +67,14 @@ def label_timezones_relative_to_user(user_tz_name: str) -> list[tuple[str, str]]
         results.append((tz_name, label))
 
     return results
+
+
+def label_common_timezones_relative_to_user(user_tz_name: str) -> list[tuple[str, str]]:
+    labels_by_name = dict(label_timezones_relative_to_user(user_tz_name))
+    return [
+        (tz_name, labels_by_name.get(tz_name, tz_name))
+        for tz_name in COMMON_TIMEZONE_NAMES
+    ]
 
 
 def to_datetime_input_value(value: datetime | None, timezone_name: ZoneInfo) -> datetime | None:
