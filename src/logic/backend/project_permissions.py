@@ -9,6 +9,7 @@ from logic.backend.project_members import get_project_members
 from logic.backend.users import get_user
 from models.project_access import ProjectAccess
 from models.project_member import ProjectMembersPayload
+from models.user import User
 
 
 def _coerce_bool(value: Any, default: bool) -> bool:
@@ -73,6 +74,36 @@ def _access_from_members_payload(
     )
 
 
+def _access_from_admin_user(project_id: str, user: User) -> ProjectAccess | None:
+    roles = getattr(user, "roles", []) or []
+    organizations = getattr(user, "organizations", []) or []
+
+    if any(role.get("name") == "BTA_SUPERUSER" for role in roles):
+        return ProjectAccess(
+            project_id=project_id,
+            can_view=True,
+            can_edit=True,
+            can_manage_members=True,
+            can_delete=True,
+            source="org_admin",
+        )
+
+    if any(
+        membership.is_active and membership.role in {"ORG_OWNER", "ORG_ADMIN"}
+        for membership in organizations
+    ):
+        return ProjectAccess(
+            project_id=project_id,
+            can_view=True,
+            can_edit=True,
+            can_manage_members=True,
+            can_delete=True,
+            source="org_admin",
+        )
+
+    return None
+
+
 def resolve_project_access(
     *,
     headers: dict,
@@ -84,6 +115,9 @@ def resolve_project_access(
 
     try:
         current_user = get_user(auth_headers=headers, timezone=timezone)
+        admin_access = _access_from_admin_user(project_id, current_user)
+        if admin_access is not None:
+            return admin_access
         members_payload = get_project_members(headers=headers, project_id=project_id)
         member_access = _access_from_members_payload(project_id, members_payload, current_user.id)
         if member_access is not None:

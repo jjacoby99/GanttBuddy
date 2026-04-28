@@ -92,3 +92,65 @@ def test_resolve_project_access_uses_member_permissions_over_project_record(monk
     assert access.can_manage_members is True
     assert access.can_delete is True
     assert access.is_read_only is False
+
+
+def test_resolve_project_access_promotes_org_admin_to_full_project_access(monkeypatch) -> None:
+    monkeypatch.setattr(
+        project_permissions,
+        "get_user",
+        lambda **_kwargs: SimpleNamespace(
+            id="18436fc3-afce-43aa-af0a-4c157108a008",
+            roles=[],
+            organizations=[
+                SimpleNamespace(
+                    is_active=True,
+                    role="ORG_ADMIN",
+                )
+            ],
+        ),
+    )
+    monkeypatch.setattr(
+        project_permissions,
+        "get_project_members",
+        lambda **_kwargs: ProjectMembersPayload.model_validate(_members_payload()),
+    )
+
+    access = project_permissions.resolve_project_access(
+        headers={"Authorization": "Bearer test"},
+        project_id="d9e16863-fbb9-4000-8d05-71a5d576f076",
+        timezone=ZoneInfo("America/Vancouver"),
+        project_record={"can_view": True, "can_edit": False, "can_manage_members": False, "can_delete": False},
+    )
+
+    assert access.source == "org_admin"
+    assert access.can_view is True
+    assert access.can_edit is True
+    assert access.can_manage_members is True
+    assert access.can_delete is True
+
+
+def test_resolve_project_access_promotes_superuser_to_full_project_access(monkeypatch) -> None:
+    monkeypatch.setattr(
+        project_permissions,
+        "get_user",
+        lambda **_kwargs: SimpleNamespace(
+            id="18436fc3-afce-43aa-af0a-4c157108a008",
+            roles=[{"name": "BTA_SUPERUSER"}],
+            organizations=[],
+        ),
+    )
+    monkeypatch.setattr(
+        project_permissions,
+        "get_project_members",
+        lambda **_kwargs: ProjectMembersPayload.model_validate({"items": []}),
+    )
+
+    access = project_permissions.resolve_project_access(
+        headers={"Authorization": "Bearer test"},
+        project_id="d9e16863-fbb9-4000-8d05-71a5d576f076",
+        timezone=ZoneInfo("America/Vancouver"),
+        project_record={"can_view": True, "can_edit": False, "can_manage_members": False, "can_delete": False},
+    )
+
+    assert access.source == "org_admin"
+    assert access.can_delete is True
