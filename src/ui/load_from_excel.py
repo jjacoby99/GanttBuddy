@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import datetime as dt
-from zoneinfo import ZoneInfo
 
 import streamlit as st
 
 from logic.load_project import ExcelProjectLoader, ExcelParameters, DataColumn
 from logic.backend.api_client import fetch_site
+from logic.backend.sites.fetch_sites import get_sites
 from logic.backend.crews.fetch_crews import get_crews
+from models.site import SiteIn
 from models.project_type import ProjectType
 from models.shift_schedule import ShiftAssignment
 from ui.project_metadata import render_reline_metadata_inputs
 from ui.shift_config import render_shift_assignment_table
 from ui.shift_definition import render_shift_definition
-from ui.utils.timezones import label_timezones_relative_to_user
 from ui.utils.page_header import render_registered_page_header
 
 
@@ -119,40 +119,43 @@ def _render_project_context_inputs(
     widget_prefix: str,
 ) -> tuple[str | None, str]:
     default_site_id, default_timezone = _default_project_context(analysis)
-    user_timezone = getattr(st.context, "timezone", "America/Vancouver")
-    timezone_options = label_timezones_relative_to_user(user_timezone)
-    timezone_names = [name for name, _ in timezone_options]
-    timezone_labels = {name: label for name, label in timezone_options}
-    if default_timezone not in timezone_names:
-        timezone_names.insert(0, default_timezone)
-        timezone_labels[default_timezone] = default_timezone
+    headers = st.session_state.get("auth_headers", {})
+    sites = get_sites(headers=headers)
+    sites_by_id = SiteIn.by_id(sites)
+    site_options = list(sites_by_id.keys())
+
+    selected_site_id = default_site_id if default_site_id in sites_by_id else None
+    derived_timezone = default_timezone
+    if selected_site_id is not None:
+        derived_timezone = sites_by_id[selected_site_id].timezone or default_timezone
 
     shell = st.container(border=True)
     with shell:
         st.subheader("Project Context")
-        st.caption("Set the site id and timezone that should be stored on the imported project.")
-
-        left, right = st.columns([1, 1], vertical_alignment="bottom")
-        with left:
-            site_id = st.text_input(
-                "Project site ID",
-                value=default_site_id,
-                placeholder="site-123",
-                key=f"{widget_prefix}_project_site_id",
-            ).strip()
-        with right:
-            timezone_name = st.selectbox(
+        
+        if not site_options:
+            st.warning("No sites are available from the backend, so the workbook site cannot be assigned here.")
+            st.text_input(
                 "Project timezone",
-                options=timezone_names,
-                index=timezone_names.index(default_timezone),
-                format_func=lambda name: timezone_labels[name],
-                key=f"{widget_prefix}_project_timezone",
+                value=derived_timezone,
+                disabled=True,
+                key=f"{widget_prefix}_project_timezone_display",
             )
+            return None, derived_timezone
 
-        if site_id:
-            st.caption(f"Imported project will use site id `{site_id}`.")
+        c1, c2 = st.columns([3, 1])
+        selected_index = site_options.index(selected_site_id) if selected_site_id in site_options else 0
+        selected_site_id = c1.selectbox(
+            "Site",
+            options=site_options,
+            index=selected_index,
+            format_func=lambda site_id: f"{sites_by_id[site_id].name} ({sites_by_id[site_id].code})",
+            key=f"{widget_prefix}_project_site_id",
+        )
+        derived_timezone = sites_by_id[selected_site_id].timezone or default_timezone
+        c2.info(f":material/info: Timezone: {derived_timezone}.")
 
-    return site_id or None, timezone_name
+    return selected_site_id, derived_timezone
 
 
 def _render_mill_reline_inputs(analysis: dict, widget_prefix: str) -> tuple[object, object, list[object]]:
@@ -384,7 +387,7 @@ def render_excel_import_page() -> None:
                             shift_definition_override=resolved_shift_definition,
                             shift_assignments_override=resolved_shift_assignments,
                             site_id_override=resolved_site_id,
-                            timezone_override=ZoneInfo(resolved_timezone_name),
+                            timezone_override=resolved_timezone_name,
                         )
                 except (FileNotFoundError, ValueError, KeyError) as exc:
                     st.error(str(exc))
