@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+import datetime as dt
+
 import streamlit as st
 
 from logic.load_project import ExcelProjectLoader, ExcelParameters, DataColumn
+from logic.backend.api_client import fetch_site
+from logic.backend.crews.fetch_crews import get_crews
+from models.project_type import ProjectType
+from models.shift_schedule import ShiftAssignment
+from ui.project_metadata import render_reline_metadata_inputs
+from ui.shift_config import render_shift_assignment_table
+from ui.shift_definition import render_shift_definition
 from ui.utils.page_header import render_registered_page_header
 
 
@@ -50,6 +59,109 @@ def _render_project_preview(analysis: dict) -> None:
         m3, _ = st.columns(2)
         with m3:
             st.metric("Phase constraint rows inferred", analysis["inferred_phase_predecessor_count"])
+
+
+def _import_widget_prefix(uploaded_file, analysis: dict) -> str:
+    token = hash(
+        (
+            getattr(uploaded_file, "name", "workbook"),
+            getattr(uploaded_file, "size", 0),
+            analysis["project_name"],
+            analysis["project_id"],
+            analysis["task_count"],
+            analysis["phase_count"],
+        )
+    )
+    return f"excel_import_{abs(token)}"
+
+
+def _default_assignment_window(analysis: dict) -> tuple[dt.date, dt.date]:
+    preview = analysis["schedule_preview"]
+    if preview.empty:
+        start = dt.date.today()
+        return start, start + dt.timedelta(days=4)
+
+    for value in preview["Planned Start"].tolist():
+        if hasattr(value, "date"):
+            start = value.date()
+            return start, start + dt.timedelta(days=4)
+
+    start = dt.date.today()
+    return start, start + dt.timedelta(days=4)
+
+
+def _mill_reline_inputs_complete(
+    metadata,
+    shift_definition,
+    shift_assignments,
+) -> bool:
+    return metadata is not None and shift_definition is not None and bool(shift_assignments)
+
+
+def _render_mill_reline_inputs(analysis: dict, widget_prefix: str) -> tuple[object, object, list[object]]:
+    resolved_metadata = analysis["metadata"]
+    resolved_shift_definition = analysis["shift_definition"]
+    resolved_shift_assignments = analysis["shift_assignments"]
+
+    shell = st.container(border=True)
+    with shell:
+        if analysis["input_issues"]:
+            st.warning("Some mill reline inputs were missing or invalid in the workbook. Review and confirm them below before import.")
+            for issue in analysis["input_issues"]:
+                st.caption(f"- {issue}")
+        elif analysis["is_new_project"]:
+            st.info("This workbook looks like a new mill reline project. Confirm the project setup, shift definition, and crew assignments before import.")
+
+        metadata = render_reline_metadata_inputs(
+            existing=analysis["metadata"],
+            template_version=getattr(analysis["metadata"], "template_version", None),
+            title="Project Setup (Mill Reline)",
+            require_submit=False,
+            state_key=f"{widget_prefix}_metadata_state",
+            key_prefix=f"{widget_prefix}_metadata",
+        )
+        if metadata is not None:
+            resolved_metadata = metadata
+
+        site_tz = "America/Vancouver"
+        crews = []
+        if resolved_metadata is not None and resolved_metadata.site_id:
+            headers = st.session_state.get("auth_headers", {})
+            try:
+                site = fetch_site(headers=headers, site_id=resolved_metadata.site_id)
+                site_tz = site.get("timezone") or site_tz
+            except Exception as exc:
+                st.warning(f"Unable to read site timezone from the backend: {exc}")
+
+            try:
+                crews = get_crews(headers=headers, site_id=resolved_metadata.site_id)
+            except Exception as exc:
+                st.warning(f"Unable to load crews for the selected site: {exc}")
+
+        st.divider()
+        resolved_shift_definition = render_shift_definition(
+            project_id=analysis["project_id"] or "new-project",
+            current_tz=site_tz,
+            existing=analysis["shift_definition"],
+            key_prefix=f"{widget_prefix}_shift_definition",
+        )
+
+        default_start, default_end = _default_assignment_window(analysis)
+        edited_assignments = render_shift_assignment_table(
+            crews,
+            project_id=analysis["project_id"] or "new-project",
+            initial_assignments=analysis["shift_assignments"],
+            default_start_date=default_start,
+            default_end_date=default_end,
+            key=f"{widget_prefix}_shift_assignments",
+        )
+        if edited_assignments is not None:
+            resolved_shift_assignments = ShiftAssignment.from_df(
+                edited_assignments,
+                project_id=analysis["project_id"] or "new-project",
+            )
+
+    return resolved_metadata, resolved_shift_definition, resolved_shift_assignments
 
 
 def render_excel_import_page() -> None:
@@ -117,6 +229,24 @@ def render_excel_import_page() -> None:
         st.error(f"Failed to analyze workbook: {exc}")
         return
 
+    widget_prefix = _import_widget_prefix(uploaded_file, analysis)
+    resolved_metadata = analysis["metadata"]
+    resolved_shift_definition = analysis["shift_definition"]
+    resolved_shift_assignments = analysis["shift_assignments"]
+
+    if analysis["project_type"] == ProjectType.MILL_RELINE and analysis["requires_mill_reline_inputs"]:
+        resolved_metadata, resolved_shift_definition, resolved_shift_assignments = _render_mill_reline_inputs(
+            analysis,
+            widget_prefix,
+        )
+        if not _mill_reline_inputs_complete(
+            resolved_metadata,
+            resolved_shift_definition,
+            resolved_shift_assignments,
+        ):
+            st.info("Finish the required mill reline inputs above to unlock the workbook preview and import action.")
+            return
+
     _render_project_preview(analysis)
 
     tabs = st.tabs(
@@ -154,6 +284,12 @@ def render_excel_import_page() -> None:
         else:
             st.dataframe(analysis["metadata_preview"], hide_index=True, width="stretch")
 
+    if analysis["project_type"] == ProjectType.MILL_RELINE and not analysis["requires_mill_reline_inputs"]:
+        resolved_metadata, resolved_shift_definition, resolved_shift_assignments = _render_mill_reline_inputs(
+            analysis,
+            widget_prefix,
+        )
+
     actions = st.container()
     with actions:
         left, right = st.columns([1, 1], vertical_alignment="center")
@@ -162,12 +298,26 @@ def render_excel_import_page() -> None:
                 st.switch_page("pages/home.py")
         with right:
             if st.button("Import Project", type="primary", width="stretch"):
+                if analysis["project_type"] == ProjectType.MILL_RELINE:
+                    if resolved_metadata is None:
+                        st.error("Mill reline imports need project setup details before they can be loaded.")
+                        return
+                    if resolved_shift_definition is None:
+                        st.error("Mill reline imports need a valid shift definition before they can be loaded.")
+                        return
+                    if not resolved_shift_assignments:
+                        st.error("Mill reline imports need at least one shift assignment before they can be loaded.")
+                        return
+
                 try:
                     with st.spinner("Importing workbook into GanttBuddy..."):
                         project, metadata = ExcelProjectLoader.load_excel_project(
                             uploaded_file,
                             params=params,
                             infer_predecessors=bool(infer_predecessors),
+                            metadata_override=resolved_metadata,
+                            shift_definition_override=resolved_shift_definition,
+                            shift_assignments_override=resolved_shift_assignments,
                         )
                 except (FileNotFoundError, ValueError, KeyError) as exc:
                     st.error(str(exc))

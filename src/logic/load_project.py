@@ -7,6 +7,7 @@ import warnings
 from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Any, Optional, Union
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from openpyxl import Workbook, load_workbook
@@ -108,6 +109,16 @@ class ExcelReadContext:
     workbook_values: Workbook
     workbook_formulas: Workbook | None = None
 
+
+@dataclass
+class ExcelAuxiliaryData:
+    metadata: Optional[RelineMetadata]
+    shift_definition: Optional[ShiftDefinition]
+    shift_assignments: list[ShiftAssignment]
+    issues: list[str] = field(default_factory=list)
+    is_new_project: bool = False
+    requires_user_inputs: bool = False
+
 class ExcelProjectLoader():
 
     _phase_pat = re.compile(r"\b(\d+(?:\.\d+)?)\s*day(s)?\b", re.IGNORECASE)
@@ -130,6 +141,17 @@ class ExcelProjectLoader():
         if ExcelProjectLoader._is_nan(x):
             return ""
         return str(x).strip()
+
+    @staticmethod
+    def _coerce_optional_str(x: Any) -> Optional[str]:
+        value = ExcelProjectLoader._coerce_str(x)
+        return value or None
+
+    @staticmethod
+    def _has_sheet(source: Workbook | pd.ExcelFile, sheet_name: str) -> bool:
+        if isinstance(source, pd.ExcelFile):
+            return sheet_name in source.sheet_names
+        return sheet_name in source.sheetnames
     
     @staticmethod
     def _coerce_bool(x: Any) -> bool:
@@ -625,13 +647,16 @@ class ExcelProjectLoader():
         project_name = plan_sheet[params.project_name_cell].value or "Untitled Project"
         project_id = ExcelProjectLoader.load_project_id(context.workbook_values)
         project_type = ExcelProjectLoader.load_project_type(context.workbook_values)
-        metadata = (
-            ExcelProjectLoader.load_metadata(context.workbook_values)
-            if project_type == ProjectType.MILL_RELINE
-            else None
+        auxiliary = ExcelProjectLoader.load_auxiliary_data(
+            workbook=context.workbook_values,
+            excel_file=context.excel_file,
+            project_type=project_type,
+            project_id=project_id,
+            default_project_id=project_id or "new-project",
         )
-        shift_definition = ExcelProjectLoader.load_shift_definition(context.excel_file, project_id=project_id)
-        shift_assignments = ExcelProjectLoader.load_shift_assignments(context.excel_file, project_id=project_id)
+        metadata = auxiliary.metadata
+        shift_definition = auxiliary.shift_definition
+        shift_assignments = auxiliary.shift_assignments
 
         preview_rows: list[dict[str, Any]] = []
         inferred_count = 0
@@ -696,6 +721,11 @@ class ExcelProjectLoader():
             "project_id": project_id,
             "project_type": project_type,
             "metadata": metadata,
+            "shift_definition": shift_definition,
+            "shift_assignments": shift_assignments,
+            "input_issues": auxiliary.issues,
+            "is_new_project": auxiliary.is_new_project,
+            "requires_mill_reline_inputs": auxiliary.requires_user_inputs,
             "task_count": task_count,
             "phase_count": phase_count,
             "provided_predecessor_count": provided_count,
@@ -703,7 +733,9 @@ class ExcelProjectLoader():
             "inferred_phase_predecessor_count": inferred_phase_count,
             "schedule_preview": pd.DataFrame(preview_rows).head(preview_limit),
             "shift_definition_preview": pd.DataFrame(
-                [
+                []
+                if shift_definition is None
+                else [
                     {
                         "project_id": shift_definition.project_id,
                         "day_start_time": shift_definition.day_start_time,
@@ -734,6 +766,10 @@ class ExcelProjectLoader():
         file,
         params: ExcelParameters,
         infer_predecessors: bool = False,
+        *,
+        metadata_override: Optional[RelineMetadata] = None,
+        shift_definition_override: Optional[ShiftDefinition] = None,
+        shift_assignments_override: Optional[list[ShiftAssignment]] = None,
     ) -> tuple[Project, Optional[RelineMetadata]]:
         data = ExcelProjectLoader._read_excel_bytes(file)
         context = ExcelProjectLoader._build_read_context(
@@ -756,21 +792,27 @@ class ExcelProjectLoader():
         if project_id is not None:
             project.uuid = project_id #existing project, preserve uuid for backend.
 
-        project.shift_definition = ExcelProjectLoader.load_shift_definition(
-            context.excel_file,
-            project_id=project.uuid,
+        proj_type = ExcelProjectLoader.load_project_type(wb)
+        project.project_type = proj_type
+
+        auxiliary = ExcelProjectLoader.load_auxiliary_data(
+            workbook=wb,
+            excel_file=context.excel_file,
+            project_type=proj_type,
+            project_id=project_id,
+            default_project_id=project.uuid,
         )
-        project.shift_assignments = ExcelProjectLoader.load_shift_assignments(
-            context.excel_file,
-            project_id=project.uuid,
+        project.shift_definition = ExcelProjectLoader._bind_shift_definition_to_project(
+            shift_definition_override or auxiliary.shift_definition,
+            project.uuid,
+        )
+        project.shift_assignments = ExcelProjectLoader._bind_shift_assignments_to_project(
+            shift_assignments_override if shift_assignments_override is not None else auxiliary.shift_assignments,
+            project.uuid,
         )
         if project.shift_definition is not None:
             project.timezone = project.shift_definition.timezone
-        proj_type = ExcelProjectLoader.load_project_type(wb)
-        project.project_type = proj_type
-        metadata = None
-        if proj_type == ProjectType.MILL_RELINE:
-            metadata = ExcelProjectLoader.load_metadata(wb)
+        metadata = metadata_override or auxiliary.metadata
         current_phase = None
         unassigned_phase = None
 
@@ -825,6 +867,97 @@ class ExcelProjectLoader():
                     current_phase.add_task(task)
 
         return project, metadata
+
+    @staticmethod
+    def _bind_shift_definition_to_project(
+        shift_definition: Optional[ShiftDefinition],
+        project_id: str,
+    ) -> Optional[ShiftDefinition]:
+        if shift_definition is None:
+            return None
+        return shift_definition.model_copy(update={"project_id": project_id})
+
+    @staticmethod
+    def _bind_shift_assignments_to_project(
+        shift_assignments: Optional[list[ShiftAssignment]],
+        project_id: str,
+    ) -> list[ShiftAssignment]:
+        bound_assignments: list[ShiftAssignment] = []
+        for assignment in shift_assignments or []:
+            bound_assignments.append(assignment.model_copy(update={"project_id": project_id}))
+        return bound_assignments
+
+    @staticmethod
+    def default_shift_definition(
+        *,
+        project_id: str,
+        timezone: str = "America/Vancouver",
+    ) -> ShiftDefinition:
+        return ShiftDefinition(
+            project_id=project_id,
+            day_start_time=dt.time(hour=7, minute=0),
+            night_start_time=dt.time(hour=19, minute=0),
+            shift_length_hours=12.0,
+            timezone=ZoneInfo(timezone),
+        )
+
+    @staticmethod
+    def load_auxiliary_data(
+        *,
+        workbook: Workbook,
+        excel_file: pd.ExcelFile,
+        project_type: ProjectType,
+        project_id: Optional[str],
+        default_project_id: str,
+    ) -> ExcelAuxiliaryData:
+        issues: list[str] = []
+        is_new_project = project_type == ProjectType.MILL_RELINE and not project_id
+        requires_user_inputs = is_new_project
+        metadata = None
+
+        if project_type == ProjectType.MILL_RELINE:
+            try:
+                metadata = ExcelProjectLoader.load_metadata(workbook)
+            except Exception as exc:
+                issues.append(f"Metadata: {exc}")
+                requires_user_inputs = True
+
+        try:
+            shift_definition = ExcelProjectLoader.load_shift_definition(
+                excel_file,
+                project_id=project_id or default_project_id,
+            )
+        except Exception as exc:
+            if project_type == ProjectType.MILL_RELINE:
+                shift_definition = ExcelProjectLoader.default_shift_definition(project_id=default_project_id)
+                issues.append(f"Shift definition: {exc}")
+                requires_user_inputs = True
+            else:
+                shift_definition = None
+                if ExcelProjectLoader._has_sheet(excel_file, "shift_definition"):
+                    issues.append(f"Shift definition: {exc}")
+
+        try:
+            shift_assignments = ExcelProjectLoader.load_shift_assignments(
+                excel_file,
+                project_id=project_id or default_project_id,
+            )
+        except Exception as exc:
+            shift_assignments = []
+            if project_type == ProjectType.MILL_RELINE:
+                issues.append(f"Shift assignments: {exc}")
+                requires_user_inputs = True
+            elif ExcelProjectLoader._has_sheet(excel_file, "shift_assignments"):
+                issues.append(f"Shift assignments: {exc}")
+
+        return ExcelAuxiliaryData(
+            metadata=metadata,
+            shift_definition=shift_definition,
+            shift_assignments=shift_assignments,
+            issues=issues,
+            is_new_project=is_new_project,
+            requires_user_inputs=requires_user_inputs,
+        )
     
     @staticmethod
     def load_metadata(wb, sheet_name: str="metadata") -> RelineMetadata:
@@ -832,17 +965,29 @@ class ExcelProjectLoader():
             raise ValueError(f"Provided sheet name {sheet_name} not found in Workbook.")
         ws = wb[sheet_name]
 
-        site_id =          str(ws.cell(row=2,column=1).value)
-        site_name =        str(ws.cell(row=2,column=2).value)
-        mill_id =          str(ws.cell(row=2,column=3).value)
-        mill_name =        str(ws.cell(row=2,column=4).value)
-        vendor =           str(ws.cell(row=2,column=5).value)
-        liner_system =     str(ws.cell(row=2,column=6).value)
-        campaign_id =      str(ws.cell(row=2,column=7).value)
-        scope =            str(ws.cell(row=2,column=8).value)
-        liner =            str(ws.cell(row=2,column=9).value)
-        supervisor =       str(ws.cell(row=2,column=10).value)
-        notes =            str(ws.cell(row=2,column=11).value)
+        site_id =          ExcelProjectLoader._coerce_optional_str(ws.cell(row=2,column=1).value)
+        site_name =        ExcelProjectLoader._coerce_optional_str(ws.cell(row=2,column=2).value)
+        mill_id =          ExcelProjectLoader._coerce_optional_str(ws.cell(row=2,column=3).value)
+        mill_name =        ExcelProjectLoader._coerce_optional_str(ws.cell(row=2,column=4).value)
+        vendor =           ExcelProjectLoader._coerce_optional_str(ws.cell(row=2,column=5).value)
+        liner_system =     ExcelProjectLoader._coerce_optional_str(ws.cell(row=2,column=6).value)
+        campaign_id =      ExcelProjectLoader._coerce_optional_str(ws.cell(row=2,column=7).value)
+        scope =            ExcelProjectLoader._coerce_optional_str(ws.cell(row=2,column=8).value)
+        liner =            ExcelProjectLoader._coerce_optional_str(ws.cell(row=2,column=9).value)
+        supervisor =       ExcelProjectLoader._coerce_optional_str(ws.cell(row=2,column=10).value)
+        notes =            ExcelProjectLoader._coerce_optional_str(ws.cell(row=2,column=11).value)
+
+        required_fields = {
+            "site_id": site_id,
+            "site_name": site_name,
+            "mill_id": mill_id,
+            "mill_name": mill_name,
+            "vendor": vendor,
+            "liner_system": liner_system,
+        }
+        missing = [name for name, value in required_fields.items() if not value]
+        if missing:
+            raise ValueError(f"Metadata sheet is missing required values: {', '.join(missing)}")
         
         return RelineMetadata(
             site_id=site_id,
@@ -886,9 +1031,9 @@ class ExcelProjectLoader():
 
         ws = wb[sheet_name]
         val = ws.cell(row=14, column=4).value
-        if val is None:
+        if val is None or ExcelProjectLoader._coerce_str(val) == "":
             return None
-        return str(val)
+        return ExcelProjectLoader._coerce_str(val)
 
     @staticmethod
     def load_project_settings(wb, sheet_name: str = "Project Inputs") -> ProjectSettings:
@@ -966,7 +1111,12 @@ class ExcelProjectLoader():
 
     @staticmethod
     def load_shift_definition(file, project_id: str, sheet_name: str="shift_definition") -> ShiftDefinition:
-        source = BytesIO(file) if isinstance(file, bytes) else file
+        if isinstance(file, pd.ExcelFile):
+            if sheet_name not in file.sheet_names:
+                raise ValueError(f"Provided sheet name {sheet_name} not found in Workbook.")
+            source = file
+        else:
+            source = BytesIO(file) if isinstance(file, bytes) else file
         df = pd.read_excel(
             source,
             sheet_name=sheet_name,
@@ -974,17 +1124,28 @@ class ExcelProjectLoader():
             usecols="A:F",
             names=["id", "project_id", "day_start_time", "night_start_time", "shift_length_hours", "timezone"]
         )
+        df = df.dropna(how="all")
+        if df.empty:
+            raise ValueError("Shift definition sheet is empty.")
 
         df["day_start_time"] = df["day_start_time"].map(ExcelProjectLoader.coerce_time)
         df["night_start_time"] = df["night_start_time"].map(ExcelProjectLoader.coerce_time)
-        if project_id is not None and (df["project_id"] != project_id).any():
-            df["project_id"] = project_id # fall back on provided project id (existing project)
+        df["id"] = df["id"].map(ExcelProjectLoader._coerce_optional_str)
+        df["project_id"] = project_id
+        df["timezone"] = df["timezone"].map(
+            lambda value: ExcelProjectLoader._coerce_optional_str(value) or "America/Vancouver"
+        )
 
         return ShiftDefinition.from_df(df, project_id)
     
     @staticmethod
     def load_shift_assignments(file, project_id: str, sheet_name: str="shift_assignments") -> list[ShiftAssignment]:
-        source = BytesIO(file) if isinstance(file, bytes) else file
+        if isinstance(file, pd.ExcelFile):
+            if sheet_name not in file.sheet_names:
+                raise ValueError(f"Provided sheet name {sheet_name} not found in Workbook.")
+            source = file
+        else:
+            source = BytesIO(file) if isinstance(file, bytes) else file
         df = pd.read_excel(
             source,
             sheet_name=sheet_name,
@@ -992,6 +1153,10 @@ class ExcelProjectLoader():
             usecols="A:F",
             names=["id", "project_id", "shift_type", "crew_id", "start_date", "end_date"],
         )
+        df = df.dropna(how="all")
+        if df.empty:
+            return []
+        df["id"] = df["id"].map(ExcelProjectLoader._coerce_optional_str)
         df["start_date"] = pd.to_datetime(df["start_date"], errors="raise")
         df["end_date"] = pd.to_datetime(df["end_date"], errors="raise")
 

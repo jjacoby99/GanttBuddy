@@ -3,21 +3,17 @@ from pydantic import ValidationError
 from typing import Optional
 
 from models.project_metadata import RelineMetadata
-from models.mill import HVC_MILLS
-
-import streamlit as st
-from pydantic import ValidationError
-from typing import Optional
 
 from logic.backend.api_client import fetch_sites, fetch_mills, fetch_site
 
-@st.dialog("Mill Reline Setup Information")
-def render_reline_metadata_form(
+def render_reline_metadata_inputs(
     existing: Optional[RelineMetadata] = None,
     *,
     template_version: Optional[str] = None,
     title: str = "Project Setup (Mill Reline)",
     require_submit: bool = True,
+    state_key: str = "reline_metadata",
+    key_prefix: str = "reline_metadata",
 ) -> Optional[RelineMetadata]:
 
     st.subheader(title)
@@ -37,67 +33,109 @@ def render_reline_metadata_form(
     if template_version:
         st.caption(f"Template version: {template_version}")
 
+    headers = st.session_state.get("auth_headers", {})
+    try:
+        sites = fetch_sites(headers)
+    except Exception as exc:
+        st.error(f"Failed to load sites: {exc}")
+        return existing
+
+    site_ids = {site.get("id"): site.get("name") for site in sites}
+    options = list(site_ids.keys())
+    if not options:
+        st.warning("No sites are available yet. Create a site in the backend before configuring mill reline inputs.")
+        return existing
+
+    selected_site_index = 0
+    if ex.site_id in options:
+        selected_site_index = options.index(ex.site_id)
+
     c1, c2 = st.columns(2)
     with c1:
-        headers = st.session_state.get("auth_headers", {})
-        sites = fetch_sites(headers)
-        site_ids = {site.get("id"): site.get("name") for site in sites }
-        options = list(site_ids.keys())
         selected_site_id = st.selectbox(
             "Site",
             options=options,
-            index=options.index(existing.site_id) if existing else 0,
+            index=selected_site_index,
             format_func=lambda s: site_ids[s],
+            key=f"{key_prefix}_site_id",
         )
 
         vendor_options = ["Metso", "Other"]
+        vendor_index = vendor_options.index(ex.vendor) if ex.vendor in vendor_options else 0
         vendor = st.selectbox(
             "Vendor",
             options=vendor_options,
-            index=vendor_options.index(existing.vendor) if existing else 0
+            index=vendor_index,
+            key=f"{key_prefix}_vendor",
         )
     
         campaign_id = st.text_input(
             "Campaign ID", 
             value=_s(ex.campaign_id), 
-            placeholder="2026_C1"
+            placeholder="2026_C1",
+            key=f"{key_prefix}_campaign_id",
         )
         liner_options = ["polymet", "steel", "rubber"] 
+        liner_index = liner_options.index(ex.liner_type) if ex.liner_type in liner_options else 0
         liner_type = st.selectbox(
             "Liner Type",
             options=liner_options,
-            index=liner_options.index(existing) if existing else 0
+            index=liner_index,
+            key=f"{key_prefix}_liner_type",
         )
 
     with c2:
-        mills = fetch_mills(headers, site_id=selected_site_id)
+        try:
+            mills = fetch_mills(headers, site_id=selected_site_id)
+        except Exception as exc:
+            st.error(f"Failed to load mills: {exc}")
+            return existing
+
         mill_ids = {mill["id"]: mill["name"] for mill in mills}
         mill_options = list(mill_ids.keys())
+        if not mill_options:
+            st.warning("No mills are available for the selected site.")
+            return existing
+
+        selected_mill_index = 0
+        if ex.mill_id in mill_options:
+            selected_mill_index = mill_options.index(ex.mill_id)
         selected_mill_id = st.selectbox(
             "Select Mill", 
             options=mill_options,
             format_func=lambda m: mill_ids[m],
-            index=mill_options.index(existing.mill_id) if existing else 0
+            index=selected_mill_index,
+            key=f"{key_prefix}_mill_id",
         )
 
+        liner_system_options = ["Megaliner", "Generic"]
+        liner_system_index = (
+            liner_system_options.index(ex.liner_system)
+            if ex.liner_system in liner_system_options
+            else 0
+        )
         liner_system = st.selectbox(
             "Liner System",
-            options=["Megaliner", "Generic"]
+            options=liner_system_options,
+            index=liner_system_index,
+            key=f"{key_prefix}_liner_system",
         )
 
         scope_options = ["", "Full", "Partial", "Other"]
+        scope_index = scope_options.index(ex.scope) if ex.scope in scope_options else 0
         scope = st.selectbox(
             "Scope", 
             options=scope_options, 
-            index=scope_options.index(existing.scope) if existing else 0
+            index=scope_index,
+            key=f"{key_prefix}_scope",
         )
         
 
     st.divider()
 
-    supervisor = st.text_input("Supervisor", value=_s(ex.supervisor))
+    supervisor = st.text_input("Supervisor", value=_s(ex.supervisor), key=f"{key_prefix}_supervisor")
 
-    notes = st.text_area("Notes", value=_s(ex.notes), height=90)
+    notes = st.text_area("Notes", value=_s(ex.notes), height=90, key=f"{key_prefix}_notes")
 
     submitted = st.button("Save Setup", width="stretch") if require_submit else True
 
@@ -116,7 +154,6 @@ def render_reline_metadata_form(
         "campaign_id": campaign_id.strip() or None,
         "scope": scope or None,
         "liner_type": liner_type or None,
-        "template_version": template_version or getattr(ex, "template_version", None),
         "supervisor": supervisor.strip() or "Unnamed",
         "notes": notes.strip() or "",
     }
@@ -127,9 +164,10 @@ def render_reline_metadata_form(
         # Optional: show a small success marker only when submitted
         if require_submit:
             st.success("Reline setup information saved")
-            st.session_state["reline_metadata"] = model
+            st.session_state[state_key] = model
             st.session_state["reline_dialog_open"] = False
             st.rerun()
+        return model
     except ValidationError as e:
         # Make errors readable in UI
         st.error("Fix the highlighted issues and save again.")
@@ -137,6 +175,28 @@ def render_reline_metadata_form(
             loc = ".".join(str(x) for x in err.get("loc", []))
             msg = err.get("msg", "Invalid value")
             st.caption(f"- {loc}: {msg}")
-        st.session_state["reline_metadata"] = None
-        st.session_state["reline_dialog_open"] = False
-        st.rerun()
+        if require_submit:
+            st.session_state[state_key] = None
+            st.session_state["reline_dialog_open"] = False
+            st.rerun()
+        return None
+
+
+@st.dialog("Mill Reline Setup Information")
+def render_reline_metadata_form(
+    existing: Optional[RelineMetadata] = None,
+    *,
+    template_version: Optional[str] = None,
+    title: str = "Project Setup (Mill Reline)",
+    require_submit: bool = True,
+    state_key: str = "reline_metadata",
+    key_prefix: str = "reline_metadata",
+) -> Optional[RelineMetadata]:
+    return render_reline_metadata_inputs(
+        existing=existing,
+        template_version=template_version,
+        title=title,
+        require_submit=require_submit,
+        state_key=state_key,
+        key_prefix=key_prefix,
+    )

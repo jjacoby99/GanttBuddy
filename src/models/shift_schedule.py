@@ -60,8 +60,12 @@ class ShiftDefinition(BaseModel):
         missing = [c for c in required if c not in df.columns]
         if missing:
             raise KeyError(f"Provided dataframe is missing required columns: {", ".join(missing)}")
-        
-        first_row = df.iloc[0]
+
+        cleaned = df.dropna(how="all")
+        if cleaned.empty:
+            raise ValueError("Shift definition sheet does not contain any rows.")
+
+        first_row = cleaned.iloc[0]
         pid = first_row["project_id"]
         dst = first_row["day_start_time"]
         nst = first_row["night_start_time"]
@@ -71,9 +75,19 @@ class ShiftDefinition(BaseModel):
         id_present = "id" in df.columns
         if id_present:
             id = first_row["id"]
+            if pd.isna(id) or id == "":
+                id = None
+        else:
+            id = None
+
+        if pd.isna(pid) or pid in ("", None):
+            pid = project_id
+
+        if pd.isna(tz) or tz in ("", None):
+            tz = "America/Vancouver"
         
         return ShiftDefinition(
-            id=id if id_present else None,
+            id=id,
             project_id=pid,
             day_start_time=dst,
             night_start_time=nst,
@@ -118,18 +132,26 @@ class ShiftAssignment(BaseModel):
         
         id_present = "id" in df.columns
         assignments = []
-        for _, row in df.iterrows():
+        for _, row in df.dropna(how="all").iterrows():
             start = row["start_date"]
             end = row["end_date"]
             shift_type = row["shift_type"]
             crew_id = row["crew_id"]
+            if pd.isna(crew_id) or crew_id in ("", None):
+                raise ValueError("Shift assignments sheet contains a row with no crew_id.")
+            if pd.isna(shift_type) or shift_type in ("", None):
+                raise ValueError("Shift assignments sheet contains a row with no shift_type.")
 
             if id_present:
                 id = row["id"]
+                if pd.isna(id) or id == "":
+                    id = None
+            else:
+                id = None
             
             assignments.append(
                 ShiftAssignment(
-                    id=id if id_present else None,
+                    id=id,
                     project_id=project_id if project_id else "",
                     crew_id=crew_id,
                     shift_type=shift_type,

@@ -6,13 +6,15 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from logic.load_project import DataColumn, ExcelParameters, ExcelProjectLoader
 from models.constraint import ConstraintRelation
+from models.project_metadata import RelineMetadata
 from models.project_type import ProjectType
+from models.shift_schedule import ShiftAssignment
 
 
 def _default_excel_parameters(start_row: int = 8) -> ExcelParameters:
@@ -104,6 +106,60 @@ def _build_excel_fixture() -> bytes:
     shift_assignments.append(["id", "project_id", "shift_type", "crew_id", "start_date", "end_date"])
     shift_assignments.append(["assign-1", "project-123", "day", "crew-a", dt.date(2026, 2, 17), dt.date(2026, 2, 18)])
     shift_assignments.append(["assign-2", "project-123", "night", "crew-b", dt.date(2026, 2, 17), dt.date(2026, 2, 18)])
+
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _build_new_mill_reline_fixture(*, include_auxiliary_sheets: bool = False) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Daily Schedule"
+    ws["A5"] = "New Mill Reline"
+
+    headers = [
+        "IGNORE",
+        "ACTIVITY",
+        "PLANNED DURATION (HOURS)",
+        "PLANNED START",
+        "PLANNED END",
+        "IGNORE 2",
+        "ACTUAL DURATION",
+        "ACTUAL START",
+        "ACTUAL END",
+        "NOTES",
+        "PREDECESSOR",
+        "UUID",
+        "PLANNED",
+    ]
+    for idx, header in enumerate(headers, start=1):
+        ws.cell(row=7, column=idx, value=header)
+
+    ws.cell(row=8, column=2, value="Template spacer")
+    ws.cell(row=9, column=2, value="Phase 1")
+    ws.cell(row=9, column=3, value="1 Day")
+    ws.cell(row=9, column=4, value=dt.datetime(2026, 5, 1, 7))
+    ws.cell(row=9, column=5, value=dt.datetime(2026, 5, 2, 7))
+    ws.cell(row=10, column=2, value="Task A")
+    ws.cell(row=10, column=3, value=2)
+    ws.cell(row=10, column=4, value=dt.datetime(2026, 5, 1, 7))
+    ws.cell(row=10, column=5, value=dt.datetime(2026, 5, 1, 9))
+    ws.cell(row=10, column=12, value="task-a")
+    ws.cell(row=10, column=13, value=True)
+
+    inputs = wb.create_sheet("Project Inputs")
+    inputs.cell(row=13, column=4, value="MILL_RELINE")
+    inputs.cell(row=14, column=4, value=None)
+
+    if include_auxiliary_sheets:
+        metadata = wb.create_sheet("metadata")
+        metadata.cell(row=2, column=2, value="Site Name")
+        metadata.cell(row=2, column=4, value="Mill Name")
+
+        shift_definition = wb.create_sheet("shift_definition")
+        shift_definition.append(["id", "project_id", "day_start_time", "night_start_time", "shift_length_hours", "timezone"])
+        shift_definition.append([None, None, dt.time(7, 0), dt.time(19, 0), 12, None])
 
     buf = BytesIO()
     wb.save(buf)
@@ -218,3 +274,71 @@ def test_infer_predecessors_resolves_task_and_phase_dependencies(
     assert second_phase.constraints[0].predecessor_id == first_phase.uuid
     assert second_phase.constraints[0].predecessor_kind == "phase"
     assert second_phase.constraints[0].relation_type == ConstraintRelation.FS
+
+
+def test_analyze_excel_project_flags_new_mill_reline_inputs_without_crashing() -> None:
+    analysis = ExcelProjectLoader.analyze_excel_project(
+        file=_build_new_mill_reline_fixture(),
+        params=_default_excel_parameters(),
+        infer_predecessors=False,
+        preview_limit=10,
+    )
+
+    assert analysis["project_type"] == ProjectType.MILL_RELINE
+    assert analysis["project_id"] is None
+    assert analysis["is_new_project"] is True
+    assert analysis["requires_mill_reline_inputs"] is True
+    assert analysis["shift_definition"] is not None
+    assert analysis["shift_assignments"] == []
+    assert analysis["input_issues"]
+
+
+def test_load_excel_project_accepts_overrides_for_new_mill_reline_workbooks() -> None:
+    metadata = ExcelProjectLoader.load_metadata(load_workbook(BytesIO(_build_excel_fixture())))
+    shift_definition = ExcelProjectLoader.default_shift_definition(project_id="new-project")
+    project, loaded_metadata = ExcelProjectLoader.load_excel_project(
+        file=_build_new_mill_reline_fixture(),
+        params=_default_excel_parameters(),
+        infer_predecessors=False,
+        metadata_override=metadata.model_copy(update={"site_id": "site-9", "mill_id": "mill-9"}),
+        shift_definition_override=shift_definition,
+        shift_assignments_override=[
+            ShiftAssignment(
+                project_id="new-project",
+                crew_id="crew-a",
+                shift_type="day",
+                start_date=dt.date(2026, 5, 1),
+                end_date=dt.date(2026, 5, 5),
+            )
+        ],
+    )
+
+    assert loaded_metadata is not None
+    assert project.project_type == ProjectType.MILL_RELINE
+    assert project.uuid
+    assert project.shift_definition is not None
+    assert project.shift_definition.project_id == project.uuid
+    assert project.shift_definition.day_start_time == shift_definition.day_start_time
+    assert len(project.shift_assignments) == 1
+    assert project.shift_assignments[0].project_id == project.uuid
+
+
+def test_load_shift_definition_tolerates_missing_id_and_project_id_cells() -> None:
+    project, _ = ExcelProjectLoader.load_excel_project(
+        file=_build_new_mill_reline_fixture(include_auxiliary_sheets=True),
+        params=_default_excel_parameters(),
+        infer_predecessors=False,
+        metadata_override=RelineMetadata(
+            site_id="site-1",
+            site_name="Site Name",
+            mill_id="mill-1",
+            mill_name="Mill Name",
+            vendor="Metso",
+            liner_system="Megaliner",
+        ),
+    )
+
+    assert project.shift_definition is not None
+    assert project.shift_definition.id is None
+    assert project.shift_definition.project_id == project.uuid
+    assert str(project.shift_definition.timezone) == "America/Vancouver"

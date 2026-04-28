@@ -45,10 +45,21 @@ def render_tz_info(current_tz = None):
 
 from models.shift_schedule import ShiftAssignment, assignments_to_df
 
-def render_shift_assignment_table(crews: list[CrewIn], project_id: str, edit: bool = False) -> pd.DataFrame:
+def render_shift_assignment_table(
+    crews: list[CrewIn],
+    project_id: str,
+    edit: bool = False,
+    *,
+    initial_assignments: list[ShiftAssignment] | None = None,
+    default_start_date: dt.date | None = None,
+    default_end_date: dt.date | None = None,
+    key: str = "shift_assignments_editor",
+) -> pd.DataFrame:
     st.subheader(f"Shift Schedule")
-    
-    shift_assignments = st.session_state.get("shift_assignments", None)
+
+    shift_assignments = initial_assignments or st.session_state.get("shift_assignments", None)
+    default_start = default_start_date or dt.date.today()
+    default_end = default_end_date or (default_start + dt.timedelta(days=4))
 
     if not crews:
         st.info("No crews available for the selected site. Make some!")
@@ -62,15 +73,15 @@ def render_shift_assignment_table(crews: list[CrewIn], project_id: str, edit: bo
             project_id=project_id,
             crew_id=next(iter([c.id for c in crews])),
             shift_type="day",
-            start_date=dt.date.today(),
-            end_date=dt.date.today() + dt.timedelta(days=4)
+            start_date=default_start,
+            end_date=default_end,
         )
         a2 = ShiftAssignment(
             project_id=project_id,
             crew_id=next(iter([c.id for c in crews])),
             shift_type="night",
-            start_date=dt.date.today(),
-            end_date=dt.date.today() + dt.timedelta(days=4)
+            start_date=default_start,
+            end_date=default_end,
         )
         shift_assignments = [a1, a2]
 
@@ -85,6 +96,7 @@ def render_shift_assignment_table(crews: list[CrewIn], project_id: str, edit: bo
         column_order=["crew_id", "shift_type", "start_date", "end_date"],
         width="stretch",
         num_rows='dynamic',
+        key=key,
         column_config={
             "crew_id": st.column_config.SelectboxColumn(
                 label="Crew",
@@ -95,12 +107,12 @@ def render_shift_assignment_table(crews: list[CrewIn], project_id: str, edit: bo
             "start_date": st.column_config.DateColumn(
                 label="Start Date",
                 required=True,
-                default=dt.date.today(),
+                default=default_start,
             ),
             "end_date": st.column_config.DateColumn(
                 label="End Date",
                 required=True,
-                default=dt.date.today(),
+                default=default_end,
             ),
             "shift_type": st.column_config.SelectboxColumn(
                 label="Shift Type",
