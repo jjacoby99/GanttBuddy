@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 
@@ -12,6 +13,7 @@ from models.shift_schedule import ShiftAssignment
 from ui.project_metadata import render_reline_metadata_inputs
 from ui.shift_config import render_shift_assignment_table
 from ui.shift_definition import render_shift_definition
+from ui.utils.timezones import label_timezones_relative_to_user
 from ui.utils.page_header import render_registered_page_header
 
 
@@ -96,6 +98,61 @@ def _mill_reline_inputs_complete(
     shift_assignments,
 ) -> bool:
     return metadata is not None and shift_definition is not None and bool(shift_assignments)
+
+
+def _default_project_context(analysis: dict) -> tuple[str, str]:
+    default_site_id = ""
+    metadata = analysis.get("metadata")
+    if metadata is not None and getattr(metadata, "site_id", None):
+        default_site_id = metadata.site_id
+
+    shift_definition = analysis.get("shift_definition")
+    default_timezone = "America/Vancouver"
+    if shift_definition is not None and getattr(shift_definition, "timezone", None) is not None:
+        default_timezone = str(shift_definition.timezone)
+
+    return default_site_id, default_timezone
+
+
+def _render_project_context_inputs(
+    analysis: dict,
+    widget_prefix: str,
+) -> tuple[str | None, str]:
+    default_site_id, default_timezone = _default_project_context(analysis)
+    user_timezone = getattr(st.context, "timezone", "America/Vancouver")
+    timezone_options = label_timezones_relative_to_user(user_timezone)
+    timezone_names = [name for name, _ in timezone_options]
+    timezone_labels = {name: label for name, label in timezone_options}
+    if default_timezone not in timezone_names:
+        timezone_names.insert(0, default_timezone)
+        timezone_labels[default_timezone] = default_timezone
+
+    shell = st.container(border=True)
+    with shell:
+        st.subheader("Project Context")
+        st.caption("Set the site id and timezone that should be stored on the imported project.")
+
+        left, right = st.columns([1, 1], vertical_alignment="bottom")
+        with left:
+            site_id = st.text_input(
+                "Project site ID",
+                value=default_site_id,
+                placeholder="site-123",
+                key=f"{widget_prefix}_project_site_id",
+            ).strip()
+        with right:
+            timezone_name = st.selectbox(
+                "Project timezone",
+                options=timezone_names,
+                index=timezone_names.index(default_timezone),
+                format_func=lambda name: timezone_labels[name],
+                key=f"{widget_prefix}_project_timezone",
+            )
+
+        if site_id:
+            st.caption(f"Imported project will use site id `{site_id}`.")
+
+    return site_id or None, timezone_name
 
 
 def _render_mill_reline_inputs(analysis: dict, widget_prefix: str) -> tuple[object, object, list[object]]:
@@ -233,12 +290,18 @@ def render_excel_import_page() -> None:
     resolved_metadata = analysis["metadata"]
     resolved_shift_definition = analysis["shift_definition"]
     resolved_shift_assignments = analysis["shift_assignments"]
+    resolved_site_id, resolved_timezone_name = _render_project_context_inputs(
+        analysis,
+        widget_prefix,
+    )
 
     if analysis["project_type"] == ProjectType.MILL_RELINE and analysis["requires_mill_reline_inputs"]:
         resolved_metadata, resolved_shift_definition, resolved_shift_assignments = _render_mill_reline_inputs(
             analysis,
             widget_prefix,
         )
+        if resolved_metadata is not None and not resolved_site_id:
+            resolved_site_id = resolved_metadata.site_id
         if not _mill_reline_inputs_complete(
             resolved_metadata,
             resolved_shift_definition,
@@ -289,6 +352,8 @@ def render_excel_import_page() -> None:
             analysis,
             widget_prefix,
         )
+        if resolved_metadata is not None and not resolved_site_id:
+            resolved_site_id = resolved_metadata.site_id
 
     actions = st.container()
     with actions:
@@ -318,6 +383,8 @@ def render_excel_import_page() -> None:
                             metadata_override=resolved_metadata,
                             shift_definition_override=resolved_shift_definition,
                             shift_assignments_override=resolved_shift_assignments,
+                            site_id_override=resolved_site_id,
+                            timezone_override=ZoneInfo(resolved_timezone_name),
                         )
                 except (FileNotFoundError, ValueError, KeyError) as exc:
                     st.error(str(exc))

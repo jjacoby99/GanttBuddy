@@ -181,6 +181,7 @@ def test_load_excel_project_builds_schedule_from_single_workbook_fixture(excel_b
     assert project.name == "Fixture Project"
     assert project.uuid == "project-123"
     assert project.project_type == ProjectType.MILL_RELINE
+    assert project.site_id == "site-1"
     assert metadata is not None
     assert metadata.site_name == "Site Name"
     assert len(project.phase_order) == 2
@@ -311,14 +312,18 @@ def test_load_excel_project_accepts_overrides_for_new_mill_reline_workbooks() ->
                 end_date=dt.date(2026, 5, 5),
             )
         ],
+        timezone_override="America/Edmonton",
     )
 
     assert loaded_metadata is not None
     assert project.project_type == ProjectType.MILL_RELINE
     assert project.uuid
+    assert project.site_id == "site-9"
     assert project.shift_definition is not None
     assert project.shift_definition.project_id == project.uuid
     assert project.shift_definition.day_start_time == shift_definition.day_start_time
+    assert str(project.shift_definition.timezone) == "America/Edmonton"
+    assert str(project.timezone) == "America/Edmonton"
     assert len(project.shift_assignments) == 1
     assert project.shift_assignments[0].project_id == project.uuid
 

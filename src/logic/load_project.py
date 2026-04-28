@@ -770,6 +770,8 @@ class ExcelProjectLoader():
         metadata_override: Optional[RelineMetadata] = None,
         shift_definition_override: Optional[ShiftDefinition] = None,
         shift_assignments_override: Optional[list[ShiftAssignment]] = None,
+        site_id_override: Optional[str] = None,
+        timezone_override: dt.tzinfo | str | None = None,
     ) -> tuple[Project, Optional[RelineMetadata]]:
         data = ExcelProjectLoader._read_excel_bytes(file)
         context = ExcelProjectLoader._build_read_context(
@@ -810,9 +812,24 @@ class ExcelProjectLoader():
             shift_assignments_override if shift_assignments_override is not None else auxiliary.shift_assignments,
             project.uuid,
         )
-        if project.shift_definition is not None:
-            project.timezone = project.shift_definition.timezone
         metadata = metadata_override or auxiliary.metadata
+        resolved_site_id = ExcelProjectLoader._coerce_optional_str(site_id_override)
+        if resolved_site_id is None and metadata is not None:
+            resolved_site_id = metadata.site_id
+        project.site_id = resolved_site_id
+
+        resolved_timezone: dt.tzinfo | None = None
+        if timezone_override is not None:
+            resolved_timezone = ZoneInfo(str(timezone_override))
+        elif project.shift_definition is not None:
+            resolved_timezone = project.shift_definition.timezone
+
+        if resolved_timezone is not None:
+            project.timezone = resolved_timezone
+            if project.shift_definition is not None:
+                project.shift_definition = project.shift_definition.model_copy(
+                    update={"timezone": resolved_timezone}
+                )
         current_phase = None
         unassigned_phase = None
 
