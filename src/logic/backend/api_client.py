@@ -8,6 +8,16 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from models.delay import Delay, DelayEditorRow  
+from models.analytics import (
+    InchingAnalytics,
+    ProjectDashboardAnalytics,
+    QuantityNormalizedBreakdownAnalytics,
+    QuantityNormalizedOverviewAnalytics,
+    parse_dashboard_analytics,
+    parse_inching_analytics,
+    parse_normalized_breakdown,
+    parse_normalized_overview,
+)
 from models.forecast import ForecastResponse, parse_forecast_response
 from typing import Optional
 
@@ -276,7 +286,12 @@ def add_site(headers: dict, site: SiteOut) -> dict:
     
 
 @st.cache_data
-def fetch_analytics(headers: dict, project_id: str, date_from: Optional[dt.date], date_to: Optional[dt.date]):
+def fetch_analytics(
+    headers: dict,
+    project_id: str,
+    date_from: Optional[dt.date],
+    date_to: Optional[dt.date],
+) -> ProjectDashboardAnalytics:
     url = f"{API_BASE}/projects/{project_id}/analytics/dashboard"
     params = {}
     if date_from:
@@ -287,7 +302,7 @@ def fetch_analytics(headers: dict, project_id: str, date_from: Optional[dt.date]
     try:
         response = requests.get(url=url, headers=headers, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
+        return parse_dashboard_analytics(response.json())
     except Exception as e:
         body = ""
         try:
@@ -302,7 +317,7 @@ def fetch_inching_performance(
     project_id: str,
     date_from=None,
     date_to=None,
-):
+) -> InchingAnalytics:
     params = {"project_id": project_id}
     if date_from:
         params["date_from"] = date_from.isoformat()
@@ -314,7 +329,7 @@ def fetch_inching_performance(
     try:
         response = requests.get(url=url, headers=headers, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
+        return parse_inching_analytics(response.json())
     except Exception as e:
         body = ""
         try:
@@ -322,6 +337,68 @@ def fetch_inching_performance(
         except Exception:
             pass
         raise ValueError(f"Failed to fetch analytics for {project_id}: {e} {body}")
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_normalized_overview(
+    *,
+    headers: dict,
+    project_id: str,
+) -> QuantityNormalizedOverviewAnalytics:
+    url = f"{API_BASE}/projects/{project_id}/analytics/normalized-overview"
+    try:
+        response = requests.get(url=url, headers=headers, timeout=30)
+        response.raise_for_status()
+        return parse_normalized_overview(response.json())
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to fetch normalized overview for {project_id}: {e} {body}")
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_normalized_by_work_type(
+    *,
+    headers: dict,
+    project_id: str,
+) -> QuantityNormalizedBreakdownAnalytics:
+    url = f"{API_BASE}/projects/{project_id}/analytics/normalized-by-work-type"
+    try:
+        response = requests.get(url=url, headers=headers, timeout=30)
+        response.raise_for_status()
+        return parse_normalized_breakdown(response.json())
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to fetch normalized work-type analytics for {project_id}: {e} {body}")
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_normalized_by_component(
+    *,
+    headers: dict,
+    project_id: str,
+    include_subcomponents: bool = False,
+) -> QuantityNormalizedBreakdownAnalytics:
+    url = f"{API_BASE}/projects/{project_id}/analytics/normalized-by-component"
+    params = {"include_subcomponents": str(include_subcomponents).lower()}
+    try:
+        response = requests.get(url=url, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        return parse_normalized_breakdown(response.json())
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to fetch normalized component analytics for {project_id}: {e} {body}")
 
 
 def headers_for_organization(headers: dict | None, organization_id: str | UUID | None) -> dict:
