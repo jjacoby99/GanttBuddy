@@ -5,7 +5,7 @@ import datetime as dt
 import streamlit as st
 
 from logic.load_project import ExcelProjectLoader, ExcelParameters, DataColumn
-from logic.backend.api_client import fetch_site
+from logic.backend.api_client import fetch_project_summary_by_id, fetch_site
 from logic.backend.crews.fetch_crews import get_crews
 from models.project_type import ProjectType
 from models.shift_schedule import ShiftAssignment
@@ -59,6 +59,52 @@ def _render_project_preview(analysis: dict) -> None:
         m3, _ = st.columns(2)
         with m3:
             st.metric("Phase constraint rows inferred", analysis["inferred_phase_predecessor_count"])
+
+
+def _find_existing_project_for_import(analysis: dict) -> object | None:
+    project_id = (analysis.get("project_id") or "").strip()
+    if not project_id:
+        return None
+
+    headers = st.session_state.get("auth_headers")
+    if not headers:
+        return None
+
+    try:
+        return fetch_project_summary_by_id(headers=headers, project_id=project_id, include_closed=True)
+    except Exception:
+        return None
+
+
+def _render_overwrite_warning(analysis: dict, existing_project: object | None, widget_prefix: str) -> bool:
+    project_id = analysis.get("project_id")
+    if not project_id:
+        return True
+
+    if existing_project is None:
+        st.info(
+            "This workbook includes a project ID. Saving after import will update that backend project instead of creating a brand new one."
+        )
+        return True
+
+    existing_name = getattr(existing_project, "name", "Existing project")
+    existing_status = "closed" if getattr(existing_project, "closed", False) else "active"
+    imported_name = analysis.get("project_name") or "Untitled Project"
+
+    st.warning(
+        f"This workbook carries project id `{project_id}`, which already belongs to `{existing_name}` "
+        f"({existing_status}). Importing and saving this workbook can overwrite that existing project."
+    )
+    if imported_name.strip() and imported_name.strip() != existing_name.strip():
+        st.caption(
+            f"Workbook name: `{imported_name}`. Existing backend project: `{existing_name}`. "
+            "If this is meant to become a new project, clear the project ID in the workbook before importing."
+        )
+
+    return st.checkbox(
+        "I understand this import is linked to an existing project ID and could overwrite that project when I save.",
+        key=f"{widget_prefix}_overwrite_ack",
+    )
 
 
 def _import_widget_prefix(uploaded_file, analysis: dict) -> str:
@@ -233,6 +279,7 @@ def render_excel_import_page() -> None:
     resolved_metadata = analysis["metadata"]
     resolved_shift_definition = analysis["shift_definition"]
     resolved_shift_assignments = analysis["shift_assignments"]
+    existing_project = _find_existing_project_for_import(analysis)
 
     if analysis["project_type"] == ProjectType.MILL_RELINE and analysis["requires_mill_reline_inputs"]:
         resolved_metadata, resolved_shift_definition, resolved_shift_assignments = _render_mill_reline_inputs(
@@ -248,6 +295,7 @@ def render_excel_import_page() -> None:
             return
 
     _render_project_preview(analysis)
+    overwrite_acknowledged = _render_overwrite_warning(analysis, existing_project, widget_prefix)
 
     tabs = st.tabs(
         [
@@ -298,6 +346,10 @@ def render_excel_import_page() -> None:
                 st.switch_page("pages/home.py")
         with right:
             if st.button("Import Project", type="primary", width="stretch"):
+                if analysis["project_id"] and not overwrite_acknowledged:
+                    st.error("Acknowledge the existing project ID warning before importing this workbook.")
+                    return
+
                 if analysis["project_type"] == ProjectType.MILL_RELINE:
                     if resolved_metadata is None:
                         st.error("Mill reline imports need project setup details before they can be loaded.")
@@ -327,6 +379,14 @@ def render_excel_import_page() -> None:
                     return
 
                 st.session_state.session.project = project
+                if analysis["project_id"] and existing_project is not None:
+                    st.session_state["import_overwrite_warning"] = {
+                        "project_id": analysis["project_id"],
+                        "existing_project_name": getattr(existing_project, "name", None),
+                        "imported_project_name": project.name,
+                    }
+                else:
+                    st.session_state.pop("import_overwrite_warning", None)
                 if metadata is not None:
                     st.session_state["reline_metadata"] = metadata
                 elif "reline_metadata" in st.session_state:

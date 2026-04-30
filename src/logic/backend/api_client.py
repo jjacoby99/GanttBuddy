@@ -19,6 +19,7 @@ from models.crew import CrewOut
 from models.delay import DelayType
 from models.site import SiteOut
 from models.todo import TodoIn, TodoUpsertRow
+from models.project_summary import ProjectSummary
 
 
 API_BASE = get_backend_environment_config().api_base_url
@@ -48,6 +49,26 @@ def fetch_projects(headers, include_closed: bool = False) -> dict:
     r = requests.get(url, params=params, headers=headers, timeout=30)
     r.raise_for_status()
     return r.json()
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_project_summary_by_id(
+    *,
+    headers: dict,
+    project_id: str | UUID,
+    include_closed: bool = True,
+) -> ProjectSummary | None:
+    project_id_str = str(project_id).strip()
+    if not project_id_str:
+        return None
+
+    projects = fetch_projects(headers, include_closed=include_closed)
+    for project in projects:
+        if str(project.get("id", "")).strip() != project_id_str:
+            continue
+        return ProjectSummary.model_validate(project)
+
+    return None
 
 
 @st.cache_data(ttl=30, show_spinner=False)
