@@ -19,6 +19,7 @@ from logic.backend.users import get_user
 from ui.todo_overview import inject_todo_panel_css, render_todo_overview_panel, todo_dataframe
 from ui.activity_feed import inject_activity_feed_css, render_recent_activity_preview
 from ui.utils.page_header import render_page_aside, render_registered_page_header
+from ui.load_project import go_to_load_project
 
 def open_project(project_id: str) -> None:
     st.session_state["selected_project_id"] = project_id
@@ -194,7 +195,7 @@ def main() -> None:
             st.markdown("### 📁 Browse")
             st.caption("Search, filter, and open projects you have access to.")
             if st.button(":material/folder_open: Browse projects", width="stretch"):
-                render_load_project()
+                go_to_load_project()
                 if st.session_state.session.project is not None:
                     st.switch_page("pages/plan.py")
 

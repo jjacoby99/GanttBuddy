@@ -373,6 +373,8 @@ def _inject_project_browser_css() -> None:
         unsafe_allow_html=True,
     )
 
+def go_to_load_project() -> None:
+    st.switch_page("pages/projects.py")
 
 def _fmt_dt(value: dt.datetime | None) -> str:
     if value is None:
@@ -724,27 +726,3 @@ def render_project_browser(*, key_prefix: str, full_page: bool = False) -> str |
         st.info(access_copy)
 
     return None
-
-
-@st.dialog(":material/open_in_browser: Load Saved Project")
-def render_load_project() -> Project:
-    selected_project_id = render_project_browser(key_prefix="dialog_project_browser")
-    if selected_project_id is None:
-        projects = get_projects(
-            st.session_state.auth_headers,
-            include_closed=st.session_state.get("dialog_project_browser_include_closed", False),
-        )
-        if not projects:
-            st.info(":material/info: No accessible projects.")
-            st.caption("Create one on the homepage to get started.")
-            if st.button("Back", type="primary"):
-                st.rerun()
-            st.stop()
-        st.stop()
-
-    projects = get_projects(
-        st.session_state.auth_headers,
-        include_closed=st.session_state.get("dialog_project_browser_include_closed", False),
-    )
-    load_project_into_session(selected_project_id, projects[selected_project_id])
-    st.switch_page("pages/plan.py")
