@@ -11,8 +11,7 @@ import streamlit as st
 from logic.backend.api_client import (
     fetch_analytics,
     fetch_inching_performance,
-    fetch_normalized_by_component,
-    fetch_normalized_by_work_type,
+    fetch_normalized_by_work_type_and_component,
     fetch_normalized_overview,
 )
 from logic.backend.utils.parse_datetime import parse_backend_utc
@@ -24,7 +23,6 @@ from models.analytics import (
 )
 from models.task import TaskType
 from ui.create_project import create_project
-from ui.load_project import render_load_project
 from ui.utils.page_header import render_registered_page_header
 from ui.utils.phase_delay_plot import generate_phase_delay_plot
 
@@ -53,6 +51,16 @@ def _fmt_pct(value: Any, *, decimals: int = 1, already_percent: bool = False) ->
         numeric = float(value)
         pct = numeric if already_percent else numeric * 100.0
         return f"{pct:.{decimals}f}%"
+    except Exception:
+        return str(value)
+
+
+def _fmt_signed_pct(value: Any, *, decimals: int = 1) -> str:
+    if value is None:
+        return "-"
+    try:
+        numeric = float(value) * 100.0
+        return f"{numeric:+.{decimals}f}%"
     except Exception:
         return str(value)
 
@@ -178,6 +186,24 @@ def _kpi_value(kpis: list[Any], key: str) -> tuple[Any, Any]:
     return None, None
 
 
+_COMPONENT_KPI_SPECS: list[tuple[str, str]] = [
+    ("strip_feed", "Strip Feed"),
+    ("strip_shell", "Strip Shell"),
+    ("strip_discharge", "Strip Discharge"),
+    ("install_feed", "Install Feed"),
+    ("install_shell", "Install Shell"),
+    ("install_discharge", "Install Discharge"),
+]
+
+
+def _component_kpi_keys() -> set[str]:
+    keys: set[str] = set()
+    for prefix, _label in _COMPONENT_KPI_SPECS:
+        keys.add(f"{prefix}_rows")
+        keys.add(f"{prefix}_pieces")
+    return keys
+
+
 def _dashboard_phase_frame(dashboard: ProjectDashboardAnalytics) -> pd.DataFrame:
     df = pd.DataFrame([row.model_dump() for row in dashboard.by_phase.rows])
     if df.empty:
@@ -274,15 +300,19 @@ def _coverage_pill(coverage: float | None) -> tuple[str, str] | None:
     return (f"{_fmt_pct(coverage)} coverage", "pill-good")
 
 
-def _normalized_metric_options() -> dict[str, tuple[str, str, bool]]:
-    return {
-        "Actual hours per row": ("actual_hours_per_row", "Hours / row", False),
-        "Actual hours per liner": ("actual_hours_per_liner", "Hours / liner", False),
-        "Actual rows per hour": ("actual_rows_per_hour", "Rows / hour", False),
-        "Actual liners per hour": ("actual_liners_per_hour", "Liners / hour", False),
-        "Rows attainment": ("rows_attainment_ratio", "Rows attainment", True),
-        "Liners attainment": ("liners_attainment_ratio", "Liners attainment", True),
-    }
+def _variance_pill(value: float | None, *, inverse_good: bool = False) -> tuple[str, str] | None:
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except Exception:
+        return None
+    is_good = numeric < 0 if inverse_good else numeric > 0
+    if abs(numeric) < 0.001:
+        tone = "pill-neutral"
+    else:
+        tone = "pill-good" if is_good else "pill-bad"
+    return (_fmt_signed_pct(numeric), tone)
 
 
 def _chart_burnup(df: pd.DataFrame) -> None:
@@ -359,48 +389,47 @@ def _chart_events_timeline(df: pd.DataFrame) -> None:
     st.altair_chart(chart, width="stretch")
 
 
-def _chart_normalized_metric(
-    payload: QuantityNormalizedBreakdownAnalytics,
-    *,
-    metric_label: str,
-    metric_field: str,
-    is_percent: bool,
-    top_n: int = 10,
-) -> None:
+def _chart_combined_hours_per_row(payload: QuantityNormalizedBreakdownAnalytics) -> None:
     df = payload.to_frame()
     if df.empty:
         st.info("No normalized breakdown data yet.")
         return
-    frame = df[["label", metric_field, "actual_hours", "quantified_actual_hours_pct"]].copy()
-    frame = frame.dropna(subset=[metric_field]).head(top_n)
+    frame = df[
+        [
+            "label",
+            "actual_hours_per_row",
+            "planned_hours_per_row",
+            "hours_per_row_variance_pct",
+            "quantified_actual_hours_pct",
+        ]
+    ].copy()
+    frame = frame.dropna(subset=["actual_hours_per_row"]).head(12)
     if frame.empty:
-        st.info("This metric is not available yet because the denominator is zero.")
+        st.info("Hours-per-row comparisons are not available yet because the denominator is zero.")
         return
-    if is_percent:
-        frame["display_metric"] = frame[metric_field] * 100.0
-        tooltip_metric = alt.Tooltip("display_metric:Q", title=metric_label, format=",.1f")
-    else:
-        frame["display_metric"] = frame[metric_field]
-        tooltip_metric = alt.Tooltip("display_metric:Q", title=metric_label, format=",.3f")
     chart = (
         alt.Chart(frame)
         .mark_bar(cornerRadiusEnd=8)
         .encode(
             y=alt.Y("label:N", title=None, sort="-x"),
-            x=alt.X("display_metric:Q", title=metric_label),
+            x=alt.X("actual_hours_per_row:Q", title="Actual hours / row"),
             color=alt.Color(
-                "quantified_actual_hours_pct:Q",
-                title="Coverage",
-                scale=alt.Scale(domain=[0.5, 0.8, 1.0], range=["#ef4444", "#f59e0b", "#10b981"]),
+                "hours_per_row_variance_pct:Q",
+                title="Vs plan",
+                scale=alt.Scale(
+                    domain=[-0.25, 0, 0.25],
+                    range=["#10b981", "#93c5fd", "#ef4444"],
+                ),
             ),
             tooltip=[
-                alt.Tooltip("label:N", title="Group"),
-                tooltip_metric,
-                alt.Tooltip("actual_hours:Q", title="Actual hours", format=",.2f"),
+                alt.Tooltip("label:N", title="Bucket"),
+                alt.Tooltip("actual_hours_per_row:Q", title="Actual hours / row", format=",.3f"),
+                alt.Tooltip("planned_hours_per_row:Q", title="Planned hours / row", format=",.3f"),
+                alt.Tooltip("hours_per_row_variance_pct:Q", title="Variance", format="+.1%"),
                 alt.Tooltip("quantified_actual_hours_pct:Q", title="Coverage", format=".0%"),
             ],
         )
-        .properties(height=max(280, min(34 * len(frame), 460)))
+        .properties(height=max(280, min(34 * len(frame), 440)))
     )
     st.altair_chart(chart, width="stretch")
 
@@ -444,22 +473,15 @@ def _fetch_inching(project_id: str, date_from: Optional[date], date_to: Optional
 @st.cache_data(ttl=30, show_spinner=False)
 def _fetch_normalized_bundle(
     project_id: str,
-    include_subcomponents: bool,
 ) -> tuple[
     QuantityNormalizedOverviewAnalytics,
-    QuantityNormalizedBreakdownAnalytics,
     QuantityNormalizedBreakdownAnalytics,
 ]:
     headers = st.session_state.get("auth_headers", {})
     pid = st.session_state.get("project_id") or st.session_state.session.project.uuid
     overview = fetch_normalized_overview(headers=headers, project_id=pid)
-    work_type = fetch_normalized_by_work_type(headers=headers, project_id=pid)
-    component = fetch_normalized_by_component(
-        headers=headers,
-        project_id=pid,
-        include_subcomponents=include_subcomponents,
-    )
-    return overview, work_type, component
+    work_type_component = fetch_normalized_by_work_type_and_component(headers=headers, project_id=pid)
+    return overview, work_type_component
 
 
 def _render_project_header(dashboard: ProjectDashboardAnalytics) -> None:
@@ -644,128 +666,136 @@ def _render_normalized_overview(overview: QuantityNormalizedOverviewAnalytics) -
         )
     with c2:
         _kpi_card(
-            "Actual Hours / Row",
+            "Hours / Row",
             _fmt_num(summary.actual_hours_per_row, decimals=3),
             f"Plan: {_fmt_num(summary.planned_hours_per_row, decimals=3)}",
+            pill=_variance_pill(summary.hours_per_row_variance_pct, inverse_good=True),
         )
     with c3:
         _kpi_card(
-            "Actual Hours / Liner",
+            "Hours / Piece",
             _fmt_num(summary.actual_hours_per_liner, decimals=3),
             f"Plan: {_fmt_num(summary.planned_hours_per_liner, decimals=3)}",
+            pill=_variance_pill(summary.hours_per_liner_variance_pct, inverse_good=True),
         )
     with c4:
         _kpi_card(
-            "Rows / Hour",
-            _fmt_num(summary.actual_rows_per_hour, decimals=3),
-            f"Actual rows: {_fmt_num(summary.actual_rows, decimals=1)}",
+            "Rows Complete",
+            _fmt_num(summary.actual_rows, decimals=1),
+            f"Planned: {_fmt_num(summary.planned_rows, decimals=1)}",
+            pill=_variance_pill(summary.rows_variance_pct),
         )
     with c5:
         _kpi_card(
-            "Liners / Hour",
-            _fmt_num(summary.actual_liners_per_hour, decimals=3),
-            f"Actual liners: {_fmt_num(summary.actual_liners, decimals=0)}",
+            "Pieces Complete",
+            _fmt_num(summary.actual_liners, decimals=0),
+            f"Planned: {_fmt_num(summary.planned_liners, decimals=0)}",
+            pill=_variance_pill(summary.liners_variance_pct),
         )
 
-    c6, c7, c8, c9 = st.columns(4)
-    with c6:
-        _kpi_card("Rows Attainment", _fmt_pct(summary.rows_attainment_ratio), f"Planned: {_fmt_num(summary.planned_rows, decimals=1)}")
-    with c7:
-        _kpi_card("Liners Attainment", _fmt_pct(summary.liners_attainment_ratio), f"Planned: {_fmt_num(summary.planned_liners, decimals=0)}")
-    with c8:
-        _kpi_card("Quantified Tasks", _fmt_num(summary.quantified_task_count, decimals=0), f"Of {_fmt_num(summary.task_count, decimals=0)} total tasks")
-    with c9:
-        _kpi_card("Unquantified Hours", f"{_fmt_num(summary.unquantified_actual_hours)} h", "Actual hours without quantity metadata")
+    detail_left, detail_right = st.columns([2.2, 1.8])
+    with detail_left:
+        st.caption(
+            f"Quantified tasks: {_fmt_num(summary.quantified_task_count, decimals=0)} of {_fmt_num(summary.task_count, decimals=0)}. "
+            f"Unquantified hours: {_fmt_num(summary.unquantified_actual_hours)} h."
+        )
+    with detail_right:
+        st.caption(
+            f"Rows / hour: {_fmt_num(summary.actual_rows_per_hour, decimals=3)}. "
+            f"Pieces / hour: {_fmt_num(summary.actual_liners_per_hour, decimals=3)}."
+        )
+
+
+def _render_component_quantity_kpis(
+    overview: QuantityNormalizedOverviewAnalytics,
+    combined: QuantityNormalizedBreakdownAnalytics,
+) -> None:
+    kpi_map = {item.key: item for item in overview.kpis if item.key in _component_kpi_keys()}
+    if not kpi_map:
+        kpi_map = {item.key: item for item in combined.kpis if item.key in _component_kpi_keys()}
+    if not kpi_map:
+        return
+
+    st.subheader("Strip / Install Component Counts")
+    rows: list[dict[str, Any]] = []
+    for prefix, label in _COMPONENT_KPI_SPECS:
+        rows.append(
+            {
+                "Bucket": label,
+                "Rows (Actual / Planned)": kpi_map.get(f"{prefix}_rows").value if kpi_map.get(f"{prefix}_rows") else None,
+                "Pieces (Actual / Planned)": kpi_map.get(f"{prefix}_pieces").value if kpi_map.get(f"{prefix}_pieces") else None,
+            }
+        )
+
+    df = pd.DataFrame(rows)
+    st.dataframe(df, width="stretch", hide_index=True)
 
 
 def _render_normalized_tab(project_id: str, refresh: bool) -> None:
-    controls_col, spacer_col = st.columns([2.2, 3.8])
-    with controls_col:
-        metric_options = _normalized_metric_options()
-        selected_metric = st.selectbox("Comparison metric", list(metric_options.keys()), key="normalized_metric")
-        include_subcomponents = st.toggle(
-            "Break out subcomponents",
-            value=st.session_state.get("normalized_include_subcomponents", False),
-            key="normalized_include_subcomponents",
-            help="Use grouped component buckets like DISCHARGE:GRATES when component-level metadata supports it.",
-        )
-    with spacer_col:
-        st.caption(
-            "These normalized endpoints are designed for apples-to-apples project comparison. Lower hours-per-unit is usually better; higher units-per-hour is usually better."
-        )
+    st.caption(
+        "This view uses the project summary plus the combined strip/install-by-component breakdown so the comparison stays focused on the highest-signal reline data."
+    )
 
     if refresh:
         _fetch_normalized_bundle.clear()
         fetch_normalized_overview.clear()
-        fetch_normalized_by_work_type.clear()
-        fetch_normalized_by_component.clear()
+        fetch_normalized_by_work_type_and_component.clear()
 
     try:
-        overview, work_type, component = _fetch_normalized_bundle(project_id, include_subcomponents)
+        overview, work_type_component = _fetch_normalized_bundle(project_id)
     except Exception as exc:
         st.error(f"Failed to load normalized analytics: {exc}")
         return
 
     _render_normalized_overview(overview)
-    metric_field, axis_title, is_percent = _normalized_metric_options()[selected_metric]
+    _render_component_quantity_kpis(overview, work_type_component)
 
-    left, right = st.columns(2)
-    with left:
-        st.subheader("By Work Type")
-        st.caption(work_type.allocation_basis)
-        _chart_normalized_metric(work_type, metric_label=axis_title, metric_field=metric_field, is_percent=is_percent)
-        work_type_df = work_type.to_frame()
-        if not work_type_df.empty:
-            table = work_type_df[
-                [
-                    "label",
-                    "task_count",
-                    "quantified_actual_hours_pct",
-                    "actual_hours_per_row",
-                    "actual_hours_per_liner",
-                    "actual_rows_per_hour",
-                    "actual_liners_per_hour",
-                ]
-            ].rename(
-                columns={
-                    "label": "Work Type",
-                    "task_count": "Tasks",
-                    "quantified_actual_hours_pct": "Coverage",
-                    "actual_hours_per_row": "Hours / Row",
-                    "actual_hours_per_liner": "Hours / Liner",
-                    "actual_rows_per_hour": "Rows / Hour",
-                    "actual_liners_per_hour": "Liners / Hour",
-                }
-            )
-            st.dataframe(table, width="stretch", hide_index=True)
-    with right:
-        st.subheader("By Component")
-        st.caption(component.allocation_basis)
-        _chart_normalized_metric(component, metric_label=axis_title, metric_field=metric_field, is_percent=is_percent)
-        component_df = component.to_frame()
-        if not component_df.empty:
-            table = component_df[
-                [
-                    "label",
-                    "task_count",
-                    "quantified_actual_hours_pct",
-                    "actual_hours_per_row",
-                    "actual_hours_per_liner",
-                    "rows_attainment_ratio",
-                    "liners_attainment_ratio",
-                ]
-            ].rename(
-                columns={
-                    "label": "Component",
-                    "task_count": "Tasks",
-                    "quantified_actual_hours_pct": "Coverage",
-                    "actual_hours_per_row": "Hours / Row",
-                    "actual_hours_per_liner": "Hours / Liner",
-                    "rows_attainment_ratio": "Rows Attainment",
-                    "liners_attainment_ratio": "Liners Attainment",
-                }
-            )
-            st.dataframe(table, width="stretch", hide_index=True)
+    st.divider()
+    st.subheader("Strip / Install by Component")
+    st.caption(work_type_component.allocation_basis)
+    _chart_combined_hours_per_row(work_type_component)
+    combined_df = work_type_component.to_frame()
+    if not combined_df.empty:
+        table = combined_df[
+            [
+                "label",
+                "task_count",
+                "quantified_actual_hours_pct",
+                "planned_hours_per_row",
+                "actual_hours_per_row",
+                "hours_per_row_variance_pct",
+                "planned_hours_per_liner",
+                "actual_hours_per_liner",
+                "hours_per_liner_variance_pct",
+                "actual_rows",
+                "planned_rows",
+                "rows_variance_pct",
+                "actual_liners",
+                "planned_liners",
+                "liners_variance_pct",
+            ]
+        ].rename(
+            columns={
+                "label": "Work Type / Component",
+                "task_count": "Tasks",
+                "quantified_actual_hours_pct": "Coverage",
+                "planned_hours_per_row": "Plan Hours / Row",
+                "actual_hours_per_row": "Hours / Row",
+                "hours_per_row_variance_pct": "Row Variance",
+                "planned_hours_per_liner": "Plan Hours / Piece",
+                "actual_hours_per_liner": "Hours / Piece",
+                "hours_per_liner_variance_pct": "Piece Variance",
+                "actual_rows": "Actual Rows",
+                "planned_rows": "Planned Rows",
+                "rows_variance_pct": "Rows Variance",
+                "actual_liners": "Actual Pieces",
+                "planned_liners": "Planned Pieces",
+                "liners_variance_pct": "Pieces Variance",
+            }
+        )
+        for column in ["Coverage", "Row Variance", "Piece Variance", "Rows Variance", "Pieces Variance"]:
+            table[column] = table[column].map(lambda value: _fmt_pct(value) if pd.notna(value) else "-")
+        st.dataframe(table, width="stretch", hide_index=True)
 
 
 def _render_inching_tab(project_id: str, date_from: Optional[date], date_to: Optional[date], refresh: bool) -> None:
@@ -851,31 +881,19 @@ def main() -> None:
 
     if project is None:
         st.info(":material/info: load a project to view available analytics.")
-        row = st.container(horizontal=True)
-        load_clicked = row.button("Load Project", type="primary")
-        row.space("stretch")
-        create_clicked = row.button("Create project", type="secondary")
-        if load_clicked:
-            render_load_project()
-        if create_clicked:
-            create_project()
         st.stop()
 
-    with st.sidebar:
-        st.subheader("Controls")
-        project_id = st.text_input("Project ID", value=project.uuid)
-        st.session_state["project_id"] = project_id
-        st.caption("Optional: limit analytics to a date window for burnup and events.")
+    project_id = st.session_state.session.project.uuid
+    st.session_state["project_id"] = project_id
+    with st.popover(":material/knob: Controls"):
+        
+        st.caption("Limit analytics to a date window for burnup and events.")
         col1, col2 = st.columns(2)
         with col1:
             date_from = st.date_input("From", value=None)
         with col2:
             date_to = st.date_input("To", value=None)
         refresh = st.button("Refresh data", width="stretch")
-
-    if not project_id:
-        st.info("Enter a project ID in the sidebar to view analytics.")
-        return
 
     try:
         if refresh:

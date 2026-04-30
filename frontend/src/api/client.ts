@@ -6,6 +6,8 @@ import type {
   DelayInput,
   DashboardAnalytics,
   InchingAnalytics,
+  QuantityNormalizedBreakdownAnalytics,
+  QuantityNormalizedOverviewAnalytics,
   ProjectImportPayload,
   ProjectSnapshot,
   ProjectSummary,
@@ -143,6 +145,39 @@ export const api = {
       `/projects/${projectId}/analytics/inching-performance`,
       { token },
       params,
+    );
+  },
+
+  getNormalizedOverview(token: string, projectId: string) {
+    return request<QuantityNormalizedOverviewAnalytics>(
+      `/projects/${projectId}/analytics/normalized-overview`,
+      { token },
+    );
+  },
+
+  getNormalizedByWorkType(token: string, projectId: string) {
+    return request<QuantityNormalizedBreakdownAnalytics>(
+      `/projects/${projectId}/analytics/normalized-by-work-type`,
+      { token },
+    );
+  },
+
+  getNormalizedByComponent(
+    token: string,
+    projectId: string,
+    params?: { include_subcomponents?: boolean },
+  ) {
+    return request<QuantityNormalizedBreakdownAnalytics>(
+      `/projects/${projectId}/analytics/normalized-by-component`,
+      { token },
+      params,
+    );
+  },
+
+  getNormalizedByWorkTypeAndComponent(token: string, projectId: string) {
+    return request<QuantityNormalizedBreakdownAnalytics>(
+      `/projects/${projectId}/analytics/normalized-by-work-type-and-component`,
+      { token },
     );
   },
 

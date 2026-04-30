@@ -78,7 +78,6 @@ from logic.backend.project_list import get_projects
 from logic.backend.activity_items import get_attention_items, count_activities
 from logic.backend.events import get_events
 from ui.create_project import create_project
-from ui.load_project import render_load_project
 from ui.load_from_excel import go_to_excel_import
 # -----------------------------
 # Page
@@ -171,7 +170,7 @@ def main() -> None:
                 accent_soft="rgba(51, 65, 85, 0.12)",
             )
             if st.button("Browse", width="stretch"):
-                render_load_project()
+                go_to_load_project()
 
     # ---------- Quick actions ----------
     st.subheader("Quick actions")

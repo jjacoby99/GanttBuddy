@@ -401,6 +401,26 @@ def fetch_normalized_by_component(
         raise ValueError(f"Failed to fetch normalized component analytics for {project_id}: {e} {body}")
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_normalized_by_work_type_and_component(
+    *,
+    headers: dict,
+    project_id: str,
+) -> QuantityNormalizedBreakdownAnalytics:
+    url = f"{API_BASE}/projects/{project_id}/analytics/normalized-by-work-type-and-component"
+    try:
+        response = requests.get(url=url, headers=headers, timeout=30)
+        response.raise_for_status()
+        return parse_normalized_breakdown(response.json())
+    except Exception as e:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            pass
+        raise ValueError(f"Failed to fetch normalized work-type/component analytics for {project_id}: {e} {body}")
+
+
 def headers_for_organization(headers: dict | None, organization_id: str | UUID | None) -> dict:
     scoped_headers = dict(headers or {})
     if organization_id:

@@ -19,6 +19,21 @@ import { useAuthStore } from "../../auth/auth-store";
 import { formatDate } from "../../lib/utils";
 import { useWorkspaceStore } from "../plan/workspace-store";
 
+const componentKpiKeys = [
+  "strip_feed_rows",
+  "strip_feed_pieces",
+  "strip_shell_rows",
+  "strip_shell_pieces",
+  "strip_discharge_rows",
+  "strip_discharge_pieces",
+  "install_feed_rows",
+  "install_feed_pieces",
+  "install_shell_rows",
+  "install_shell_pieces",
+  "install_discharge_rows",
+  "install_discharge_pieces",
+] as const;
+
 function formatKpiValue(value: number | string | null, unit?: string | null) {
   if (value === null || value === "") {
     return "Not set";
@@ -57,12 +72,28 @@ export function AnalyticsPage() {
     enabled: Boolean(token && projectId),
   });
 
+  const normalizedOverviewQuery = useQuery({
+    queryKey: ["normalized-overview", projectId],
+    queryFn: () => api.getNormalizedOverview(token!, projectId!),
+    enabled: Boolean(token && projectId),
+  });
+
+  const normalizedCombinedQuery = useQuery({
+    queryKey: ["normalized-work-type-component", projectId],
+    queryFn: () => api.getNormalizedByWorkTypeAndComponent(token!, projectId!),
+    enabled: Boolean(token && projectId),
+  });
+
   const burnupRows =
     dashboardQuery.data?.burnup.cumulative_planned_hours.map((point, index) => ({
       x: point.x,
       planned: point.y,
       actual: dashboardQuery.data?.burnup.cumulative_actual_hours[index]?.y ?? 0,
     })) ?? [];
+
+  const componentCountKpis = normalizedOverviewQuery.data?.kpis.filter((kpi) =>
+    componentKpiKeys.includes(kpi.key as (typeof componentKpiKeys)[number]),
+  );
 
   if (!draft) {
     return null;
@@ -99,6 +130,12 @@ export function AnalyticsPage() {
 
       {dashboardQuery.isLoading ? <p>Loading dashboard...</p> : null}
       {dashboardQuery.isError ? <p className="error-text">{(dashboardQuery.error as Error).message}</p> : null}
+      {normalizedOverviewQuery.isError ? (
+        <p className="error-text">{(normalizedOverviewQuery.error as Error).message}</p>
+      ) : null}
+      {normalizedCombinedQuery.isError ? (
+        <p className="error-text">{(normalizedCombinedQuery.error as Error).message}</p>
+      ) : null}
 
       {dashboardQuery.data ? (
         <>
@@ -157,6 +194,64 @@ export function AnalyticsPage() {
             </section>
           </div>
         </>
+      ) : null}
+
+      {normalizedOverviewQuery.data ? (
+        <section className="panel">
+          <div className="panel__header">
+            <div>
+              <h2>Normalized component counts</h2>
+              <p>Rows and pieces broken out by strip/install and top-level liner component.</p>
+            </div>
+          </div>
+          <div className="stats-grid">
+            {componentCountKpis?.map((kpi) => (
+              <article className="stat-card" key={kpi.key}>
+                <span>{kpi.label}</span>
+                <strong>{formatKpiValue(kpi.value, kpi.unit)}</strong>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {normalizedCombinedQuery.data ? (
+        <section className="panel">
+          <div className="panel__header">
+            <div>
+              <h2>By work type and component</h2>
+              <p>{normalizedCombinedQuery.data.allocation_basis}</p>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Bucket</th>
+                  <th>Tasks</th>
+                  <th>Coverage</th>
+                  <th>Hours / Row</th>
+                  <th>Hours / Liner</th>
+                  <th>Rows / Hour</th>
+                  <th>Liners / Hour</th>
+                </tr>
+              </thead>
+              <tbody>
+                {normalizedCombinedQuery.data.rows.map((row) => (
+                  <tr key={row.key}>
+                    <td>{row.label}</td>
+                    <td>{row.task_count}</td>
+                    <td>{row.quantified_actual_hours_pct == null ? "Not set" : `${(row.quantified_actual_hours_pct * 100).toFixed(0)}%`}</td>
+                    <td>{row.actual_hours_per_row == null ? "Not set" : row.actual_hours_per_row.toFixed(3)}</td>
+                    <td>{row.actual_hours_per_liner == null ? "Not set" : row.actual_hours_per_liner.toFixed(3)}</td>
+                    <td>{row.actual_rows_per_hour == null ? "Not set" : row.actual_rows_per_hour.toFixed(3)}</td>
+                    <td>{row.actual_liners_per_hour == null ? "Not set" : row.actual_liners_per_hour.toFixed(3)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       ) : null}
 
       {inchingQuery.data ? (

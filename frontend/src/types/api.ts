@@ -296,6 +296,54 @@ export interface InchingAnalytics {
   shift_inch_performance: ShiftInchRow[];
 }
 
+export interface QuantityNormalizedSummary {
+  task_count: number;
+  quantified_task_count: number;
+  planned_hours: number;
+  actual_hours: number;
+  quantified_actual_hours: number;
+  unquantified_actual_hours: number;
+  quantified_actual_hours_pct: number | null;
+  planned_rows: number;
+  actual_rows: number;
+  planned_liners: number;
+  actual_liners: number;
+  planned_hours_per_row: number | null;
+  actual_hours_per_row: number | null;
+  planned_hours_per_liner: number | null;
+  actual_hours_per_liner: number | null;
+  actual_rows_per_hour: number | null;
+  actual_liners_per_hour: number | null;
+  rows_attainment_ratio: number | null;
+  liners_attainment_ratio: number | null;
+  rows_variance_pct: number | null;
+  liners_variance_pct: number | null;
+  hours_per_row_variance_pct: number | null;
+  hours_per_liner_variance_pct: number | null;
+}
+
+export interface QuantityNormalizedOverviewAnalytics {
+  project_id: Id;
+  as_of: string;
+  kpis: Kpi[];
+  summary: QuantityNormalizedSummary;
+}
+
+export interface QuantityNormalizedBreakdownRow extends QuantityNormalizedSummary {
+  key: string;
+  label: string;
+}
+
+export interface QuantityNormalizedBreakdownAnalytics {
+  project_id: Id;
+  as_of: string;
+  grouping: "work_type" | "component" | "work_type_component";
+  include_subcomponents: boolean;
+  allocation_basis: string;
+  kpis: Kpi[];
+  rows: QuantityNormalizedBreakdownRow[];
+}
+
 export interface TaskActionInput {
   occurred_at?: string;
 }

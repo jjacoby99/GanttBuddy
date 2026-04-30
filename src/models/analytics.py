@@ -156,11 +156,16 @@ class QuantityNormalizedSummary(AnalyticsBaseModel):
     actual_liners_per_hour: float | None = None
     rows_attainment_ratio: float | None = None
     liners_attainment_ratio: float | None = None
+    rows_variance_pct: float | None = None
+    liners_variance_pct: float | None = None
+    hours_per_row_variance_pct: float | None = None
+    hours_per_liner_variance_pct: float | None = None
 
 
 class QuantityNormalizedOverviewAnalytics(AnalyticsBaseModel):
     project_id: str
     as_of: dt.datetime
+    kpis: list[Kpi] = Field(default_factory=list)
     summary: QuantityNormalizedSummary
 
 
@@ -172,9 +177,10 @@ class QuantityNormalizedBreakdownRow(QuantityNormalizedSummary):
 class QuantityNormalizedBreakdownAnalytics(AnalyticsBaseModel):
     project_id: str
     as_of: dt.datetime
-    grouping: Literal["work_type", "component"]
+    grouping: Literal["work_type", "component", "work_type_component"]
     include_subcomponents: bool = False
     allocation_basis: str
+    kpis: list[Kpi] = Field(default_factory=list)
     rows: list[QuantityNormalizedBreakdownRow] = Field(default_factory=list)
 
     def to_frame(self) -> pd.DataFrame:
@@ -201,6 +207,10 @@ class QuantityNormalizedBreakdownAnalytics(AnalyticsBaseModel):
             "actual_liners_per_hour",
             "rows_attainment_ratio",
             "liners_attainment_ratio",
+            "rows_variance_pct",
+            "liners_variance_pct",
+            "hours_per_row_variance_pct",
+            "hours_per_liner_variance_pct",
         ]
         for column in numeric_columns:
             if column in df.columns:
